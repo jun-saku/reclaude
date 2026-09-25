@@ -18,11 +18,10 @@ python3 -m http.server 8000 -d /tmp/serve   # open http://localhost:8000/reclaud
 
 ## Deploying
 
-`claude/...` → PR → `main` → PR → `deploy`. Only `deploy` is published.
+`claude/...` → PR → `main`. Merging into `main` publishes the site; PRs only run the build check.
 
 One-time setup:
-1. Make the repo public (Settings → General → Danger Zone → Change visibility).
-2. Settings → Pages → Source: **GitHub Actions**.
-3. Settings → Environments → `github-pages` → Deployment branches: allow `deploy`.
-4. Settings → Branches (or Rules): protect `deploy`: require a pull request, block force pushes and deletion,
-   and don't allow bypassing. Settings → General: leave "Allow auto-merge" off.
+1. Settings → Pages → Source: **GitHub Actions**.
+2. Settings → General → Default branch: `main`. Leave "Allow auto-merge" off.
+3. Settings → Rules → Rulesets (or Branches): protect `main`: require a pull request (0 approvals is fine
+   when working solo), require the "build" check to pass, block force pushes and deletion, no bypass.
