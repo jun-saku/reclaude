@@ -54,20 +54,6 @@ pre {
 }
 img { max-width: 100%; height: auto; }
 
-/* Top bar with a way back home, used on docs. */
-.topbar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface);
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
-.topbar a { text-decoration: none; font-weight: 600; }
-
 /* Document pages. */
 .doc {
   max-width: 720px;

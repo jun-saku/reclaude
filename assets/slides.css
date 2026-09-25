@@ -34,14 +34,6 @@ body { user-select: none; -webkit-user-select: none; }
   font-size: 0.85rem;
   font-variant-numeric: tabular-nums;
 }
-.deck-home {
-  position: fixed;
-  left: 16px;
-  bottom: 12px;
-  font-size: 0.85rem;
-  z-index: 5;
-  text-decoration: none;
-}
 .deck-progress {
   position: fixed;
   left: 0;
@@ -54,5 +46,4 @@ body { user-select: none; -webkit-user-select: none; }
 @media print {
   html, body { height: auto; overflow: visible; }
   .slide { display: flex; position: relative; min-height: 100vh; page-break-after: always; }
-  .deck-counter, .deck-progress, .deck-home { display: none; }
-}
+  .deck-counter, .deck-progress, 
