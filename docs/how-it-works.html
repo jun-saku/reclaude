@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>How reclaude works</title>
+  <meta name="description" content="Where files live, how they get published, and what not to put here.">
+  <meta name="robots" content="noindex">
+  <link rel="stylesheet" href="../assets/theme.css">
+</head>
+<body>
+  <nav class="topbar"><a href="../">← reclaude</a></nav>
+  <article class="doc">
+    <h1>How reclaude works</h1>
+    <div class="meta">September 25, 2026</div>
+
+    <p>reclaude is a small site where every file is a web page. Claude writes the pages and pushes them to the repository, and GitHub Pages publishes them so each one has a link you can share.</p>
+
+    <h2>Where files live</h2>
+    <table>
+      <tr><th>Folder</th><th>What goes there</th></tr>
+      <tr><td><code>docs/</code></td><td>Documents to read top to bottom</td></tr>
+      <tr><td><code>slides/</code></td><td>Slide decks, one <code>&lt;section class="slide"&gt;</code> per slide</td></tr>
+      <tr><td><code>pages/</code></td><td>Anything else: tools, dashboards, one-off pages</td></tr>
+    </table>
+    <p>The home page lists every <code>.html</code> file in those folders, using each page's title and description. Files starting with <code>_</code> are templates or drafts and stay off the list.</p>
+
+    <h2>How publishing works</h2>
+    <p>On every push to <code>main</code>, a GitHub Actions workflow rebuilds the file list and deploys the site. A new page is usually live about a minute after the push.</p>
+
+    <h2>Sharing</h2>
+    <p>Send the page's link. There's no login, so anyone with the link can open it.</p>
+
+    <div class="callout">Pages ask search engines not to index them, but that is a request, not protection. Keep anything private or sensitive out of this site.</div>
+  </article>
+</body>
+</html>
