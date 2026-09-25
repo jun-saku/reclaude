@@ -1,28 +1,28 @@
 # reclaude
 
-claudeOS for remote and mobile friendly development: a site where every file is a web page.
-Ask Claude for a doc or a slide deck, it pushes the HTML here, and Cloudflare Pages publishes it
-at `/<name>`, a link you can share. There is no public index; the list of pages lives at
-`/admin/<key>`.
+claudeOS for remote and mobile friendly development: small web projects (calculators, games,
+toys) built by Claude from a phone, each published at its own link.
 
-- `docs/`: documents
-- `slides/`: slide decks (swipe, tap the edges or use arrow keys)
-- `pages/`: anything else
+- `projects/<name>/` → `https://jun-saku.github.io/reclaude/<name>/`
+- There's no index page; share each project's link directly.
 
-See [CLAUDE.md](CLAUDE.md) for how pages are added and published.
+See [CLAUDE.md](CLAUDE.md) for how projects are added, tested and deployed.
 
 ## Preview locally
 
 ```sh
 node scripts/build.mjs
-python3 -m http.server -d _site 8000   # pages at /<name>.html; the admin gate needs Cloudflare
+mkdir -p /tmp/serve && ln -sfn "$PWD/_site" /tmp/serve/reclaude
+python3 -m http.server 8000 -d /tmp/serve   # open http://localhost:8000/reclaude/<name>/
 ```
 
-## Cloudflare Pages setup (once)
+## Deploying
 
-1. Workers & Pages → Create → Pages → connect this GitHub repo.
-2. Production branch `main`; build command `node scripts/build.mjs`; output directory `_site`.
-3. Settings → Variables and Secrets: add `ADMIN_KEY` as a secret (a long random string, letters and digits only).
-4. Settings → Builds → Branch control: turn off preview deployments to save builds.
+`claude/...` → PR → `main` → PR → `deploy`. Only `deploy` is published.
 
-The admin page is then at `https://<project>.pages.dev/admin/<ADMIN_KEY>/`.
+One-time setup:
+1. Make the repo public (Settings → General → Danger Zone → Change visibility).
+2. Settings → Pages → Source: **GitHub Actions**.
+3. Settings → Environments → `github-pages` → Deployment branches: allow `deploy`.
+4. Settings → Branches (or Rules): protect `deploy`: require a pull request, block force pushes and deletion,
+   and don't allow bypassing. Settings → General: leave "Allow auto-merge" off.

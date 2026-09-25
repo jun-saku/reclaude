@@ -1,0 +1,45 @@
+name: Build and deploy
+
+# Every PR and push is built, so broken projects are caught before merging.
+# Only the deploy branch is published to GitHub Pages.
+on:
+  push:
+    branches: [main, deploy, "claude/**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.ref }}
+  # Never cancel a deploy halfway; superseded checks on other branches can go.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/deploy' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/build.mjs
+      - if: github.ref == 'refs/heads/deploy'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    if: github.ref == 'refs/heads/deploy'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

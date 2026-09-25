@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#161618" media="(prefers-color-scheme: dark)">
+  <title>Calculator</title>
+  <meta name="description" content="A pocket calculator with operator precedence, a live result preview and keyboard support.">
+  <style>
+    :root {
+      --bg: #f7f6f3;
+      --key: #ffffff;
+      --key-fn: #e8e6e1;
+      --key-op: #c2571a;
+      --key-op-text: #ffffff;
+      --text: #1d1d1f;
+      --muted: #6b6b70;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+      color-scheme: light;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #161618;
+        --key: #2a2a2e;
+        --key-fn: #3a3a40;
+        --key-op: #f08a4b;
+        --key-op-text: #1d1208;
+        --text: #ececef;
+        --muted: #9a9aa2;
+        --shadow: none;
+        color-scheme: dark;
+      }
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      justify-content: center;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .calc {
+      width: 100%;
+      max-width: 420px;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      padding: 16px 16px max(16px, env(safe-area-inset-bottom));
+    }
+    .display {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      align-items: flex-end;
+      gap: 4px;
+      padding: 8px 8px 20px;
+      min-height: 140px;
+      overflow: hidden;
+    }
+    .expr {
+      font-size: clamp(1.2rem, 5vw, 1.6rem);
+      color: var(--muted);
+      word-break: break-all;
+      text-align: right;
+      min-height: 1.4em;
+    }
+    .result {
+      font-size: clamp(2.8rem, 15vw, 4.4rem);
+      font-weight: 300;
+      line-height: 1.05;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .result.error { color: var(--key-op); font-size: clamp(2rem, 10vw, 3rem); }
+    .keys {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+    button {
+      font: inherit;
+      font-size: clamp(1.4rem, 6.5vw, 1.9rem);
+      aspect-ratio: 1;
+      border: 0;
+      border-radius: 999px;
+      background: var(--key);
+      color: var(--text);
+      box-shadow: var(--shadow);
+      cursor: pointer;
+      touch-action: manipulation;
+      transition: filter 0.08s ease, transform 0.08s ease;
+    }
+    button:active, button.pressed { filter: brightness(0.88); transform: scale(0.96); }
+    button.fn { background: var(--key-fn); font-size: clamp(1.2rem, 5.5vw, 1.6rem); }
+    button.op { background: var(--key-op); color: var(--key-op-text); }
+    button.zero { grid-column: span 2; aspect-ratio: auto; }
+  </style>
+</head>
+<body>
+  <main class="calc">
+    <div class="display" aria-live="polite">
+      <div class="expr" id="expr"></div>
+      <div class="result" id="result">0</div>
+    </div>
+    <div class="keys">
+      <button class="fn" data-k="C" aria-label="Clear">AC</button>
+      <button class="fn" data-k="Backspace" aria-label="Delete">⌫</button>
+      <button class="fn" data-k="%" aria-label="Percent">%</button>
+      <button class="op" data-k="/" aria-label="Divide">÷</button>
+      <button data-k="7">7</button>
+      <button data-k="8">8</button>
+      <button data-k="9">9</button>
+      <button class="op" data-k="*" aria-label="Multiply">×</button>
+      <button data-k="4">4</button>
+      <button data-k="5">5</button>
+      <button data-k="6">6</button>
+      <button class="op" data-k="-" aria-label="Subtract">−</button>
+      <button data-k="1">1</button>
+      <button data-k="2">2</button>
+      <button data-k="3">3</button>
+      <button class="op" data-k="+" aria-label="Add">+</button>
+      <button class="zero" data-k="0">0</button>
+      <button data-k="." aria-label="Decimal point">.</button>
+      <button class="op" data-k="=" aria-label="Equals">=</button>
+    </div>
+  </main>
+
+  <script>
+    // The expression is a list of tokens: number strings and operators (+ - * /).
+    // "%" divides the number being typed by 100. Evaluation respects × ÷ before + −.
+    const OPS = { "+": 1, "-": 1, "*": 2, "/": 2 };
+    const SHOW = { "+": "+", "-": "−", "*": "×", "/": "÷" };
+    const exprEl = document.getElementById("expr");
+    const resultEl = document.getElementById("result");
+
+    let tokens = ["0"];
+    let justEvaluated = false;
+
+    const last = () => tokens[tokens.length - 1];
+    const isOp = (t) => t in OPS;
+
+    function evaluate(list) {
+      const t = isOp(list[list.length - 1]) ? list.slice(0, -1) : list;
+      const out = [];
+      const ops = [];
+      const apply = () => {
+        const b = out.pop(), a = out.pop(), op = ops.pop();
+        out.push(op === "+" ? a + b : op === "-" ? a - b : op === "*" ? a * b : a / b);
+      };
+      for (const tok of t) {
+        if (isOp(tok)) {
+          while (ops.length && OPS[ops[ops.length - 1]] >= OPS[tok]) apply();
+          ops.push(tok);
+        } else {
+          out.push(parseFloat(tok));
+        }
+      }
+      while (ops.length) apply();
+      return out[0];
+    }
+
+    function format(n) {
+      if (!Number.isFinite(n)) return null;
+      if (Object.is(n, -0)) n = 0;
+      const abs = Math.abs(n);
+      if (abs !== 0 && (abs >= 1e15 || abs < 1e-9)) return n.toExponential(6).replace(/\.?0+e/, "e");
+      const rounded = parseFloat(n.toPrecision(12));
+      return rounded.toLocaleString("en-US", { maximumFractionDigits: 10 });
+    }
+
+    function pretty(tok) {
+      if (isOp(tok)) return " " + SHOW[tok] + " ";
+      const [int, frac] = tok.split(".");
+      const grouped = (int === "" || int === "-" ? int + "0" : Number(int).toLocaleString("en-US"));
+      return frac === undefined ? grouped : grouped + "." + frac;
+    }
+
+    function render() {
+      const value = evaluate(tokens);
+      const shown = format(value);
+      exprEl.textContent = tokens.length > 1 || justEvaluated ? tokens.map(pretty).join("") : "";
+      if (shown === null) {
+        resultEl.textContent = "Can't divide by 0";
+        resultEl.classList.add("error");
+      } else {
+        resultEl.textContent = shown;
+        resultEl.classList.remove("error");
+      }
+    }
+
+    function press(k) {
+      if (k === "C" || k === "Escape") {
+        tokens = ["0"];
+        justEvaluated = false;
+      } else if (/^[0-9]$/.test(k)) {
+        if (justEvaluated) { tokens = ["0"]; justEvaluated = false; }
+        if (isOp(last())) tokens.push(k);
+        else if (last() === "0") tokens[tokens.length - 1] = k;
+        else if (last().replace(/[-.]/g, "").length < 15) tokens[tokens.length - 1] += k;
+      } else if (k === ".") {
+        if (justEvaluated) { tokens = ["0"]; justEvaluated = false; }
+        if (isOp(last())) tokens.push("0.");
+        else if (!last().includes(".")) tokens[tokens.length - 1] += ".";
+      } else if (k in OPS) {
+        justEvaluated = false;
+        if (isOp(last())) tokens[tokens.length - 1] = k;
+        else tokens.push(k);
+      } else if (k === "%") {
+        if (!isOp(last())) {
+          const n = parseFloat(last()) / 100;
+          tokens[tokens.length - 1] = String(parseFloat(n.toPrecision(12)));
+        }
+      } else if (k === "Backspace") {
+        if (justEvaluated) { tokens = ["0"]; justEvaluated = false; }
+        else if (isOp(last())) tokens.pop();
+        else {
+          const s = last().slice(0, -1);
+          if (s === "" || s === "-") tokens.length > 1 ? tokens.pop() : (tokens[0] = "0");
+          else tokens[tokens.length - 1] = s;
+        }
+      } else if (k === "=" || k === "Enter") {
+        const v = evaluate(tokens);
+        if (!Number.isFinite(v)) { render(); return; }
+        tokens = [String(parseFloat(v.toPrecision(12)))];
+        justEvaluated = true;
+        exprEl.textContent = "";
+        resultEl.textContent = format(v);
+        resultEl.classList.remove("error");
+        return;
+      }
+      render();
+    }
+
+    document.querySelector(".keys").addEventListener("click", (e) => {
+      const b = e.target.closest("button");
+      if (b) press(b.dataset.k);
+    });
+
+    const KEYMAP = { x: "*", X: "*", "×": "*", "÷": "/", Delete: "C", c: "C" };
+    document.addEventListener("keydown", (e) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const k = KEYMAP[e.key] || e.key;
+      if (/^[0-9.%+\-*/=]$/.test(k) || ["Enter", "Backspace", "Escape", "C"].includes(k)) {
+        e.preventDefault();
+        press(k);
+        const btn = document.querySelector(`button[data-k="${k === "Enter" ? "=" : k === "Escape" ? "C" : CSS.escape(k)}"]`);
+        if (btn) { btn.classList.add("pressed"); setTimeout(() => btn.classList.remove("pressed"), 100); }
+      }
+    });
+
+    render();
+  </script>
+</body>
+</html>
