@@ -23,7 +23,9 @@ The user usually works from their phone, so keep replies short and end with the 
   Firebase / emulator / stand-in / same-device backends. New multiplayer games must use it rather than copying room code.
   It also has public leaderboards (`topScores`, `myScore`, `saveScore`; `scores/<game>/<uid>` in the rules), which
   connect only briefly; 2048 uses one.
-- `scripts/build.mjs`: builds `_site/`. Fails on bad or reserved names and missing `index.html`.
+- `scripts/build.mjs`: builds `_site/`. Fails on bad or reserved names and missing `index.html`. It rewrites every
+  `../shared/<file>` link in project files to `../shared/<file>?v=<content hash>`, so browsers never mix a new
+  page with an old cached shared file. Always reference shared code with exactly that `../shared/<file>` form.
 - `scripts/new-project.mjs`: creates a project from the template.
 - `tests/`: dev-only tests, never published. `npm run rules` checks the database rules on the Firebase emulator (CI runs
   it); `npm run e2e` plays the online games on the real Firebase SDK + emulator in headless Chromium.
