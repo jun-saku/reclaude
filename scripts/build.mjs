@@ -4,6 +4,7 @@
 // Each folder projects/<name>/ is published at /<name>/ and must contain an index.html.
 // Names must be lowercase-kebab-case and are the URL, so they can't change once shared.
 // Folders starting with "_" (templates, drafts) are skipped. There is no index page.
+// shared/ is published at /shared/ for code used by several projects.
 
 import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -12,7 +13,7 @@ const ROOT = new URL("..", import.meta.url).pathname;
 const OUT = join(ROOT, "_site");
 const PROJECTS = join(ROOT, "projects");
 const NAME_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
-const RESERVED = new Set(["404", "assets"]);
+const RESERVED = new Set(["404", "assets", "shared"]);
 
 rmSync(OUT, { recursive: true, force: true });
 mkdirSync(OUT);
@@ -48,6 +49,8 @@ if (errors.length) {
 }
 
 cpSync(join(ROOT, "site"), OUT, { recursive: true });
+// Code shared between projects, imported as ../shared/<file>.
+cpSync(join(ROOT, "shared"), join(OUT, "shared"), { recursive: true });
 // Serve files as-is; don't let GitHub Pages run Jekyll over them.
 writeFileSync(join(OUT, ".nojekyll"), "");
 
