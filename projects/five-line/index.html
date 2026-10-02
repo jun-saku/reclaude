@@ -1,0 +1,658 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#161618" media="(prefers-color-scheme: dark)">
+  <title>Five Line</title>
+  <meta name="description" content="Line up five chips on a 10×10 board of coloured numbers. Play 2–4 friends online with a room code.">
+  <style>
+    :root {
+      --bg: #f7f6f3;
+      --text: #1d1d1f;
+      --muted: #6b6b70;
+      --panel: #ffffff;
+      --line: #d9d2c6;
+      --soft: #ece7df;
+      --accent: #c2571a;
+      --danger: #b3261e;
+      --cell: #ffffff;
+      --free: #e6e0d4;
+      --r: #d14343; --b: #2f6fd6; --g: #2a9a5b; --p: #8a4bd4;
+      --c0: #1d1d1f; --c0-ring: #ffffff;
+      --c1: #ffffff; --c1-ring: #1d1d1f;
+      --c2: #f2a93b; --c2-ring: #7a4a00;
+      --ring: rgba(0, 0, 0, 0.12);
+      color-scheme: light;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #161618;
+        --text: #ececef;
+        --muted: #9a9aa2;
+        --panel: #1f1f22;
+        --line: #3a3a40;
+        --soft: #2a2a2e;
+        --accent: #f08a4b;
+        --danger: #ff8a80;
+        --cell: #26262a;
+        --free: #35353b;
+        --r: #ff6b6b; --b: #6ea1ff; --g: #4fd083; --p: #b88cff;
+        --c0: #0a0a0c; --c0-ring: #f2f2f5;
+        --c1: #f2f2f5; --c1-ring: #0a0a0c;
+        --c2: #f5b84f; --c2-ring: #5a3300;
+        --ring: rgba(255, 255, 255, 0.14);
+        color-scheme: dark;
+      }
+    }
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    html, body { min-height: 100%; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 17px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      justify-content: center;
+      -webkit-tap-highlight-color: transparent;
+    }
+    main {
+      width: 100%;
+      max-width: 480px;
+      padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    h1 { font-size: 1.6rem; margin: 0; display: flex; align-items: center; gap: 10px; }
+    h1 .mini { display: inline-flex; gap: 2px; }
+    h1 .mini i { width: 0.5em; height: 0.5em; border-radius: 50%; background: var(--c0); border: 2px solid var(--c0-ring); box-shadow: 0 0 0 1px var(--ring); }
+    h1 .mini i:nth-child(even) { background: var(--c1); border-color: var(--c1-ring); }
+    h2 { font-size: 1.05rem; margin: 0; }
+    p { margin: 0; }
+    .muted { color: var(--muted); }
+    button {
+      font: inherit; font-weight: 650; border: 0; border-radius: 12px; padding: 12px 16px;
+      background: var(--accent); color: #fff; cursor: pointer; touch-action: manipulation;
+    }
+    button:disabled { opacity: 0.5; cursor: default; }
+    button.secondary { background: var(--soft); color: var(--text); }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+    .row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+    .join { display: flex; gap: 10px; }
+    .join input {
+      flex: 1; min-width: 0; font: inherit; font-size: 1.3rem; letter-spacing: 0.3em; text-transform: uppercase; text-align: center;
+      padding: 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--text);
+    }
+    .error { color: var(--danger); min-height: 1.4em; font-size: 0.95rem; }
+    .seg { display: flex; background: var(--soft); border-radius: 12px; padding: 4px; gap: 4px; }
+    .seg button { flex: 1; background: transparent; color: var(--text); padding: 9px 6px; font-size: 0.95rem; }
+    .seg button[aria-pressed="true"] { background: var(--panel); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+
+    .bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .players { display: flex; gap: 6px; flex-wrap: wrap; }
+    .chip {
+      display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px;
+      background: var(--soft); font-size: 0.85rem; font-weight: 600; border: 2px solid transparent;
+    }
+    .chip.turn { border-color: var(--accent); }
+    .chip .disc { width: 12px; height: 12px; border-radius: 50%; border: 2px solid; box-shadow: 0 0 0 1px var(--ring); }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); opacity: 0.4; }
+    .dot.on { background: #2e9d5b; opacity: 1; }
+    .code { font-size: 0.85rem; color: var(--muted); }
+    .code b { font-size: 1.05rem; letter-spacing: 0.15em; color: var(--text); }
+    .bigcode { font-size: 2.6rem; font-weight: 800; letter-spacing: 0.25em; text-align: center; margin: 0; }
+    .status { text-align: center; font-size: 1.15rem; font-weight: 700; min-height: 1.5em; }
+    .seated { display: flex; flex-direction: column; gap: 6px; }
+    .seated div { display: flex; align-items: center; gap: 8px; }
+
+    .board {
+      display: grid; grid-template-columns: repeat(10, 1fr); gap: 2px;
+      background: var(--line); border: 2px solid var(--line); border-radius: 10px; padding: 2px; user-select: none;
+    }
+    .sq {
+      position: relative; aspect-ratio: 1; background: var(--cell); border-radius: 4px; border: 0; padding: 0;
+      display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: clamp(11px, 3.4vw, 15px);
+      color: var(--k); cursor: default; touch-action: manipulation;
+    }
+    .sq.free { background: var(--free); color: var(--muted); font-size: 11px; }
+    .sq.ok { box-shadow: inset 0 0 0 2px var(--accent); cursor: pointer; }
+    .sq.ok::after { content: ""; position: absolute; inset: 30%; border-radius: 50%; background: var(--accent); opacity: 0.35; }
+    .sq .chipd {
+      position: absolute; inset: 12%; border-radius: 50%; background: var(--cc); border: 2px solid var(--cr);
+      box-shadow: 0 0 0 1px var(--ring), 0 1px 2px rgba(0, 0, 0, 0.3);
+    }
+    .sq.last .chipd::after { content: ""; position: absolute; inset: 28%; border-radius: 50%; background: var(--cr); }
+    .sq.locked .chipd { box-shadow: 0 0 0 2px var(--accent), 0 1px 2px rgba(0, 0, 0, 0.3); }
+    .sq.ok.remove::after { background: var(--danger); opacity: 0.5; }
+    @keyframes pop { from { transform: scale(0.4); } to { transform: scale(1); } }
+    .sq.placed .chipd { animation: pop 180ms ease-out; }
+    @media (prefers-reduced-motion: reduce) { .sq.placed .chipd { animation: none; } }
+
+    .hand { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; min-height: 64px; }
+    .hcard {
+      width: 44px; height: 60px; border-radius: 8px; border: 2px solid var(--line); background: var(--panel); color: var(--k);
+      font-weight: 800; font-size: 1.25rem; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+      padding: 0; cursor: pointer; touch-action: manipulation;
+    }
+    .hcard small { font-size: 0.6rem; font-weight: 700; letter-spacing: 0.02em; }
+    .hcard[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); transform: translateY(-4px); }
+    .hcard.dead { opacity: 0.45; }
+    .hcard:disabled { cursor: default; }
+    .hint { text-align: center; font-size: 0.9rem; color: var(--muted); min-height: 1.3em; }
+    .rules { font-size: 0.9rem; color: var(--muted); }
+    .rules li { margin: 2px 0; }
+    .rules summary { cursor: pointer; font-weight: 600; color: var(--text); }
+  </style>
+</head>
+<body>
+  <main>
+    <h1><span class="mini" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>Five Line</h1>
+
+    <section id="home">
+      <div class="card">
+        <h2>Play friends online</h2>
+        <p class="muted">Create a room, send the code or link, then start once everyone is in.</p>
+        <div class="seg" role="group" aria-label="Players">
+          <button type="button" data-mode="2" aria-pressed="true">2 players</button>
+          <button type="button" data-mode="3" aria-pressed="false">3 players</button>
+          <button type="button" data-mode="4" aria-pressed="false">2 teams of 2</button>
+        </div>
+        <button id="create">Create room</button>
+      </div>
+      <div class="card">
+        <h2>Join a room</h2>
+        <form class="join" id="join-form" autocomplete="off">
+          <input id="join-code" maxlength="4" autocapitalize="characters" spellcheck="false" placeholder="CODE" aria-label="Room code">
+          <button id="join" type="submit">Join</button>
+        </form>
+        <p class="error" id="home-error" role="alert"></p>
+      </div>
+      <details class="card rules">
+        <summary>How to play</summary>
+        <ul>
+          <li>Each square shows a coloured number; every one appears twice. Corners are free for everyone.</li>
+          <li>On your turn, tap a card in your hand, then one of its squares to place a chip. You draw a new card.</li>
+          <li><b>Wild</b> cards go on any empty square. <b>Take</b> cards remove one opponent chip (not from a finished line).</li>
+          <li>A card with both squares taken is dead: tap it and swap it for a new one.</li>
+          <li>Five chips in a row, column or diagonal is a line. Two lines win with 2 players or teams; one with 3 players.</li>
+        </ul>
+      </details>
+    </section>
+
+    <section id="game" hidden>
+      <div class="bar">
+        <div class="players" id="players"></div>
+        <div class="code" id="room-label"></div>
+      </div>
+
+      <div class="card" id="waiting" hidden>
+        <p class="muted" style="text-align: center">Send this code to your friends</p>
+        <p class="bigcode" id="waiting-code"></p>
+        <div class="row">
+          <button id="share">Share link</button>
+          <button class="secondary" id="copy">Copy code</button>
+        </div>
+        <div class="seated" id="seated"></div>
+        <button id="start-btn" hidden>Start game</button>
+        <p class="muted" id="waiting-note" style="text-align: center; font-size: 0.9rem"></p>
+      </div>
+
+      <p class="status" id="status" aria-live="polite"></p>
+      <div class="board" id="board" role="grid" aria-label="Board" hidden></div>
+      <p class="hint" id="hint"></p>
+      <div class="hand" id="hand" aria-label="Your hand" hidden></div>
+
+      <div class="row">
+        <button id="rematch" hidden>Play again</button>
+        <button class="secondary" id="leave">Leave</button>
+      </div>
+    </section>
+  </main>
+
+  <script type="module">
+    import * as rooms from "../shared/rooms.js";
+
+    const GAME = "five-line";
+    const N = 10;
+    const COLOURS = { R: "Red", B: "Blue", G: "Green", P: "Purple" };
+    const KINDS = Object.keys(COLOURS).flatMap((c) => Array.from({ length: 12 }, (_, i) => `${c}${i + 1}`)); // 48
+    const CORNERS = [0, 9, 90, 99];
+    const CHIP_NAMES = ["Black", "White", "Gold"];
+
+    // ---------- fixed board ----------
+    // Every kind sits on two squares; the layout is shuffled once with a fixed seed so all phones agree.
+    function seeded(seed) {
+      return () => { seed |= 0; seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    }
+    const LAYOUT = (() => {
+      const rnd = seeded(5151);
+      const pool = [...KINDS, ...KINDS];
+      for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+      const out = [];
+      for (let i = 0; i < N * N; i++) out.push(CORNERS.includes(i) ? null : pool.pop());
+      return out;
+    })();
+    const squaresOf = (kind) => LAYOUT.flatMap((k, i) => (k === kind ? [i] : []));
+
+    // ---------- cards ----------
+    // Deck of 104: two of each kind (R7a, R7b), four Wild (W1–W4) and four Take (X1–X4).
+    const DECK = [...KINDS.flatMap((k) => [k + "a", k + "b"]), "W1", "W2", "W3", "W4", "X1", "X2", "X3", "X4"];
+    const kindOf = (card) => (card[0] === "W" || card[0] === "X" ? card[0] : card.slice(0, -1));
+    const cardLabel = (card) => {
+      const k = kindOf(card);
+      return k === "W" ? "Wild" : k === "X" ? "Take" : `${COLOURS[k[0]]} ${k.slice(1)}`;
+    };
+    function shuffled(list) {
+      const a = [...list];
+      const r = new Uint32Array(a.length);
+      crypto.getRandomValues(r);
+      for (let i = a.length - 1; i > 0; i--) { const j = r[i] % (i + 1); [a[i], a[j]] = [a[j], a[i]]; }
+      return a;
+    }
+
+    // ---------- lines ----------
+    const DIRS = [[0, 1], [1, 0], [1, 1], [1, -1]];
+    const teamAt = (board, i) => (board[i] === "-" ? null : board[i] === "*" ? "*" : Number(board[i]));
+    // Lines already counted, as groups of five square indices.
+    const linesOf = (line) => { const a = line ? line.split(",").map(Number) : []; const out = []; for (let i = 0; i < a.length; i += 5) out.push(a.slice(i, i + 5)); return out; };
+    // A new line of five through square i for team t, overlapping existing lines in at most one square.
+    function findLine(board, i, t, existing) {
+      const used = new Set(existing.flat());
+      const r0 = Math.floor(i / N), c0 = i % N;
+      for (const [dr, dc] of DIRS) {
+        const run = [i];
+        for (const s of [1, -1]) {
+          for (let k = 1; k < 5; k++) {
+            const r = r0 + dr * k * s, c = c0 + dc * k * s;
+            if (r < 0 || r >= N || c < 0 || c >= N) break;
+            const v = teamAt(board, r * N + c);
+            if (v !== t && v !== "*") break;
+            if (s === 1) run.push(r * N + c); else run.unshift(r * N + c);
+          }
+        }
+        for (let s = 0; s + 5 <= run.length; s++) {
+          const w = run.slice(s, s + 5);
+          if (w.filter((x) => used.has(x)).length <= 1) return w;
+        }
+      }
+      return null;
+    }
+    const teamOfLine = (board, w) => teamAt(board, w.find((x) => !CORNERS.includes(x)));
+
+    // ---------- room shape ----------
+    // board: 100 chars, "-" empty, "*" free corner, "0".."2" a team's chip. line: counted lines, 5 indices each.
+    // state: { deck: "card,card,…", next: index of the next card to draw, hands: "7,7" cards per seat,
+    //          lastCard, lastBy } — lastCard/lastBy let a player repair their hand if its save failed.
+    // Private per seat: "<round>:<card>,<card>,…" (the round so a new deal replaces the old hand).
+    const EMPTY_BOARD = Array.from({ length: N * N }, (_, i) => (CORNERS.includes(i) ? "*" : "-")).join("");
+    const handSize = (seats) => (seats === 2 ? 7 : 6);
+    const linesToWin = (room) => (room.teams === 2 || room.seats === 2 ? 2 : 1);
+    const teamOf = (room, s) => rooms.teamOf(room, s);
+    const parseState = (room) => ({ deck: room.state.deck.split(","), next: room.state.next, hands: room.state.hands.split(",").map(Number), lastCard: room.state.lastCard || "", lastBy: room.state.lastBy ?? -1 });
+    function dealRoom(room, round) {
+      const deck = shuffled(DECK);
+      const h = handSize(room.seats);
+      room.round = round;
+      room.turn = round % room.seats;
+      room.status = "playing";
+      room.board = EMPTY_BOARD;
+      room.line = "";
+      room.last = null;
+      room.winner = null;
+      room.left = null;
+      room.state = { deck: deck.join(","), next: room.seats * h, hands: Array(room.seats).fill(h).join(","), lastCard: "", lastBy: -1 };
+      return room;
+    }
+    const initialRoom = () => ({ board: EMPTY_BOARD, line: "", round: 0, turn: 0, state: { deck: "", next: 0, hands: "", lastCard: "", lastBy: -1 } });
+
+    // ---------- state ----------
+    let seat = null;      // { backend, code, seat }
+    let leave = null;
+    let unwatchHand = null;
+    let room = null;
+    let hand = null;      // array of card ids, or null while there is none
+    let handRound = -1;
+    let handLoaded = false; // the saved hand has been read at least once
+    let picked = null;    // selected card id
+    let lastBoard = null;
+    let mode = 2;
+    let busy = false;     // a move is being written
+
+    const $ = (id) => document.getElementById(id);
+    const boardEl = $("board");
+    boardEl.innerHTML = LAYOUT.map((k, i) =>
+      `<button class="sq${k ? "" : " free"}" data-i="${i}" role="gridcell" style="--k: var(--${(k || "r")[0].toLowerCase()})" aria-label="${k ? cardLabel(k + "a") : "Free corner"}">${k ? k.slice(1) : "★"}</button>`).join("");
+    const squares = [...boardEl.children];
+
+    const me = () => seat.seat;
+    const myTeam = () => teamOf(room, me());
+    const label = (s) => (s === me() ? "You" : `P${s + 1}`);
+
+    function setBusy(b) { for (const id of ["create", "join"]) $(id).disabled = b; }
+
+    function showHome(error = "") {
+      if (leave) leave();
+      if (unwatchHand) unwatchHand();
+      leave = unwatchHand = null;
+      seat = room = hand = lastBoard = picked = null;
+      handRound = -1;
+      handLoaded = false;
+      $("game").hidden = true;
+      $("home").hidden = false;
+      $("home-error").textContent = error;
+      setBusy(false);
+    }
+
+    function start(s) {
+      seat = s;
+      lastBoard = null;
+      picked = null;
+      $("home").hidden = true;
+      $("game").hidden = false;
+      setBusy(false);
+      leave = rooms.enter(s, (value) => { room = value; onRoom(); render(); }, showHome);
+      unwatchHand = s.backend.watchPrivate(s.code, s.seat, (value) => { onHand(value); render(); });
+    }
+
+    // ---------- hands ----------
+    function onHand(value) {
+      handLoaded = true;
+      if (typeof value !== "string") { hand = null; handRound = -1; }
+      else {
+        const [r, cards] = value.split(":");
+        handRound = Number(r);
+        hand = cards ? cards.split(",") : [];
+      }
+      onRoom();
+    }
+    const saveHand = (cards) => seat.backend.setPrivate(seat.code, me(), `${room.round}:${cards.join(",")}`);
+
+    // Deals or repairs this player's hand once the room and the hand are both known.
+    let dealing = false;
+    function onRoom() {
+      if (!room || !seat || !handLoaded || room.status === "waiting" || dealing) return;
+      if (!room.state?.deck) return;
+      const st = parseState(room);
+      if (handRound !== room.round) {
+        // New deal: my first cards are a fixed slice of the shuffled deck.
+        dealing = true;
+        const h = handSize(room.seats);
+        saveHand(st.deck.slice(me() * h, (me() + 1) * h)).catch(console.error).finally(() => { dealing = false; });
+        return;
+      }
+      // My last move saved to the room but not to my hand (connection dropped in between): redo it.
+      if (hand && st.lastBy === me() && st.lastCard && hand.includes(st.lastCard) && hand.length > st.hands[me()]) {
+        const cards = hand.filter((c) => c !== st.lastCard);
+        if (cards.length < st.hands[me()]) cards.push(st.deck[st.next - 1]);
+        dealing = true;
+        saveHand(cards).catch(console.error).finally(() => { dealing = false; });
+      }
+    }
+
+    // ---------- moves ----------
+    const isDead = (card) => { const k = kindOf(card); return k.length > 1 && squaresOf(k).every((i) => room.board[i] !== "-"); };
+    function targetsOf(card) {
+      if (!room || room.status !== "playing" || room.turn !== me()) return [];
+      const k = kindOf(card);
+      const board = room.board;
+      if (k === "W") return [...board].flatMap((v, i) => (v === "-" ? [i] : []));
+      if (k === "X") {
+        const locked = new Set(linesOf(room.line).flat());
+        return [...board].flatMap((v, i) => (v !== "-" && v !== "*" && Number(v) !== myTeam() && !locked.has(i) ? [i] : []));
+      }
+      return squaresOf(k).filter((i) => board[i] === "-");
+    }
+
+    async function play(card, square) {
+      if (busy || !hand || !hand.includes(card)) return;
+      const mySeat = me(), round = room.round;
+      busy = true;
+      try {
+        const r = await seat.backend.transact(seat.code, (cur) => {
+          if (!cur || cur.status !== "playing" || cur.turn !== mySeat || cur.round !== round) return undefined;
+          const st = parseState(cur);
+          const k = kindOf(card);
+          const board = [...cur.board];
+          const t = teamOf(cur, mySeat);
+          if (k === "X") {
+            if (board[square] === "-" || board[square] === "*" || Number(board[square]) === t) return undefined;
+            if (linesOf(cur.line).flat().includes(square)) return undefined;
+            board[square] = "-";
+          } else {
+            if (board[square] !== "-") return undefined;
+            if (k !== "W" && LAYOUT[square] !== k) return undefined;
+            board[square] = String(t);
+          }
+          cur.board = board.join("");
+          cur.last = square;
+          const drawn = st.next < st.deck.length ? st.deck[st.next] : null;
+          st.hands[mySeat] += drawn ? 0 : -1;
+          cur.state = { deck: cur.state.deck, next: drawn ? st.next + 1 : st.next, hands: st.hands.join(","), lastCard: card, lastBy: mySeat };
+          if (k !== "X") {
+            const lines = linesOf(cur.line);
+            const w = findLine(cur.board, square, t, lines);
+            if (w) {
+              lines.push(w);
+              cur.line = lines.flat().join(",");
+              if (lines.filter((l) => teamOfLine(cur.board, l) === t).length >= linesToWin(cur)) { cur.status = "done"; cur.winner = t; return cur; }
+            }
+          }
+          if (st.hands.every((n) => n === 0) && !drawn) { cur.status = "done"; cur.winner = "draw"; return cur; }
+          cur.turn = rooms.nextSeat(cur, mySeat);
+          return cur;
+        });
+        if (!r.committed) { $("hint").textContent = "That move didn't go through."; return; }
+        const st = parseState(r.value);
+        const cards = hand.filter((c) => c !== card);
+        if (st.lastBy === mySeat && cards.length < st.hands[mySeat]) cards.push(st.deck[st.next - 1]);
+        picked = null;
+        await saveHand(cards);
+      } catch (err) {
+        console.error(err);
+        $("hint").textContent = "Move didn't go through. Try again.";
+      } finally { busy = false; render(); }
+    }
+
+    // Swap a dead card (both of its squares taken) for the next one; the turn goes on.
+    async function swapDead(card) {
+      if (busy || !hand || !isDead(card) || room.turn !== me()) return;
+      const mySeat = me(), round = room.round;
+      busy = true;
+      try {
+        const r = await seat.backend.transact(seat.code, (cur) => {
+          if (!cur || cur.status !== "playing" || cur.turn !== mySeat || cur.round !== round) return undefined;
+          const st = parseState(cur);
+          if (st.next >= st.deck.length) return undefined;
+          cur.state = { ...cur.state, next: st.next + 1, lastCard: card, lastBy: mySeat };
+          return cur;
+        });
+        if (!r.committed) { $("hint").textContent = "No cards left to draw."; return; }
+        const st = parseState(r.value);
+        picked = null;
+        await saveHand([...hand.filter((c) => c !== card), st.deck[st.next - 1]]);
+      } catch (err) {
+        console.error(err);
+        $("hint").textContent = "Couldn't swap. Try again.";
+      } finally { busy = false; render(); }
+    }
+
+    async function rematch() {
+      if (!room || room.status !== "done") return;
+      const round = room.round + 1;
+      try {
+        await seat.backend.transact(seat.code, (cur) => {
+          if (!cur || cur.status !== "done" || cur.round !== round - 1) return undefined;
+          return dealRoom(cur, round);
+        });
+      } catch (err) { console.error(err); $("hint").textContent = "Couldn't start a new game. Try again."; }
+    }
+
+    async function startGame() {
+      $("start-btn").disabled = true;
+      try {
+        await rooms.startGame(seat, (cur) => dealRoom(cur, cur.round));
+      } catch (err) {
+        $("waiting-note").textContent = err instanceof rooms.RoomError ? err.message : "Couldn't start. Try again.";
+      } finally { $("start-btn").disabled = false; }
+    }
+
+    // ---------- rendering ----------
+    function render() {
+      if (!room || !seat) return;
+      const r = room;
+      const mine = me();
+      const playing = r.status === "playing";
+      const seats = rooms.seatList(r);
+
+      $("room-label").innerHTML = `Room <b>${seat.code}</b>`;
+      $("players").innerHTML = seats.map((uid, s) => {
+        if (!uid) return "";
+        const t = teamOf(r, s);
+        return `<span class="chip${playing && r.turn === s ? " turn" : ""}"><span class="disc" style="background: var(--c${t}); border-color: var(--c${t}-ring)"></span>${label(s)}` +
+          `<span class="dot${rooms.isOnline(r, s) ? " on" : ""}"></span></span>`;
+      }).join("");
+
+      const waiting = r.status === "waiting";
+      $("waiting").hidden = !waiting;
+      boardEl.hidden = waiting;
+      $("hand").hidden = waiting;
+      if (waiting) {
+        $("waiting-code").textContent = seat.code;
+        const count = rooms.playerCount(r);
+        $("seated").innerHTML = seats.map((uid, s) => uid ? `<div><span class="chip"><span class="disc" style="background: var(--c${teamOf(r, s)}); border-color: var(--c${teamOf(r, s)}-ring)"></span>${label(s)}${s === 0 ? " (host)" : ""}</span>${r.teams === 2 ? `<span class="muted">Team ${teamOf(r, s) + 1}</span>` : ""}</div>` : "").join("");
+        const isHost = r.host === seat.backend.uid;
+        $("start-btn").hidden = !isHost;
+        $("start-btn").disabled = count < (r.min || r.seats);
+        $("waiting-note").textContent = count < r.seats
+          ? `${count} of ${r.seats} here.${isHost && count >= (r.min || 2) ? " Start now or wait for more." : isHost ? " Waiting for friends…" : " Waiting for the host to start…"}`
+          : isHost ? "Everyone's here." : "Waiting for the host to start…";
+        $("status").textContent = "";
+        $("hint").textContent = "";
+        $("rematch").hidden = true;
+        return;
+      }
+
+      // Board
+      const locked = new Set(linesOf(r.line).flat());
+      const targets = new Set(picked && playing && r.turn === mine && hand?.includes(picked) ? targetsOf(picked) : []);
+      const removing = picked && kindOf(picked) === "X";
+      squares.forEach((sq, i) => {
+        const v = r.board[i];
+        const was = lastBoard ? lastBoard[i] : v;
+        const chip = v !== "-" && v !== "*";
+        sq.className = "sq" + (LAYOUT[i] ? "" : " free") + (targets.has(i) ? " ok" : "") + (removing && targets.has(i) ? " remove" : "") +
+          (locked.has(i) ? " locked" : "") + (r.last === i ? " last" : "") + (chip && was === "-" ? " placed" : "");
+        sq.innerHTML = (LAYOUT[i] ? LAYOUT[i].slice(1) : "★") + (chip ? `<span class="chipd" style="--cc: var(--c${v}); --cr: var(--c${v}-ring)"></span>` : "");
+        sq.disabled = !targets.has(i);
+        sq.setAttribute("aria-label", `${LAYOUT[i] ? cardLabel(LAYOUT[i] + "a") : "Free corner"}${chip ? `, ${CHIP_NAMES[v]} chip` : ""}${targets.has(i) ? ", tap to play here" : ""}`);
+      });
+      lastBoard = r.board;
+
+      // Hand
+      const myTurn = playing && r.turn === mine;
+      $("hand").innerHTML = (hand || []).map((c) => {
+        const k = kindOf(c), dead = playing && isDead(c);
+        const colour = k.length > 1 ? `var(--${k[0].toLowerCase()})` : "var(--text)";
+        return `<button class="hcard${dead ? " dead" : ""}" data-card="${c}" aria-pressed="${picked === c}" style="--k: ${colour}" aria-label="${cardLabel(c)}${dead ? " (dead: tap to swap)" : ""}"${myTurn ? "" : " disabled"}>` +
+          `${k === "W" ? "★" : k === "X" ? "✕" : k.slice(1)}<small>${k === "W" ? "WILD" : k === "X" ? "TAKE" : COLOURS[k[0]].toUpperCase()}</small></button>`;
+      }).join("");
+
+      // Status
+      const st = r.state?.deck ? parseState(r) : null;
+      const online = (s) => rooms.isOnline(r, s);
+      let status = "", hint = "";
+      if (playing) {
+        if (myTurn) {
+          status = "Your turn";
+          hint = picked ? (kindOf(picked) === "X" ? "Tap an opponent's chip to take it." : "Tap a highlighted square.") : hand?.length ? "Tap a card to play." : "No cards left: your turn is skipped.";
+          if (!picked && hand?.some(isDead)) hint = "A faded card is dead: tap it to swap it.";
+        } else {
+          status = `${label(r.turn)}'s turn${online(r.turn) ? "…" : " (away)"}`;
+        }
+      } else if (r.winner === "draw") status = "No cards left: it's a draw";
+      else if (typeof r.left === "number") status = r.left === mine ? "You left this game" : `${label(r.left)} left. ${r.teams === 2 ? "Game over" : r.winner === myTeam() ? "You win 🎉" : `${label(r.winner)} wins`}`;
+      else if (r.winner === myTeam()) status = r.teams === 2 ? "Your team wins! 🎉" : "You win! 🎉";
+      else status = r.teams === 2 ? `Team ${r.winner + 1} wins` : `${label(r.winner)} wins`;
+      $("status").textContent = status;
+      $("hint").textContent = hint || (st && playing ? `${st.deck.length - st.next} cards in the pile · ${seats.map((u, s) => u && s !== mine ? `${label(s)}: ${st.hands[s]}` : "").filter(Boolean).join(" · ")}` : "");
+      $("rematch").hidden = r.status !== "done";
+      $("leave").disabled = false;
+    }
+
+    // ---------- actions ----------
+    async function createRoom() {
+      setBusy(true);
+      $("home-error").textContent = "";
+      try {
+        start(await rooms.createRoom(GAME, { seats: mode, min: 2, auto: false, makeRoom: () => ({ ...initialRoom(), teams: mode === 4 ? 2 : 0 }) }));
+      } catch (err) {
+        console.error(err);
+        showHome(err instanceof rooms.RoomError ? err.message : "Couldn't create a room. Check your connection and try again.");
+      }
+    }
+    async function joinRoom(code) {
+      setBusy(true);
+      $("home-error").textContent = "";
+      try {
+        start(await rooms.joinRoom(GAME, code));
+      } catch (err) {
+        console.error(err);
+        showHome(err instanceof rooms.RoomError ? err.message : "Couldn't join. Check your connection and try again.");
+      }
+    }
+
+    // ---------- wiring ----------
+    for (const b of document.querySelectorAll(".seg button")) {
+      b.addEventListener("click", () => {
+        mode = Number(b.dataset.mode);
+        for (const o of document.querySelectorAll(".seg button")) o.setAttribute("aria-pressed", String(o === b));
+      });
+    }
+    $("create").addEventListener("click", createRoom);
+    $("join-form").addEventListener("submit", (e) => { e.preventDefault(); joinRoom($("join-code").value); });
+    $("join-code").addEventListener("input", () => {
+      $("join-code").value = $("join-code").value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+      $("home-error").textContent = "";
+    });
+    $("start-btn").addEventListener("click", startGame);
+    $("rematch").addEventListener("click", rematch);
+    $("hand").addEventListener("click", (e) => {
+      const b = e.target.closest(".hcard");
+      if (!b || b.disabled) return;
+      const card = b.dataset.card;
+      if (isDead(card)) return swapDead(card);
+      picked = picked === card ? null : card;
+      render();
+    });
+    boardEl.addEventListener("click", (e) => {
+      const sq = e.target.closest(".sq");
+      if (sq && !sq.disabled && picked) play(picked, Number(sq.dataset.i));
+    });
+    $("leave").addEventListener("click", async () => {
+      if (!seat || !room) return showHome();
+      const s = seat;
+      const others = rooms.seatList(room).filter((u, i) => u && i !== me() && rooms.isOnline(room, i)).length;
+      if (room.status === "playing" && others && !confirm(room.seats === 2 ? "Leave the game? Your friend wins this round." : "Leave the game? The others will be left without you.")) return;
+      $("leave").disabled = true;
+      await rooms.quit(s);
+      showHome();
+    });
+    $("share").addEventListener("click", async () => {
+      if ((await rooms.share(seat.code, "Five Line")) === "copied") $("share").textContent = "Link copied";
+    });
+    $("copy").addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(seat.code); $("copy").textContent = "Copied"; } catch { prompt("Room code:", seat.code); }
+      setTimeout(() => ($("copy").textContent = "Copy code"), 1500);
+    });
+
+    // Opening a shared link (?room=CODE) joins straight away.
+    const linked = rooms.roomFromUrl();
+    if (linked) { $("join-code").value = linked; joinRoom(linked); }
+
+    window.__fl = { rooms, LAYOUT, get room() { return room; }, get hand() { return hand; }, get seat() { return seat; }, play, swapDead };
+  </script>
+</body>
+</html>
