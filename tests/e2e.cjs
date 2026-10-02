@@ -142,7 +142,8 @@ const server = http.createServer((req, res) => {
   await loaded(Q); await settled(Q);
   ok((await names(Q))[0] === '1. bJunb 1,840', 'another player sees the score');
   await Q.evaluate(() => { window.__2048.setSpawn(false); window.__2048.setGrid([[2,4,2,4],[4,2,4,2],[2,4,2,4],[4,2,4,8]], 3000); });
-  await Q.waitForSelector('#save-form:not([hidden])');
+  await Q.click('#trophy'); await Q.waitForSelector('#save-form:not([hidden])');
+  ok(await Q.evaluate(() => document.getElementById('leaders').open), 'trophy opens the sheet');
   await Q.fill('#save-name', 'Bo'); await Q.click('#save-btn');
   await Q.waitForFunction(() => /Saved/.test(document.getElementById('save-msg').textContent), null, { timeout: 8000 });
   await P.evaluate(() => window.__2048.reloadLeaderboard());
@@ -151,6 +152,8 @@ const server = http.createServer((req, res) => {
   await P.evaluate(() => window.__2048.setGrid([[2,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]], 500));
   ok(await formHidden(P), 'a lower score is not offered for saving');
   await P.evaluate(() => window.__2048.setGrid([[2,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]], 2500));
+  ok(await P.isVisible('#trophy-dot'), 'a new unsaved best shows a dot on the trophy');
+  await P.evaluate(() => document.getElementById('leaders').open || document.getElementById('trophy').click());
   await P.waitForSelector('#save-form:not([hidden])');
   await P.click('#save-btn');
   await P.waitForFunction(() => /just yet|Saved/.test(document.getElementById('save-msg').textContent), null, { timeout: 8000 });
@@ -161,6 +164,15 @@ const server = http.createServer((req, res) => {
   await P.waitForFunction(() => /2,500/.test(document.getElementById('leaders-note').textContent), null, { timeout: 8000 });
   ok(JSON.stringify(await names(P)) === JSON.stringify(['1. Bo 3,000', '2. bJunb 2,500']), 'a higher score after the wait replaces your entry');
   ok(await formHidden(P), 'the save form disappears from the screen after saving');
+  ok(!(await P.isVisible('#trophy-dot')), 'the trophy dot clears once saved');
+  await P.screenshot({ path: `${out}/e2e-2048-sheet.png` });
+  await P.click('#leaders-close');
+  ok(!(await P.evaluate(() => document.getElementById('leaders').open)), '✕ closes the sheet');
+  await P.click('#trophy'); await P.mouse.click(195, 30);
+  ok(!(await P.evaluate(() => document.getElementById('leaders').open)), 'tapping outside closes the sheet');
+  await P.click('#trophy'); await P.click('.leaders-head h2');
+  ok(await P.evaluate(() => document.getElementById('leaders').open), 'tapping inside the sheet keeps it open');
+  await P.keyboard.press('Escape');
   const forged = await P.evaluate(async () => {
     const b = await (await import('../shared/rooms.js')).__test.backend();
     try { await b.saveScore('2048', 'Hax', 99999998); return 'saved'; } catch (e) { return 'denied'; }
