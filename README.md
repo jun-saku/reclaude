@@ -31,7 +31,18 @@ Firebase console → Realtime Database → Rules → Publish whenever they chang
 
 ## Deploying
 
-`claude/...` → PR → `main`. Merging into `main` publishes the site; PRs only run the build check.
+`claude/...` → PR → `main`. Each PR gets a Cloudflare preview link (posted as a comment); merging into
+`main` publishes to **Cloudflare Pages** (`reclaude.pages.dev`, plus any custom domain) and to GitHub Pages
+(`jun-saku.github.io/reclaude`, kept for old links).
+
+Cloudflare setup (once):
+1. Cloudflare → My Profile → **API Tokens** → Create Token → **Create Custom Token**: permission
+   *Account · Cloudflare Pages · Edit*, for your account. Copy the token.
+2. Copy your **Account ID** (Workers & Pages overview sidebar, or the long ID in the dashboard URL).
+3. GitHub → repo **Settings → Secrets and variables → Actions → New repository secret**:
+   `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
+4. The next deploy creates the `reclaude` Pages project. Attach a domain under Workers & Pages → reclaude →
+   **Custom domains**.
 
 Repo settings (done):
 - Settings → Pages → Source: **GitHub Actions**.

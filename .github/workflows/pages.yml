@@ -1,7 +1,9 @@
 name: Build and deploy
 
 # Every PR and push is built, so broken projects are caught before merging.
-# Only main is published to GitHub Pages, and main only changes through PRs.
+# main is published to Cloudflare Pages (production) and, for old links, GitHub Pages.
+# PRs get a Cloudflare preview link, posted as a PR comment.
+# Cloudflare steps are skipped until the CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets exist.
 on:
   push:
     branches: [main, "claude/**"]
@@ -12,7 +14,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: pages-${{ github.ref }}
+  group: pages-${{ github.event_name }}-${{ github.ref }}
   # Never cancel a deploy halfway; superseded checks on other branches can go.
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
@@ -30,6 +32,7 @@ jobs:
         with:
           path: _site
 
+  # GitHub Pages: kept so jun-saku.github.io/reclaude/... links keep working.
   deploy:
     if: github.ref == 'refs/heads/main'
     needs: build
@@ -43,3 +46,57 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+
+  # Cloudflare Pages: production from main, previews for PRs. Uploads the built site directly
+  # (no Cloudflare-GitHub connection needed, and direct uploads don't use Cloudflare's build quota).
+  cloudflare:
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      PROJECT: reclaude
+    steps:
+      - id: secrets
+        name: Check Cloudflare secrets
+        run: |
+          if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Cloudflare secrets not set yet; skipping the Cloudflare deploy."
+          fi
+      - if: steps.secrets.outputs.ready == 'true'
+        uses: actions/checkout@v4
+      - if: steps.secrets.outputs.ready == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - if: steps.secrets.outputs.ready == 'true'
+        run: node scripts/build.mjs
+      - if: steps.secrets.outputs.ready == 'true'
+        name: Create the Pages project (first run only)
+        run: npx --yes wrangler@4 pages project create "$PROJECT" --production-branch=main || echo "Project already exists."
+      - if: steps.secrets.outputs.ready == 'true'
+        id: deploy
+        name: Upload to Cloudflare Pages
+        env:
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: |
+          npx --yes wrangler@4 pages deploy _site --project-name="$PROJECT" --branch="$BRANCH" --commit-dirty=true 2>&1 | tee deploy.log
+          url=$(grep -oE 'https://[a-zA-Z0-9.-]+\.pages\.dev' deploy.log | tail -1)
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Deployed to Cloudflare Pages: $url" >> "$GITHUB_STEP_SUMMARY"
+      - if: github.event_name == 'pull_request' && steps.deploy.outputs.url != ''
+        name: Post the preview link on the PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          URL: ${{ steps.deploy.outputs.url }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          body="Preview of this PR: $URL (updated for ${GITHUB_SHA::7}). Add a project's folder name to the end, e.g. $URL/2048/"
+          gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --edit-last --body "$body" \
+            || gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body "$body"
