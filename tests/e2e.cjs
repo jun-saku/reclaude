@@ -79,7 +79,7 @@ const server = http.createServer((req, res) => {
   A.once('dialog', (d) => d.accept());
   await A.click('#leave'); await A.waitForSelector('#home:not([hidden])', { timeout: 8000 });
   ok(await statusIs(B, 'Your friend left. You win 🎉'), 'leaving mid-game forfeits; the friend sees it');
-  ok(await B.$eval('#rematch', (b) => b.hidden), 'play again waits until the friend is back');
+  ok(await B.waitForFunction(() => document.getElementById('rematch').hidden, null, { timeout: 8000 }).then(() => true).catch(() => false), 'play again waits until the friend is back');
   // A waiting room is deleted when its host leaves it
   const Z = await page(C4);
   await Z.click('#create'); await Z.waitForSelector('#waiting:not([hidden])', { timeout: 15000 });
@@ -127,11 +127,18 @@ const server = http.createServer((req, res) => {
     await F1.waitForTimeout(80);
   }
   const fr = await F1.evaluate(() => window.__fl.room);
-  ok(fr.status === 'done' && typeof fr.winner === 'number' && fr.line.split(',').length === 5, `the rules accept every move; the game ends with a line (${fturns} turns, ${swaps} dead-card swaps, winner seat ${fr.winner})`);
+  const flLines = fr.line.split(',').map(Number), flWon = []; for (let i = 0; i < flLines.length; i += 5) flWon.push(flLines.slice(i, i + 5));
+  const winnerLines = flWon.filter((g) => fr.board[g.find((x) => ![0, 9, 90, 99].includes(x))] === String(fr.winner)).length;
+  ok(fr.status === 'done' && typeof fr.winner === 'number' && winnerLines === 2, `the rules accept every move; 2 players need two lines to win (${fturns} turns, ${swaps} dead-card swaps, winner seat ${fr.winner} with ${winnerLines} lines)`);
   ok(await statusIs([F1, F2][fr.winner], 'You win! 🎉'), 'the winner is told');
   await F1.screenshot({ path: `${out}/e2e-fl.png` });
   await F2.click('#rematch'); await F2.waitForFunction(() => window.__fl.room.round === 1 && window.__fl.hand && window.__fl.hand.length === 6, null, { timeout: 8000 });
   ok(true, 'play again deals a new round');
+  // Leaving when it isn't your turn forfeits under the real rules (the room is rewritten whole, state included)
+  const fr1 = await F1.evaluate(() => window.__fl.room);
+  const leaver = [F1, F2][1 - fr1.turn], stayer = [F1, F2][fr1.turn];
+  leaver.once('dialog', (d) => d.accept()); await leaver.click('#leave'); await leaver.waitForSelector('#home:not([hidden])', { timeout: 8000 });
+  ok(await statusIs(stayer, `P${2 - fr1.turn} left. You win 🎉`), 'leaving off-turn forfeits a game with state; the other player wins');
 
   // ---- Tic-tac-toe on real Firebase ----
   const TT = BASE + 'tic-tac-toe/?backend=emulator';
