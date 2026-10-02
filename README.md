@@ -8,6 +8,7 @@ toys) built by Claude from a phone, each published at its own link.
 
 ## Projects
 
+- [Tic-tac-toe](https://jun-saku.github.io/reclaude/tic-tac-toe/): play a friend online with a room code, or on one phone
 - [2048](https://jun-saku.github.io/reclaude/2048/): slide and merge tiles, with swipe controls, undo and saved progress
 - [Calculator](https://jun-saku.github.io/reclaude/calculator/): a pocket calculator with a live result preview
 
@@ -20,6 +21,12 @@ node scripts/build.mjs
 mkdir -p /tmp/serve && ln -sfn "$PWD/_site" /tmp/serve/reclaude
 python3 -m http.server 8000 -d /tmp/serve   # open http://localhost:8000/reclaude/<name>/
 ```
+
+## Firebase
+
+Online games use Firebase (Realtime Database + anonymous sign-in, free Spark plan). The database access
+rules are in [`firebase/database.rules.json`](firebase/database.rules.json); paste them into
+Firebase console → Realtime Database → Rules → Publish whenever they change.
 
 ## Deploying
 

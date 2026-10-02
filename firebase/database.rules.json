@@ -1,0 +1,24 @@
+{
+  "rules": {
+    "rooms": {
+      "$code": {
+        ".read": "auth != null && $code.matches(/^[A-HJ-NP-Z2-9]{4}$/)",
+        ".write": "auth != null && $code.matches(/^[A-HJ-NP-Z2-9]{4}$/) && (!data.exists() || data.child('x').val() === auth.uid || data.child('o').val() === auth.uid || (!data.child('o').exists() && newData.child('o').val() === auth.uid))",
+        ".validate": "newData.hasChildren(['x', 'board', 'turn', 'status', 'round', 'createdAt'])",
+        "x": { ".validate": "newData.isString() && (data.exists() ? newData.val() === data.val() : newData.val() === auth.uid)" },
+        "o": { ".validate": "newData.isString() && (data.exists() ? newData.val() === data.val() : newData.val() === auth.uid)" },
+        "board": { ".validate": "newData.isString() && newData.val().matches(/^[-xo]{9}$/)" },
+        "turn": { ".validate": "newData.val() === 'x' || newData.val() === 'o'" },
+        "status": { ".validate": "newData.val() === 'waiting' || newData.val() === 'playing' || newData.val() === 'done'" },
+        "winner": { ".validate": "newData.val() === 'x' || newData.val() === 'o' || newData.val() === 'draw'" },
+        "line": { ".validate": "newData.isString() && newData.val().matches(/^[0-8]{3}$/)" },
+        "round": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+        "createdAt": { ".validate": "newData.isNumber()" },
+        "online": {
+          "$side": { ".validate": "($side === 'x' || $side === 'o') && newData.isBoolean()" }
+        },
+        "$other": { ".validate": false }
+      }
+    }
+  }
+}

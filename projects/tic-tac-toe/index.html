@@ -1,0 +1,625 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#161618" media="(prefers-color-scheme: dark)">
+  <title>Tic-tac-toe</title>
+  <meta name="description" content="Play a friend online with a room code, or pass the phone on one device.">
+  <style>
+    :root {
+      --bg: #f7f6f3;
+      --text: #1d1d1f;
+      --muted: #6b6b70;
+      --panel: #ffffff;
+      --line: #d9d2c6;
+      --soft: #ece7df;
+      --x: #c2571a;
+      --o: #2f7f8f;
+      --win: #f6e2c8;
+      --danger: #b3261e;
+      color-scheme: light;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #161618;
+        --text: #ececef;
+        --muted: #9a9aa2;
+        --panel: #1f1f22;
+        --line: #3a3a40;
+        --soft: #2a2a2e;
+        --x: #f08a4b;
+        --o: #5cc3d1;
+        --win: #3a2a1c;
+        --danger: #ff8a80;
+        color-scheme: dark;
+      }
+    }
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 17px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      justify-content: center;
+      -webkit-tap-highlight-color: transparent;
+    }
+    main {
+      width: 100%;
+      max-width: 440px;
+      padding: max(20px, env(safe-area-inset-top)) 16px max(20px, env(safe-area-inset-bottom));
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+    h1 { margin: 0; font-size: clamp(1.9rem, 9vw, 2.4rem); line-height: 1.1; letter-spacing: -0.02em; }
+    h1 .x { color: var(--x); } h1 .o { color: var(--o); }
+    .muted { color: var(--muted); }
+    [hidden] { display: none !important; }
+    #game { display: flex; flex-direction: column; gap: 14px; }
+
+    button, input {
+      font: inherit;
+      border-radius: 12px;
+      touch-action: manipulation;
+    }
+    button {
+      border: 0;
+      padding: 13px 18px;
+      font-weight: 650;
+      background: var(--x);
+      color: #fff;
+      cursor: pointer;
+    }
+    button.secondary { background: var(--soft); color: var(--text); }
+    button.link { background: none; color: var(--muted); padding: 6px 0; font-weight: 500; text-decoration: underline; }
+    button:disabled { opacity: 0.45; cursor: default; }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .card h2 { margin: 0; font-size: 1.05rem; }
+    .card p { margin: 0; }
+    .join { display: flex; gap: 8px; }
+    .join input {
+      flex: 1;
+      min-width: 0;
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 1.3rem;
+      font-weight: 700;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      text-align: center;
+    }
+    .error { color: var(--danger); font-size: 0.95rem; min-height: 1.3em; margin: 0; }
+
+    .bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .code {
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    .code b { color: var(--text); letter-spacing: 0.12em; font-size: 1rem; }
+    .players { display: flex; gap: 8px; }
+    .chip {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: var(--soft);
+      font-size: 0.9rem;
+      font-weight: 600;
+      border: 2px solid transparent;
+    }
+    .chip.turn.x { border-color: var(--x); }
+    .chip.turn.o { border-color: var(--o); }
+    .chip .mark { font-weight: 800; }
+    .chip.x .mark { color: var(--x); } .chip.o .mark { color: var(--o); }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); opacity: 0.4; }
+    .dot.on { background: #2e9d5b; opacity: 1; }
+
+    .status { text-align: center; font-size: 1.25rem; font-weight: 700; min-height: 1.5em; margin: 0; }
+
+    .board {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-rows: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      width: 100%;
+      aspect-ratio: 1;
+      padding: 8px;
+      background: var(--line);
+      border-radius: 18px;
+      container-type: inline-size;
+    }
+    .cell {
+      border-radius: 12px;
+      background: var(--panel);
+      display: grid;
+      place-items: center;
+      font-size: 22cqi;
+      font-weight: 800;
+      line-height: 1;
+      padding: 0;
+      min-height: 0;
+      overflow: hidden;
+      color: var(--text);
+      transition: background 120ms ease;
+    }
+    .cell.x { color: var(--x); }
+    .cell.o { color: var(--o); }
+    .cell.win { background: var(--win); }
+    .cell.placed span { animation: place 160ms ease-out; display: block; }
+    .cell:disabled { opacity: 1; cursor: default; }
+    @keyframes place { from { transform: scale(0.4); opacity: 0; } }
+    @media (prefers-reduced-motion: reduce) { .cell.placed span { animation: none; } }
+
+    .share { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+    .bigcode { font-size: clamp(2.6rem, 16vw, 3.4rem); font-weight: 800; letter-spacing: 0.18em; margin: 0; padding-left: 0.18em; }
+    .row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+    .footer { display: flex; justify-content: center; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Tic-<span class="x">tac</span>-<span class="o">toe</span></h1>
+
+    <!-- Home -->
+    <section id="home">
+      <div class="card">
+        <h2>Play a friend online</h2>
+        <p class="muted">Create a room and send your friend the code or link.</p>
+        <button id="create">Create room</button>
+      </div>
+      <div class="card" style="margin-top: 12px">
+        <h2>Join a room</h2>
+        <form class="join" id="join-form" autocomplete="off">
+          <input id="join-code" maxlength="4" inputmode="text" autocapitalize="characters" spellcheck="false" placeholder="CODE" aria-label="Room code">
+          <button id="join" type="submit">Join</button>
+        </form>
+        <p class="error" id="home-error" role="alert"></p>
+      </div>
+      <div class="card" style="margin-top: 12px">
+        <h2>Same device</h2>
+        <p class="muted">Take turns on this phone. Works offline.</p>
+        <button class="secondary" id="local">Play here</button>
+      </div>
+    </section>
+
+    <!-- Game -->
+    <section id="game" hidden>
+      <div class="bar">
+        <div class="players" id="players"></div>
+        <div class="code" id="room-label"></div>
+      </div>
+
+      <div class="share card" id="waiting" hidden>
+        <p class="muted">Send this code to a friend</p>
+        <p class="bigcode" id="waiting-code"></p>
+        <div class="row">
+          <button id="share">Share link</button>
+          <button class="secondary" id="copy">Copy code</button>
+        </div>
+        <p class="muted" style="font-size: 0.9rem">Waiting for them to join…</p>
+      </div>
+
+      <p class="status" id="status" aria-live="polite"></p>
+      <div class="board" id="board" role="grid" aria-label="Board"></div>
+
+      <div class="row">
+        <button id="rematch" hidden>Play again</button>
+        <button class="secondary" id="leave">Leave</button>
+      </div>
+    </section>
+
+    <p class="footer muted" id="conn" style="font-size: 0.85rem; margin: 0"></p>
+  </main>
+
+  <script type="module">
+    // ---------- configuration ----------
+    // Firebase web config is public by design; access is controlled by firebase/database.rules.json.
+    const FIREBASE_CONFIG = {
+      apiKey: "AIzaSyCCRIEJKgWbghpEhua1HlBvSoAuJ7ffDhE",
+      authDomain: "reclaude-67a01.firebaseapp.com",
+      databaseURL: "https://reclaude-67a01-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "reclaude-67a01",
+      storageBucket: "reclaude-67a01.firebasestorage.app",
+      messagingSenderId: "720774301235",
+      appId: "1:720774301235:web:d91c1208d791c73b684546",
+    };
+    const FIREBASE_VERSION = "10.14.1";
+    const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no I, O, 0, 1
+    const LINES = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+    const params = new URLSearchParams(location.search);
+
+    // ---------- backends ----------
+    // Both expose: uid, watch(code, cb) → unsubscribe, transact(code, fn) → { committed, value },
+    // setOnline(code, side), clearOnline(code, side). transact's fn returns the new room,
+    // null to delete it, or undefined to abort.
+
+    async function firebaseBackend() {
+      const base = `https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/`;
+      const [appMod, authMod, dbMod] = await Promise.all([
+        import(base + "firebase-app.js"),
+        import(base + "firebase-auth.js"),
+        import(base + "firebase-database.js"),
+      ]);
+      const app = appMod.initializeApp(FIREBASE_CONFIG);
+      const auth = authMod.getAuth(app);
+      const db = dbMod.getDatabase(app);
+      const user = await new Promise((resolve, reject) => {
+        const off = authMod.onAuthStateChanged(auth, (u) => { if (u) { off(); resolve(u); } });
+        authMod.signInAnonymously(auth).catch(reject);
+      });
+      const roomRef = (code, path = "") => dbMod.ref(db, `rooms/${code}${path}`);
+      return {
+        uid: user.uid,
+        watch(code, cb) {
+          return dbMod.onValue(roomRef(code), (s) => cb(s.val()), (err) => cb(null, err));
+        },
+        async transact(code, fn) {
+          const r = await dbMod.runTransaction(roomRef(code), (cur) => fn(cur), { applyLocally: false });
+          return { committed: r.committed, value: r.snapshot.val() };
+        },
+        async setOnline(code, side) {
+          const r = roomRef(code, `/online/${side}`);
+          await dbMod.onDisconnect(r).remove();
+          await dbMod.set(r, true);
+        },
+        clearOnline(code, side) {
+          return dbMod.remove(roomRef(code, `/online/${side}`)).catch(() => {});
+        },
+      };
+    }
+
+    // Stand-in used by automated tests (?backend=fake): tabs in one browser share rooms
+    // through localStorage and BroadcastChannel.
+    function fakeBackend() {
+      const KEY = "ttt-fake-db";
+      const channel = new BroadcastChannel("ttt-fake");
+      const read = () => JSON.parse(localStorage.getItem(KEY) || "{}");
+      let uid = sessionStorage.getItem("ttt-fake-uid");
+      if (!uid) { uid = "u" + Math.random().toString(36).slice(2, 10); sessionStorage.setItem("ttt-fake-uid", uid); }
+      const listeners = new Map();
+      const notify = (code) => {
+        const v = read()[code] ?? null;
+        for (const cb of listeners.get(code) || []) cb(v === null ? null : structuredClone(v));
+      };
+      channel.onmessage = (e) => notify(e.data);
+      const transact = async (code, fn) => {
+        const db = read();
+        const cur = db[code] ?? null;
+        const next = fn(cur === null ? null : structuredClone(cur));
+        if (next === undefined) return { committed: false, value: cur };
+        if (next === null) delete db[code]; else db[code] = next;
+        localStorage.setItem(KEY, JSON.stringify(db));
+        notify(code);
+        channel.postMessage(code);
+        return { committed: true, value: next };
+      };
+      const setOnlineFlag = (code, side, on) => transact(code, (room) => {
+        if (!room) return undefined;
+        room.online = room.online || {};
+        if (on) room.online[side] = true; else delete room.online[side];
+        return room;
+      });
+      return {
+        uid,
+        watch(code, cb) {
+          if (!listeners.has(code)) listeners.set(code, new Set());
+          listeners.get(code).add(cb);
+          setTimeout(() => cb(read()[code] ?? null), 0);
+          return () => listeners.get(code).delete(cb);
+        },
+        transact,
+        async setOnline(code, side) {
+          await setOnlineFlag(code, side, true);
+          addEventListener("pagehide", () => setOnlineFlag(code, side, false), { once: true });
+        },
+        clearOnline: (code, side) => setOnlineFlag(code, side, false),
+      };
+    }
+
+    // Two players sharing this device; no network at all.
+    function localBackend() {
+      let room = null;
+      let cb = null;
+      return {
+        uid: "local",
+        local: true,
+        watch(code, fn) { cb = fn; setTimeout(() => cb(room), 0); return () => { cb = null; }; },
+        async transact(code, fn) {
+          const next = fn(room === null ? null : structuredClone(room));
+          if (next === undefined) return { committed: false, value: room };
+          room = next;
+          if (cb) cb(room === null ? null : structuredClone(room));
+          return { committed: true, value: room };
+        },
+        async setOnline() {},
+        clearOnline() {},
+      };
+    }
+
+    // ---------- game rules ----------
+    function outcome(board) {
+      for (const line of LINES) {
+        const [a, b, c] = line;
+        if (board[a] !== "-" && board[a] === board[b] && board[a] === board[c]) return { winner: board[a], line: line.join("") };
+      }
+      if (!board.includes("-")) return { winner: "draw", line: null };
+      return null;
+    }
+
+    function freshRound(room, round) {
+      room.board = "---------";
+      room.round = round;
+      room.turn = round % 2 === 0 ? "x" : "o"; // starter alternates each round
+      room.status = room.o ? "playing" : "waiting";
+      room.winner = null;
+      room.line = null;
+      return room;
+    }
+
+    // ---------- state ----------
+    let net = null;          // online backend, created on first use
+    let netPromise = null;
+    let api = null;          // backend for the current game
+    let code = null;
+    let side = null;         // "x" | "o" | "both" (local)
+    let room = null;
+    let unwatch = null;
+    let lastBoard = null;
+
+    const $ = (id) => document.getElementById(id);
+    const els = {
+      home: $("home"), game: $("game"), homeError: $("home-error"), joinCode: $("join-code"),
+      players: $("players"), roomLabel: $("room-label"), waiting: $("waiting"), waitingCode: $("waiting-code"),
+      status: $("status"), board: $("board"), rematch: $("rematch"), conn: $("conn"),
+    };
+
+    els.board.innerHTML = Array.from({ length: 9 }, (_, i) =>
+      `<button class="cell" data-i="${i}" aria-label="Square ${i + 1}"><span></span></button>`).join("");
+    const cells = [...els.board.children];
+
+    function connectOnline() {
+      if (!netPromise) {
+        netPromise = (params.get("backend") === "fake" ? Promise.resolve(fakeBackend()) : firebaseBackend())
+          .then((b) => (net = b))
+          .catch((err) => { netPromise = null; throw err; });
+      }
+      return netPromise;
+    }
+
+    function setBusy(busy) {
+      for (const id of ["create", "join", "local"]) $(id).disabled = busy;
+    }
+
+    function showHome(error = "") {
+      if (unwatch) unwatch();
+      unwatch = null;
+      if (api && code && side && side !== "both") api.clearOnline(code, side);
+      api = code = side = room = lastBoard = null;
+      els.game.hidden = true;
+      els.home.hidden = false;
+      els.homeError.textContent = error;
+      setBusy(false);
+      const url = new URL(location.href);
+      url.searchParams.delete("room");
+      history.replaceState(null, "", url);
+    }
+
+    function enterRoom(backend, roomCode, mySide) {
+      api = backend;
+      code = roomCode;
+      side = mySide;
+      lastBoard = null;
+      els.home.hidden = true;
+      els.game.hidden = false;
+      if (!backend.local) {
+        const url = new URL(location.href);
+        url.searchParams.set("room", roomCode);
+        history.replaceState(null, "", url);
+        backend.setOnline(roomCode, mySide).catch(() => {});
+      }
+      unwatch = backend.watch(roomCode, (value, err) => {
+        if (err) return showHome("Lost access to the room. Check your connection and try again.");
+        if (!value) return showHome(backend.local ? "" : "That room has closed.");
+        room = value;
+        render();
+      });
+    }
+
+    // ---------- actions ----------
+    async function createRoom() {
+      setBusy(true);
+      els.homeError.textContent = "";
+      try {
+        const b = await connectOnline();
+        for (let attempt = 0; attempt < 6; attempt++) {
+          const c = Array.from(crypto.getRandomValues(new Uint8Array(4)), (n) => CODE_CHARS[n % 32]).join("");
+          const r = await b.transact(c, (cur) => {
+            if (cur !== null) return undefined; // code taken, try another
+            return freshRound({ x: b.uid, createdAt: Date.now() }, 0);
+          });
+          if (r.committed) return enterRoom(b, c, "x");
+        }
+        throw new Error("no free code");
+      } catch (err) {
+        console.error(err);
+        showHome("Couldn't create a room. Check your connection and try again.");
+      }
+    }
+
+    async function joinRoom(raw) {
+      const c = String(raw || "").trim().toUpperCase();
+      if (!/^[A-HJ-NP-Z2-9]{4}$/.test(c)) {
+        els.homeError.textContent = "Room codes are 4 letters or numbers.";
+        return;
+      }
+      setBusy(true);
+      els.homeError.textContent = "";
+      try {
+        const b = await connectOnline();
+        // Read the room first so the transaction starts from real data, not an empty cache.
+        const current = await new Promise((resolve, reject) => {
+          const off = b.watch(c, (v, err) => { setTimeout(() => off && off(), 0); err ? reject(err) : resolve(v); });
+        });
+        if (!current) return showHome(`No room called ${c}. Check the code with your friend.`);
+        if (current.x === b.uid) return enterRoom(b, c, "x");
+        if (current.o === b.uid) return enterRoom(b, c, "o");
+        if (current.o) return showHome("That room already has two players.");
+        const r = await b.transact(c, (cur) => {
+          // Firebase may first call this with an empty local cache. Returning null (not aborting)
+          // makes the server reject it and retry with the real room; if the room really is gone,
+          // writing null is a no-op.
+          if (cur === null) return null;
+          if (cur.o || cur.x === b.uid) return undefined;
+          cur.o = b.uid;
+          cur.status = "playing";
+          return cur;
+        });
+        if (r.committed && !r.value) return showHome(`No room called ${c}. Check the code with your friend.`);
+        if (!r.committed || r.value.o !== b.uid) return showHome("That room already has two players.");
+        enterRoom(b, c, "o");
+      } catch (err) {
+        console.error(err);
+        showHome("Couldn't join. Check your connection and try again.");
+      }
+    }
+
+    function playLocal() {
+      const b = localBackend();
+      b.transact("LOCAL", () => freshRound({ x: "local", o: "local", createdAt: Date.now() }, 0));
+      enterRoom(b, "LOCAL", "both");
+    }
+
+    function play(i) {
+      if (!room || room.status !== "playing") return;
+      if (side !== "both" && room.turn !== side) return;
+      const mover = room.turn;
+      api.transact(code, (cur) => {
+        if (!cur || cur.status !== "playing" || cur.turn !== mover || cur.board[i] !== "-") return undefined;
+        if (side !== "both" && cur[mover] !== api.uid) return undefined;
+        cur.board = cur.board.slice(0, i) + mover + cur.board.slice(i + 1);
+        const result = outcome(cur.board);
+        if (result) {
+          cur.status = "done";
+          cur.winner = result.winner;
+          cur.line = result.line;
+        } else {
+          cur.turn = mover === "x" ? "o" : "x";
+        }
+        return cur;
+      }).catch((err) => { console.error(err); els.status.textContent = "Move didn't go through. Try again."; });
+    }
+
+    function rematch() {
+      if (!room || room.status !== "done") return;
+      const round = room.round + 1;
+      api.transact(code, (cur) => {
+        if (!cur || cur.status !== "done" || cur.round !== round - 1) return undefined;
+        return freshRound(cur, round);
+      }).catch((err) => console.error(err));
+    }
+
+    // ---------- rendering ----------
+    function render() {
+      const r = room;
+      const local = side === "both";
+      const online = r.online || {};
+      const other = side === "x" ? "o" : "x";
+
+      els.roomLabel.innerHTML = local ? "Same device" : `Room <b>${code}</b>`;
+      const chip = (s, label, dot) =>
+        `<span class="chip ${s}${r.status === "playing" && r.turn === s ? " turn" : ""}">` +
+        `<span class="mark">${s.toUpperCase()}</span>${label}${dot === undefined ? "" : `<span class="dot${dot ? " on" : ""}"></span>`}</span>`;
+      els.players.innerHTML = local
+        ? chip("x", "", undefined) + chip("o", "", undefined)
+        : chip(side, "You", true) + (r.o ? chip(other, "Friend", !!online[other]) : "");
+
+      els.waiting.hidden = r.status !== "waiting";
+      els.waitingCode.textContent = code;
+      els.board.hidden = r.status === "waiting";
+
+      const winLine = r.line ? r.line.split("").map(Number) : [];
+      cells.forEach((cell, i) => {
+        const v = r.board[i];
+        const was = lastBoard ? lastBoard[i] : v;
+        cell.className = "cell" + (v !== "-" ? " " + v : "") + (winLine.includes(i) ? " win" : "") + (v !== "-" && was === "-" ? " placed" : "");
+        cell.firstChild.textContent = v === "-" ? "" : v.toUpperCase();
+        const myTurn = r.status === "playing" && (local || r.turn === side);
+        cell.disabled = !(myTurn && v === "-");
+        cell.setAttribute("aria-label", `Square ${i + 1}: ${v === "-" ? "empty" : v.toUpperCase()}`);
+      });
+      lastBoard = r.board;
+
+      let status = "";
+      if (r.status === "waiting") status = "";
+      else if (r.status === "playing") {
+        if (local) status = `${r.turn.toUpperCase()} to play`;
+        else if (!online[other]) status = r.turn === side ? "Your turn (friend is away)" : "Friend is away…";
+        else status = r.turn === side ? "Your turn" : "Friend's turn…";
+      } else if (r.winner === "draw") status = "It's a draw";
+      else if (local) status = `${r.winner.toUpperCase()} wins!`;
+      else status = r.winner === side ? "You win! 🎉" : "Friend wins";
+      els.status.textContent = status;
+      els.rematch.hidden = r.status !== "done";
+    }
+
+    // ---------- wiring ----------
+    $("create").addEventListener("click", createRoom);
+    $("join-form").addEventListener("submit", (e) => { e.preventDefault(); joinRoom(els.joinCode.value); });
+    $("local").addEventListener("click", playLocal);
+    $("leave").addEventListener("click", () => showHome());
+    els.rematch.addEventListener("click", rematch);
+    els.board.addEventListener("click", (e) => {
+      const cell = e.target.closest(".cell");
+      if (cell && !cell.disabled) play(Number(cell.dataset.i));
+    });
+    els.joinCode.addEventListener("input", () => {
+      els.joinCode.value = els.joinCode.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+      els.homeError.textContent = "";
+    });
+
+    function shareUrl() {
+      const url = new URL(location.href);
+      url.search = "";
+      url.searchParams.set("room", code);
+      if (params.get("backend")) url.searchParams.set("backend", params.get("backend"));
+      return url.toString();
+    }
+    $("share").addEventListener("click", async () => {
+      const url = shareUrl();
+      try {
+        if (navigator.share) await navigator.share({ title: "Tic-tac-toe", text: `Join my game: ${code}`, url });
+        else { await navigator.clipboard.writeText(url); $("share").textContent = "Link copied"; }
+      } catch {}
+    });
+    $("copy").addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(code); $("copy").textContent = "Copied"; } catch { prompt("Room code:", code); }
+      setTimeout(() => ($("copy").textContent = "Copy code"), 1500);
+    });
+
+    // Opening a shared link (?room=CODE) joins straight away.
+    if (params.get("room")) {
+      els.joinCode.value = params.get("room").toUpperCase();
+      joinRoom(params.get("room"));
+    }
+
+    // Hooks for automated tests.
+    window.__ttt = { state: () => ({ code, side, room, uid: api?.uid ?? net?.uid ?? null }) };
+  </script>
+</body>
+</html>
