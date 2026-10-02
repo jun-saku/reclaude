@@ -250,6 +250,7 @@
       room.status = room.o ? "playing" : "waiting";
       room.winner = null;
       room.line = null;
+      room.left = null;
       return room;
     }
 
@@ -261,6 +262,7 @@
         ...r,
         turn: MARK[r.turn],
         winner: typeof r.winner === "number" ? MARK[r.winner] : r.winner ?? null,
+        left: typeof r.left === "number" ? MARK[r.left] : null,
         x: r.players?.s0 ?? null,
         o: r.players?.s1 ?? null,
         online: { x: rooms.isOnline(r, 0), o: rooms.isOnline(r, 1) },
@@ -270,6 +272,7 @@
       const r = { ...orig, board: v.board, round: v.round, status: v.status, line: v.line ?? null };
       r.turn = MARK.indexOf(v.turn);
       r.winner = v.winner == null ? null : v.winner === "draw" ? "draw" : MARK.indexOf(v.winner);
+      r.left = v.left == null ? null : MARK.indexOf(v.left);
       return r;
     }
     // A transaction written against the mark view of the room.
@@ -418,16 +421,29 @@
         else status = r.turn === side ? "Your turn" : "Friend's turn…";
       } else if (r.winner === "draw") status = "It's a draw";
       else if (local) status = `${r.winner.toUpperCase()} wins!`;
+      else if (r.left === other) status = "Your friend left. You win 🎉";
+      else if (r.left === side) status = "You left this game";
       else status = r.winner === side ? "You win! 🎉" : "Friend wins";
       els.status.textContent = status;
-      els.rematch.hidden = r.status !== "done";
+      // After a friend leaves, Play again waits until they're back.
+      els.rematch.hidden = r.status !== "done" || (r.left === other && !online[other]);
     }
 
     // ---------- wiring ----------
     $("create").addEventListener("click", createRoom);
     $("join-form").addEventListener("submit", (e) => { e.preventDefault(); joinRoom(els.joinCode.value); });
     $("local").addEventListener("click", playLocal);
-    $("leave").addEventListener("click", () => showHome());
+    $("leave").addEventListener("click", async () => {
+      if (!seat || !room) return showHome();
+      const s = seat;
+      // Mid-game, leaving forfeits: make sure it's meant. An absent friend or a finished game needs no check.
+      if (room.status === "playing" && s.side !== "both" && room.online[s.side === "x" ? "o" : "x"] &&
+          !confirm("Leave the game? Your friend wins this round.")) return;
+      $("leave").disabled = true;
+      await rooms.quit(s);
+      $("leave").disabled = false;
+      showHome();
+    });
     els.rematch.addEventListener("click", rematch);
     els.board.addEventListener("click", (e) => {
       const cell = e.target.closest(".cell");
