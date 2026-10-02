@@ -39,6 +39,9 @@ The user usually works from their phone, so keep replies short and end with the 
 
 ## Adding a project
 
+For games, follow `.claude/skills/new-game/SKILL.md` (the game engine guide and contribution rules: a game PR touches
+only its own `projects/<name>/` folder; engine changes to `shared/` or the rules go in their own PR).
+
 1. `node scripts/new-project.mjs <name> "Title" "Description"`. The name is the URL, so keep it
    short and lowercase-kebab-case.
 2. Keep it self-contained: no build step, no npm packages. External scripts only from
