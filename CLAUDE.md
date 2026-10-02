@@ -15,6 +15,9 @@ The user usually works from their phone, so keep replies short and end with the 
   (images, sounds, extra scripts) next to it.
 - `projects/_template/`: starting point for new projects.
 - `site/`: files copied to the site root (`404.html`).
+- `shared/`: code used by several projects, published at `/shared/` and imported as `../shared/<file>`.
+  `shared/rooms.js` is the two-player room system (codes, share links, presence, Firebase / stand-in / same-device
+  backends, idle disconnect). New multiplayer games should use it rather than copying room code.
 - `scripts/build.mjs`: builds `_site/`. Fails on bad or reserved names and missing `index.html`.
 - `scripts/new-project.mjs`: creates a project from the template.
 - `.github/workflows/pages.yml`: builds every push and PR; deploys to Pages only from `main`.
@@ -50,6 +53,8 @@ The user usually works from their phone, so keep replies short and end with the 
   is public by design; access is controlled by `firebase/database.rules.json`.
 - Rules live only in the repo until the user pastes them into Firebase console → Realtime Database → Rules.
   When you change them, say so in the PR and give the user the new rules to paste.
+- Rooms are shared by all games: each room has a `game` field, and every field a game writes must be allowed
+  in the rules (unknown fields are rejected).
 - This environment can't reach Firebase, so test online features with the page's stand-in backend
   (`?backend=fake`: tabs in one browser share rooms), then ask the user to try the real thing.
 

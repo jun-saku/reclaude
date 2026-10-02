@@ -1,0 +1,467 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#161618" media="(prefers-color-scheme: dark)">
+  <title>Four in a Row</title>
+  <meta name="description" content="Drop discs and line up four. Play a friend online with a room code, or on one phone.">
+  <style>
+    :root {
+      --bg: #f7f6f3;
+      --text: #1d1d1f;
+      --muted: #6b6b70;
+      --panel: #ffffff;
+      --line: #d9d2c6;
+      --soft: #ece7df;
+      --accent: #c2571a;
+      --frame: #2f5ea8;
+      --frame-edge: #24498a;
+      --hole: #f7f6f3;
+      --x: #e4572e;
+      --o: #f2c14e;
+      --danger: #b3261e;
+      color-scheme: light;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #161618;
+        --text: #ececef;
+        --muted: #9a9aa2;
+        --panel: #1f1f22;
+        --line: #3a3a40;
+        --soft: #2a2a2e;
+        --accent: #f08a4b;
+        --frame: #2a4a82;
+        --frame-edge: #1f3966;
+        --hole: #161618;
+        --x: #f0694a;
+        --o: #f5cd5e;
+        --danger: #ff8a80;
+        color-scheme: dark;
+      }
+    }
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 17px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      justify-content: center;
+      -webkit-tap-highlight-color: transparent;
+    }
+    main {
+      width: 100%;
+      max-width: 480px;
+      padding: max(20px, env(safe-area-inset-top)) 16px max(20px, env(safe-area-inset-bottom));
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+    h1 { margin: 0; font-size: clamp(1.8rem, 8.5vw, 2.3rem); line-height: 1.1; letter-spacing: -0.02em; display: flex; align-items: center; gap: 10px; }
+    h1 .discs { display: inline-flex; gap: 4px; }
+    h1 .discs i { width: 0.55em; height: 0.55em; border-radius: 50%; background: var(--x); }
+    h1 .discs i:nth-child(even) { background: var(--o); }
+    .muted { color: var(--muted); }
+    [hidden] { display: none !important; }
+    #home { display: flex; flex-direction: column; gap: 12px; }
+    #game { display: flex; flex-direction: column; gap: 14px; }
+
+    button, input { font: inherit; border-radius: 12px; touch-action: manipulation; }
+    button { border: 0; padding: 13px 18px; font-weight: 650; background: var(--accent); color: #fff; cursor: pointer; }
+    button.secondary { background: var(--soft); color: var(--text); }
+    button:disabled { opacity: 0.45; cursor: default; }
+
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+    .card h2 { margin: 0; font-size: 1.05rem; }
+    .card p { margin: 0; }
+    .join { display: flex; gap: 8px; }
+    .join input {
+      flex: 1; min-width: 0; padding: 12px 14px;
+      border: 1px solid var(--line); background: var(--bg); color: var(--text);
+      font-size: 1.3rem; font-weight: 700; letter-spacing: 0.3em; text-transform: uppercase; text-align: center;
+    }
+    .error { color: var(--danger); font-size: 0.95rem; min-height: 1.3em; margin: 0; }
+
+    .bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .code { font-size: 0.85rem; color: var(--muted); }
+    .code b { color: var(--text); letter-spacing: 0.12em; font-size: 1rem; }
+    .players { display: flex; gap: 8px; }
+    .chip {
+      display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px;
+      background: var(--soft); font-size: 0.9rem; font-weight: 600; border: 2px solid transparent;
+    }
+    .chip.turn.x { border-color: var(--x); }
+    .chip.turn.o { border-color: var(--o); }
+    .chip .disc { width: 14px; height: 14px; border-radius: 50%; }
+    .chip.x .disc { background: var(--x); } .chip.o .disc { background: var(--o); }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); opacity: 0.4; }
+    .dot.on { background: #2e9d5b; opacity: 1; }
+
+    .status { text-align: center; font-size: 1.25rem; font-weight: 700; min-height: 1.5em; margin: 0; }
+
+    /* 7 columns × 6 rows. Index = row * 7 + col, row 0 at the top. */
+    .board {
+      /* Percent gaps don't count toward an auto-height grid, so size them from the board width instead
+         (main is 100vw minus 32px padding, capped at 480 - 32). */
+      --gap: calc(min(100vw - 32px, 448px) * 0.022);
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: var(--gap);
+      width: 100%;
+      padding: var(--gap);
+      background: var(--frame);
+      border-radius: 16px;
+      box-shadow: inset 0 -6px 0 var(--frame-edge);
+      touch-action: manipulation;
+      cursor: pointer;
+    }
+    .board.locked { cursor: default; }
+    .slot { position: relative; aspect-ratio: 1; border-radius: 50%; background: var(--hole); }
+    .board:not(.locked) .slot.hover { background: color-mix(in srgb, var(--hole) 82%, var(--frame)); }
+    .disc-el {
+      position: absolute; inset: 0; border-radius: 50%;
+      box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.18);
+    }
+    .disc-el.x { background: var(--x); }
+    .disc-el.o { background: var(--o); }
+    .disc-el.drop { animation: drop var(--ms) cubic-bezier(0.45, 0, 0.9, 0.45) both, settle 140ms ease-out var(--ms); }
+    /* Fall from above the board: each row is one slot plus one gap (~109% of a slot). */
+    @keyframes drop { from { transform: translateY(calc(var(--rows) * -109%)); } to { transform: translateY(0); } }
+    @keyframes settle { 0% { transform: translateY(0); } 40% { transform: translateY(-7%); } 100% { transform: translateY(0); } }
+    .slot.win .disc-el { animation: pulse 900ms ease-in-out infinite; outline: 3px solid var(--panel); outline-offset: -3px; }
+    .slot.last:not(.win) .disc-el::after {
+      content: ""; position: absolute; inset: 34%; border-radius: 50%; background: rgba(255, 255, 255, 0.55);
+    }
+    @keyframes pulse { 50% { transform: scale(0.86); } }
+    @media (prefers-reduced-motion: reduce) {
+      .disc-el.drop, .slot.win .disc-el { animation: none; }
+    }
+
+    .share { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+    .bigcode { font-size: clamp(2.6rem, 16vw, 3.4rem); font-weight: 800; letter-spacing: 0.18em; margin: 0; padding-left: 0.18em; }
+    .row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1><span class="discs" aria-hidden="true"><i></i><i></i><i></i><i></i></span>Four in a Row</h1>
+
+    <section id="home">
+      <div class="card">
+        <h2>Play a friend online</h2>
+        <p class="muted">Create a room and send your friend the code or link.</p>
+        <button id="create">Create room</button>
+      </div>
+      <div class="card">
+        <h2>Join a room</h2>
+        <form class="join" id="join-form" autocomplete="off">
+          <input id="join-code" maxlength="4" autocapitalize="characters" spellcheck="false" placeholder="CODE" aria-label="Room code">
+          <button id="join" type="submit">Join</button>
+        </form>
+        <p class="error" id="home-error" role="alert"></p>
+      </div>
+      <div class="card">
+        <h2>Same device</h2>
+        <p class="muted">Take turns on this phone. Works offline.</p>
+        <button class="secondary" id="local">Play here</button>
+      </div>
+    </section>
+
+    <section id="game" hidden>
+      <div class="bar">
+        <div class="players" id="players"></div>
+        <div class="code" id="room-label"></div>
+      </div>
+
+      <div class="share card" id="waiting" hidden>
+        <p class="muted">Send this code to a friend</p>
+        <p class="bigcode" id="waiting-code"></p>
+        <div class="row">
+          <button id="share">Share link</button>
+          <button class="secondary" id="copy">Copy code</button>
+        </div>
+        <p class="muted" style="font-size: 0.9rem">Waiting for them to join…</p>
+      </div>
+
+      <p class="status" id="status" aria-live="polite"></p>
+      <div class="board" id="board" role="grid" aria-label="Board: tap a column to drop a disc"></div>
+
+      <div class="row">
+        <button id="rematch" hidden>Play again</button>
+        <button class="secondary" id="leave">Leave</button>
+      </div>
+    </section>
+  </main>
+
+  <script type="module">
+    import * as rooms from "../shared/rooms.js";
+
+    const GAME = "four-in-a-row";
+    const COLS = 7;
+    const ROWS = 6;
+    const EMPTY = "-".repeat(COLS * ROWS);
+
+    // ---------- rules ----------
+    // Lowest empty row in a column, or -1 if the column is full.
+    function landingRow(board, col) {
+      for (let r = ROWS - 1; r >= 0; r--) if (board[r * COLS + col] === "-") return r;
+      return -1;
+    }
+
+    // Checks the four directions through the disc just played; returns the winning indices or null.
+    function winningLine(board, index) {
+      const who = board[index];
+      const r0 = Math.floor(index / COLS), c0 = index % COLS;
+      for (const [dr, dc] of [[0, 1], [1, 0], [1, 1], [1, -1]]) {
+        const line = [index];
+        for (const sign of [1, -1]) {
+          let r = r0 + dr * sign, c = c0 + dc * sign;
+          while (r >= 0 && r < ROWS && c >= 0 && c < COLS && board[r * COLS + c] === who) {
+            line.push(r * COLS + c);
+            r += dr * sign; c += dc * sign;
+          }
+        }
+        if (line.length >= 4) return line.sort((a, b) => a - b);
+      }
+      return null;
+    }
+
+    function freshRound(room, round) {
+      room.board = EMPTY;
+      room.round = round;
+      room.turn = round % 2 === 0 ? "x" : "o"; // starter alternates each round
+      room.status = room.o ? "playing" : "waiting";
+      room.winner = null;
+      room.line = null;
+      room.last = null;
+      return room;
+    }
+
+    // ---------- state ----------
+    let seat = null;   // { backend, code, side } — side is "both" on one device
+    let leave = null;
+    let room = null;
+    let lastBoard = null;
+    let hoverCol = -1;
+
+    const $ = (id) => document.getElementById(id);
+    const boardEl = $("board");
+    boardEl.innerHTML = Array.from({ length: COLS * ROWS }, (_, i) =>
+      `<div class="slot" data-i="${i}" data-col="${i % COLS}" role="gridcell"></div>`).join("");
+    const slots = [...boardEl.children];
+
+    function setBusy(busy) { for (const id of ["create", "join", "local"]) $(id).disabled = busy; }
+
+    function showHome(error = "") {
+      if (leave) leave();
+      leave = null;
+      seat = room = lastBoard = null;
+      $("game").hidden = true;
+      $("home").hidden = false;
+      $("home-error").textContent = error;
+      setBusy(false);
+    }
+
+    function start(s) {
+      seat = s;
+      lastBoard = null;
+      $("home").hidden = true;
+      $("game").hidden = false;
+      leave = rooms.enter(s, (value) => { room = value; render(); }, showHome);
+    }
+
+    // ---------- actions ----------
+    async function createRoom() {
+      setBusy(true);
+      $("home-error").textContent = "";
+      try {
+        start(await rooms.createRoom(GAME, () => freshRound({}, 0)));
+      } catch (err) {
+        console.error(err);
+        showHome(err instanceof rooms.RoomError ? err.message : "Couldn't create a room. Check your connection and try again.");
+      }
+    }
+
+    async function joinRoom(code) {
+      setBusy(true);
+      $("home-error").textContent = "";
+      try {
+        start(await rooms.joinRoom(GAME, code));
+      } catch (err) {
+        console.error(err);
+        showHome(err instanceof rooms.RoomError ? err.message : "Couldn't join. Check your connection and try again.");
+      }
+    }
+
+    function playLocal() {
+      const backend = rooms.localBackend();
+      backend.transact("LOCAL", () => freshRound({ game: GAME, x: "local", o: "local", createdAt: Date.now() }, 0));
+      start({ backend, code: "LOCAL", side: "both" });
+    }
+
+    function play(col) {
+      if (!room || room.status !== "playing") return;
+      const { backend, code, side } = seat;
+      if (side !== "both" && room.turn !== side) return;
+      const mover = room.turn;
+      backend.transact(code, (cur) => {
+        if (!cur || cur.status !== "playing" || cur.turn !== mover) return undefined;
+        if (side !== "both" && cur[mover] !== backend.uid) return undefined;
+        const r = landingRow(cur.board, col);
+        if (r < 0) return undefined;
+        const i = r * COLS + col;
+        cur.board = cur.board.slice(0, i) + mover + cur.board.slice(i + 1);
+        cur.last = i;
+        const line = winningLine(cur.board, i);
+        if (line) {
+          cur.status = "done";
+          cur.winner = mover;
+          cur.line = line.join(",");
+        } else if (!cur.board.includes("-")) {
+          cur.status = "done";
+          cur.winner = "draw";
+        } else {
+          cur.turn = mover === "x" ? "o" : "x";
+        }
+        return cur;
+      }).catch((err) => { console.error(err); $("status").textContent = "Move didn't go through. Try again."; });
+    }
+
+    function rematch() {
+      if (!room || room.status !== "done") return;
+      const round = room.round + 1;
+      seat.backend.transact(seat.code, (cur) => {
+        if (!cur || cur.status !== "done" || cur.round !== round - 1) return undefined;
+        return freshRound(cur, round);
+      }).catch((err) => console.error(err));
+    }
+
+    // ---------- rendering ----------
+    function canPlay() {
+      return room && room.status === "playing" && (seat.side === "both" || room.turn === seat.side);
+    }
+
+    function render() {
+      const r = room;
+      const { side, code } = seat;
+      const local = side === "both";
+      const online = r.online || {};
+      const other = side === "x" ? "o" : "x";
+
+      $("room-label").innerHTML = local ? "Same device" : `Room <b>${code}</b>`;
+      const chip = (s, label, dot) =>
+        `<span class="chip ${s}${r.status === "playing" && r.turn === s ? " turn" : ""}"><span class="disc"></span>${label}` +
+        (dot === undefined ? "" : `<span class="dot${dot ? " on" : ""}"></span>`) + `</span>`;
+      $("players").innerHTML = local
+        ? chip("x", "Red") + chip("o", "Yellow")
+        : chip(side, "You", true) + (r.o ? chip(other, "Friend", !!online[other]) : "");
+
+      $("waiting").hidden = r.status !== "waiting";
+      $("waiting-code").textContent = code;
+      boardEl.hidden = r.status === "waiting";
+      boardEl.classList.toggle("locked", !canPlay());
+
+      const win = new Set(r.line ? r.line.split(",").map(Number) : []);
+      // A fresh round (board emptied) shouldn't animate old discs away; only new discs drop.
+      const fresh = !lastBoard || !r.board.includes("x") && !r.board.includes("o");
+      slots.forEach((slot, i) => {
+        const v = r.board[i];
+        const was = lastBoard ? lastBoard[i] : v;
+        slot.classList.toggle("win", win.has(i));
+        slot.classList.toggle("last", r.last === i);
+        slot.classList.toggle("hover", i % COLS === hoverCol);
+        const label = v === "x" ? (local ? "red" : side === "x" ? "yours" : "friend's") : v === "o" ? (local ? "yellow" : side === "o" ? "yours" : "friend's") : "empty";
+        slot.setAttribute("aria-label", `Row ${Math.floor(i / COLS) + 1}, column ${(i % COLS) + 1}: ${label}`);
+        if (v === "-") { slot.innerHTML = ""; return; }
+        let disc = slot.firstChild;
+        if (!disc || !disc.classList.contains(v)) {
+          slot.innerHTML = `<div class="disc-el ${v}"></div>`;
+          disc = slot.firstChild;
+        }
+        if (!fresh && was === "-") {
+          const rows = Math.floor(i / COLS) + 1;
+          disc.style.setProperty("--rows", rows);
+          disc.style.setProperty("--ms", `${120 + rows * 45}ms`);
+          disc.classList.remove("drop");
+          void disc.offsetWidth; // restart the animation
+          disc.classList.add("drop");
+        }
+      });
+      lastBoard = r.board;
+
+      let status = "";
+      if (r.status === "playing") {
+        const name = r.turn === "x" ? "Red" : "Yellow";
+        if (local) status = `${name} to play`;
+        else if (!online[other]) status = r.turn === side ? "Your turn (friend is away)" : "Friend is away…";
+        else status = r.turn === side ? "Your turn" : "Friend's turn…";
+      } else if (r.status === "done") {
+        if (r.winner === "draw") status = "Board full: it's a draw";
+        else if (local) status = `${r.winner === "x" ? "Red" : "Yellow"} wins!`;
+        else status = r.winner === side ? "You win! 🎉" : "Friend wins";
+      }
+      $("status").textContent = status;
+      $("rematch").hidden = r.status !== "done";
+    }
+
+    // ---------- input ----------
+    function columnAt(e) {
+      const slot = e.target.closest(".slot");
+      if (slot) return Number(slot.dataset.col);
+      const rect = boardEl.getBoundingClientRect();
+      const col = Math.floor(((e.clientX - rect.left) / rect.width) * COLS);
+      return col >= 0 && col < COLS ? col : -1;
+    }
+    boardEl.addEventListener("click", (e) => {
+      const col = columnAt(e);
+      if (col >= 0 && canPlay()) play(col);
+    });
+    boardEl.addEventListener("pointermove", (e) => {
+      if (e.pointerType !== "mouse") return;
+      const col = columnAt(e);
+      if (col === hoverCol) return;
+      hoverCol = col;
+      slots.forEach((s, i) => s.classList.toggle("hover", i % COLS === hoverCol));
+    });
+    boardEl.addEventListener("pointerleave", () => {
+      hoverCol = -1;
+      slots.forEach((s) => s.classList.remove("hover"));
+    });
+    document.addEventListener("keydown", (e) => {
+      if (/^[1-7]$/.test(e.key) && canPlay() && document.activeElement?.tagName !== "INPUT") play(Number(e.key) - 1);
+    });
+
+    $("create").addEventListener("click", createRoom);
+    $("join-form").addEventListener("submit", (e) => { e.preventDefault(); joinRoom($("join-code").value); });
+    $("local").addEventListener("click", playLocal);
+    $("leave").addEventListener("click", () => showHome());
+    $("rematch").addEventListener("click", rematch);
+    $("join-code").addEventListener("input", () => {
+      $("join-code").value = $("join-code").value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+      $("home-error").textContent = "";
+    });
+    $("share").addEventListener("click", async () => {
+      if ((await rooms.share(seat.code, "Four in a Row")) === "copied") $("share").textContent = "Link copied";
+    });
+    $("copy").addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(seat.code); $("copy").textContent = "Copied"; } catch { prompt("Room code:", seat.code); }
+      setTimeout(() => ($("copy").textContent = "Copy code"), 1500);
+    });
+
+    // Opening a shared link (?room=CODE) joins straight away.
+    const linked = rooms.roomFromUrl();
+    if (linked) { $("join-code").value = linked.toUpperCase(); joinRoom(linked); }
+
+    // Hooks for automated tests.
+    window.__c4 = {
+      state: () => ({ room, side: seat?.side, code: seat?.code }), winningLine, landingRow, rooms,
+      setBoard: (board, turn) => seat.backend.transact(seat.code, (cur) => ({ ...cur, board, turn, status: "playing", winner: null, line: null, last: null })),
+    };
+  </script>
+</body>
+</html>
