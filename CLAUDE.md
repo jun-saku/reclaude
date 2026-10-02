@@ -73,9 +73,10 @@ The user usually works from their phone, so keep replies short and end with the 
 - The rules also enforce play: while `playing`, only the player in seat `turn` may change the game (board, turn,
   winner, state…); before the start only the host may set it up; a finished result is fixed until the next round
   (`round + 1`); taken seats can't be emptied or reassigned. Games must write in that order (see the top of
-  `shared/rooms.js`). Any seated player may forfeit a 2-player game (`rooms.quit`: status `done`, `winner` the other
-  seat, `left` their own); games call it when a player taps Leave. Rooms over a day old may be deleted by anyone;
-  `rooms.js` clears them when it meets one, and a host leaving an empty waiting room deletes it.
+  `shared/rooms.js`). Any seated player may forfeit (`rooms.quit`: status `done`, `left` their own seat, and `winner`
+  the other player, the other team, or `draw` with 3+ players); games call it when a player taps Leave. Rooms over a
+  day old may be deleted by anyone; `rooms.js` clears them when it meets one, and a host leaving a waiting room
+  closes it.
 - Testing online features: this environment can't reach real Firebase, but the emulator works. Use `?backend=fake`
   (tabs share rooms, no rules) for quick UI tests, then `cd tests && npm run e2e` / `npm run rules` for the real SDK
   and rules. Any rules change needs a passing `npm run rules` and new cases in `tests/rules.test.mjs`. Rules must stay

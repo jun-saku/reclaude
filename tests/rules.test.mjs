@@ -132,6 +132,21 @@ await expect('changing who left afterwards', false, () => update(A.r('rooms/TTTT
 await expect('a seated player deleting the room mid-game', false, () => remove(A.r('rooms/TTTT')));
 await expect('A starting the next round after the forfeit', true, () => update(A.r('rooms/TTTT'), { status: 'playing', round: 1, turn: 1, winner: null, left: null }));
 await expect('a left seat outside 0–5', false, () => update(B.r('rooms/TTTT'), { status: 'done', winner: 0, left: 9 }));
+// Forfeits in rooms with game state (a transaction rewrites the whole room, state included), teams and 3 players
+const whole = async (u, code, patch) => { const cur = (await get(u.r(`rooms/${code}`))).val(); await set(u.r(`rooms/${code}`), { ...cur, ...patch }); };
+await expect('creating a 2-team room with state', true, () => set(A.r('rooms/TEAM'), { ...room(A.uid), seats: 4, min: 4, teams: 2, auto: false, state: { deck: 'x' } }));
+for (const [u, s] of [[B, 1], [C, 2], [D, 3]]) await update(u.r('rooms/TEAM'), { [`players/s${s}`]: u.uid });
+await update(A.r('rooms/TEAM'), { status: 'playing' });
+await expect('B forfeiting a team game to their own team', false, () => whole(B, 'TEAM', { status: 'done', winner: 1, left: 1 }));
+await expect('B (not on turn) forfeiting a team game to the other team, rewriting the room whole', true, () => whole(B, 'TEAM', { status: 'done', winner: 0, left: 1 }));
+await expect('creating a 3-player room with state', true, () => set(A.r('rooms/TRYZ'), { ...room(A.uid), seats: 3, min: 2, auto: false, state: { deck: 'x' } }));
+for (const [u, s] of [[B, 1], [C, 2]]) await update(u.r('rooms/TRYZ'), { [`players/s${s}`]: u.uid });
+await update(A.r('rooms/TRYZ'), { status: 'playing', turn: 1 });
+await expect('C forfeiting a 3-player game in their own favour', false, () => whole(C, 'TRYZ', { status: 'done', winner: 2, left: 2 }));
+await expect('C (not on turn) forfeiting a 3-player game as a draw', true, () => whole(C, 'TRYZ', { status: 'done', winner: 'draw', left: 2 }));
+await expect('the host closing a waiting room with guests in it', true, async () => {
+  await set(A.r('rooms/LQBY'), room(A.uid)); await update(B.r('rooms/LQBY'), { 'players/s1': B.uid }); await remove(A.r('rooms/LQBY'));
+});
 
 console.log('-- leaderboard (scores/2048)');
 const entry = (name, score) => ({ name, score, at: serverTimestamp() });

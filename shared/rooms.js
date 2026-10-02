@@ -12,8 +12,9 @@
 // (free-form game data goes in `state`). The rules also enforce who may change what:
 //   waiting: the host sets the game up; others may only take an empty seat (filling an auto room starts it).
 //            `state` isn't protected yet, so deal hidden or random things in startGame's setup.
-//   playing: only the player in seat `turn` may change board/turn/winner/line/last/round/teams/state;
-//            any seated player may forfeit (quit): status "done", winner another seat, left their own seat.
+//   playing: only the player in seat `turn` may change board/turn/winner/line/last/round/teams/left/state;
+//            any seated player may forfeit (quit): status "done", left their own seat, and winner another
+//            seat (no teams), the other team (2 teams) or "draw" (3+ players); nothing else changes.
 //   done:    the result is fixed; anyone seated may start the next round (round + 1).
 // A taken seat can't be emptied or reassigned, and each player sets only their own online flag.
 // Rooms can be deleted by the host while waiting, or by anyone once a day old (createdAt).
@@ -431,21 +432,21 @@ export function enter({ backend, code, seat }, onRoom, onGone) {
   };
 }
 
-// Leaves for good, so the others aren't left waiting: a waiting room with nobody else in it is deleted,
-// and a game in play is forfeited (status "done", winner the other seat, left this seat). Only rooms
-// without teams and with exactly one other player forfeit; otherwise this just leaves the room as it is.
-// Call it before leave() so presence is still valid; errors are ignored (the room may already be gone).
+// Leaves for good, so the others aren't left waiting: the host leaving a waiting room closes it, and a
+// game in play is forfeited (status "done", left this seat): the win goes to the other player, or to the
+// other team with 2 teams, and with 3 or more players the game ends in a draw. Call it before leave() so
+// presence is still valid; errors are ignored (the room may already be gone).
 export async function quit({ backend, code, seat }) {
   if (backend.local) return;
   await backend.transact(code, (cur) => {
     if (cur === null) return null;
     if (seatOf(cur, backend.uid) !== seat) return undefined;
-    if (cur.status === "waiting") return cur.host === backend.uid && playerCount(cur) === 1 ? null : undefined;
-    if (cur.status !== "playing" || cur.teams) return undefined;
+    if (cur.status === "waiting") return cur.host === backend.uid ? null : undefined;
+    if (cur.status !== "playing") return undefined;
     const others = seatList(cur).flatMap((uid, i) => (uid && i !== seat ? [i] : []));
-    if (others.length !== 1) return undefined;
+    if (!others.length) return undefined;
     cur.status = "done";
-    cur.winner = others[0];
+    cur.winner = cur.teams === 2 ? 1 - (seat % 2) : others.length === 1 && !cur.teams ? others[0] : "draw";
     cur.left = seat;
     return cur;
   }).catch(() => {});

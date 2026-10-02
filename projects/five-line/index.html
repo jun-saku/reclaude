@@ -125,6 +125,7 @@
       box-shadow: 0 0 0 1px var(--ring), 0 1px 2px rgba(0, 0, 0, 0.3);
     }
     .sq.last .chipd::after { content: ""; position: absolute; inset: 28%; border-radius: 50%; background: var(--cr); }
+    .sq.taken::after { content: ""; position: absolute; inset: 12%; border-radius: 50%; border: 2px dashed var(--danger); }
     .sq.locked .chipd { box-shadow: 0 0 0 2px var(--accent), 0 1px 2px rgba(0, 0, 0, 0.3); }
     .sq.ok.remove::after { background: var(--danger); opacity: 0.5; }
     @keyframes pop { from { transform: scale(0.4); } to { transform: scale(1); } }
@@ -207,6 +208,7 @@
 
       <div class="row">
         <button id="rematch" hidden>Play again</button>
+        <button id="pass" hidden>Pass</button>
         <button class="secondary" id="leave">Leave</button>
       </div>
     </section>
@@ -258,9 +260,11 @@
     const teamAt = (board, i) => (board[i] === "-" ? null : board[i] === "*" ? "*" : Number(board[i]));
     // Lines already counted, as groups of five square indices.
     const linesOf = (line) => { const a = line ? line.split(",").map(Number) : []; const out = []; for (let i = 0; i < a.length; i += 5) out.push(a.slice(i, i + 5)); return out; };
-    // A new line of five through square i for team t, overlapping existing lines in at most one square.
-    function findLine(board, i, t, existing) {
+    // New lines of five through square i for team t (one per direction at most), each overlapping the lines
+    // already counted, including ones found just now, in at most one square.
+    function findLines(board, i, t, existing) {
       const used = new Set(existing.flat());
+      const found = [];
       const r0 = Math.floor(i / N), c0 = i % N;
       for (const [dr, dc] of DIRS) {
         const run = [i];
@@ -275,38 +279,47 @@
         }
         for (let s = 0; s + 5 <= run.length; s++) {
           const w = run.slice(s, s + 5);
-          if (w.filter((x) => used.has(x)).length <= 1) return w;
+          if (w.filter((x) => used.has(x)).length <= 1) { found.push(w); w.forEach((x) => used.add(x)); break; }
         }
       }
-      return null;
+      return found;
     }
     const teamOfLine = (board, w) => teamAt(board, w.find((x) => !CORNERS.includes(x)));
 
     // ---------- room shape ----------
     // board: 100 chars, "-" empty, "*" free corner, "0".."2" a team's chip. line: counted lines, 5 indices each.
-    // state: { deck: "card,card,…", next: index of the next card to draw, hands: "7,7" cards per seat,
-    //          lastCard, lastBy } — lastCard/lastBy let a player repair their hand if its save failed.
+    // state: { deck: "card,card,…", next: index of the next card to draw, hands: "7,7" cards per seat (0 for an
+    //          empty seat), played: "R7a,,B2b" the card each seat last played or swapped, drawn: the card each
+    //          seat last drew, passes: turns passed in a row }. played/drawn let a player repair their hand
+    //          if its save failed after the room was written.
     // Private per seat: "<round>:<card>,<card>,…" (the round so a new deal replaces the old hand).
     const EMPTY_BOARD = Array.from({ length: N * N }, (_, i) => (CORNERS.includes(i) ? "*" : "-")).join("");
     const handSize = (seats) => (seats === 2 ? 7 : 6);
-    const linesToWin = (room) => (room.teams === 2 || room.seats === 2 ? 2 : 1);
+    const linesToWin = (room) => (room.teams === 2 || rooms.playerCount(room) === 2 ? 2 : 1);
     const teamOf = (room, s) => rooms.teamOf(room, s);
-    const parseState = (room) => ({ deck: room.state.deck.split(","), next: room.state.next, hands: room.state.hands.split(",").map(Number), lastCard: room.state.lastCard || "", lastBy: room.state.lastBy ?? -1 });
+    const parseState = (room) => ({
+      deck: room.state.deck.split(","), next: room.state.next, hands: room.state.hands.split(",").map(Number),
+      played: (room.state.played || "").split(","), drawn: (room.state.drawn || "").split(","), passes: room.state.passes || 0,
+    });
+    const packState = (deck, st) => ({ deck, next: st.next, hands: st.hands.join(","), played: st.played.join(","), drawn: st.drawn.join(","), passes: st.passes });
     function dealRoom(room, round) {
       const deck = shuffled(DECK);
       const h = handSize(room.seats);
+      const seated = rooms.seatList(room).map(Boolean);
       room.round = round;
-      room.turn = round % room.seats;
+      room.turn = rooms.nextSeat(room, (round - 1 + room.seats) % room.seats);
       room.status = "playing";
       room.board = EMPTY_BOARD;
       room.line = "";
       room.last = null;
       room.winner = null;
       room.left = null;
-      room.state = { deck: deck.join(","), next: room.seats * h, hands: Array(room.seats).fill(h).join(","), lastCard: "", lastBy: -1 };
+      // Seated players deal themselves consecutive slices of the deck (seat 0 first); empty seats get nothing.
+      room.state = packState(deck.join(","), { next: seated.filter(Boolean).length * h, hands: seated.map((on) => (on ? h : 0)), played: seated.map(() => ""), drawn: seated.map(() => ""), passes: 0 });
       return room;
     }
-    const initialRoom = () => ({ board: EMPTY_BOARD, line: "", round: 0, turn: 0, state: { deck: "", next: 0, hands: "", lastCard: "", lastBy: -1 } });
+    const initialRoom = () => ({ board: EMPTY_BOARD, line: "", round: 0, turn: 0, state: { deck: "", next: 0, hands: "", played: "", drawn: "", passes: 0 } });
+    const dealSlice = (room, seat) => { const h = handSize(room.seats); const before = rooms.seatList(room).slice(0, seat).filter(Boolean).length; return parseState(room).deck.slice(before * h, before * h + h); };
 
     // ---------- state ----------
     let seat = null;      // { backend, code, seat }
@@ -379,17 +392,23 @@
       if (handRound !== room.round) {
         // New deal: my first cards are a fixed slice of the shuffled deck.
         dealing = true;
-        const h = handSize(room.seats);
-        saveHand(st.deck.slice(me() * h, (me() + 1) * h)).catch(console.error).finally(() => { dealing = false; });
+        saveHand(dealSlice(room, me())).catch(console.error).finally(() => { dealing = false; });
         return;
       }
-      // My last move saved to the room but not to my hand (connection dropped in between): redo it.
-      if (hand && st.lastBy === me() && st.lastCard && hand.includes(st.lastCard) && hand.length > st.hands[me()]) {
-        const cards = hand.filter((c) => c !== st.lastCard);
-        if (cards.length < st.hands[me()]) cards.push(st.deck[st.next - 1]);
+      // My last move reached the room but not my hand (connection dropped in between): redo it. The card I
+      // played can't be in my hand any more, and the card I drew must be, as long as the count says so.
+      if (!hand) return;
+      const repaired = repairHand(hand, st, me());
+      if (repaired) {
         dealing = true;
-        saveHand(cards).catch(console.error).finally(() => { dealing = false; });
+        saveHand(repaired).catch(console.error).finally(() => { dealing = false; });
       }
+    }
+    function repairHand(cards, st, s) {
+      let out = cards;
+      if (st.played[s] && out.includes(st.played[s])) out = out.filter((c) => c !== st.played[s]);
+      if (st.drawn[s] && !out.includes(st.drawn[s]) && out.length < st.hands[s]) out = [...out, st.drawn[s]];
+      return out.length === cards.length && out.every((c, i) => c === cards[i]) ? null : out;
     }
 
     // ---------- moves ----------
@@ -428,28 +447,29 @@
           }
           cur.board = board.join("");
           cur.last = square;
-          const drawn = st.next < st.deck.length ? st.deck[st.next] : null;
+          const drawn = st.next < st.deck.length ? st.deck[st.next] : "";
           st.hands[mySeat] += drawn ? 0 : -1;
-          cur.state = { deck: cur.state.deck, next: drawn ? st.next + 1 : st.next, hands: st.hands.join(","), lastCard: card, lastBy: mySeat };
+          st.next += drawn ? 1 : 0;
+          st.played[mySeat] = card;
+          st.drawn[mySeat] = drawn;
+          st.passes = 0;
+          cur.state = packState(cur.state.deck, st);
           if (k !== "X") {
             const lines = linesOf(cur.line);
-            const w = findLine(cur.board, square, t, lines);
-            if (w) {
-              lines.push(w);
+            const found = findLines(cur.board, square, t, lines);
+            if (found.length) {
+              lines.push(...found);
               cur.line = lines.flat().join(",");
               if (lines.filter((l) => teamOfLine(cur.board, l) === t).length >= linesToWin(cur)) { cur.status = "done"; cur.winner = t; return cur; }
             }
           }
-          if (st.hands.every((n) => n === 0) && !drawn) { cur.status = "done"; cur.winner = "draw"; return cur; }
+          if (!drawn && rooms.seatList(cur).every((uid, i) => !uid || st.hands[i] === 0)) { cur.status = "done"; cur.winner = "draw"; return cur; }
           cur.turn = rooms.nextSeat(cur, mySeat);
           return cur;
         });
         if (!r.committed) { $("hint").textContent = "That move didn't go through."; return; }
-        const st = parseState(r.value);
-        const cards = hand.filter((c) => c !== card);
-        if (st.lastBy === mySeat && cards.length < st.hands[mySeat]) cards.push(st.deck[st.next - 1]);
         picked = null;
-        await saveHand(cards);
+        await saveHand(repairHand(hand, parseState(r.value), mySeat) || hand);
       } catch (err) {
         console.error(err);
         $("hint").textContent = "Move didn't go through. Try again.";
@@ -466,17 +486,39 @@
           if (!cur || cur.status !== "playing" || cur.turn !== mySeat || cur.round !== round) return undefined;
           const st = parseState(cur);
           if (st.next >= st.deck.length) return undefined;
-          cur.state = { ...cur.state, next: st.next + 1, lastCard: card, lastBy: mySeat };
+          st.played[mySeat] = card;
+          st.drawn[mySeat] = st.deck[st.next];
+          st.next += 1;
+          cur.state = packState(cur.state.deck, st);
           return cur;
         });
-        if (!r.committed) { $("hint").textContent = "No cards left to draw."; return; }
-        const st = parseState(r.value);
+        if (!r.committed) { $("hint").textContent = "Couldn't swap: it isn't your turn, or the pile is empty."; return; }
         picked = null;
-        await saveHand([...hand.filter((c) => c !== card), st.deck[st.next - 1]]);
+        await saveHand(repairHand(hand, parseState(r.value), mySeat) || hand);
       } catch (err) {
         console.error(err);
         $("hint").textContent = "Couldn't swap. Try again.";
       } finally { busy = false; render(); }
+    }
+
+    // Nothing playable: the turn moves on. When everyone passes in a row the game is over.
+    const canPlay = () => !!hand && hand.some((c) => targetsOf(c).length || (isDead(c) && parseState(room).next < parseState(room).deck.length));
+    async function pass() {
+      if (busy || !room || room.status !== "playing" || room.turn !== me() || canPlay()) return;
+      const mySeat = me(), round = room.round;
+      busy = true;
+      try {
+        await seat.backend.transact(seat.code, (cur) => {
+          if (!cur || cur.status !== "playing" || cur.turn !== mySeat || cur.round !== round) return undefined;
+          const st = parseState(cur);
+          st.passes += 1;
+          cur.state = packState(cur.state.deck, st);
+          if (st.passes >= rooms.playerCount(cur)) { cur.status = "done"; cur.winner = "draw"; return cur; }
+          cur.turn = rooms.nextSeat(cur, mySeat);
+          return cur;
+        });
+      } catch (err) { console.error(err); $("hint").textContent = "Couldn't pass. Try again."; }
+      finally { busy = false; render(); }
     }
 
     async function rematch() {
@@ -527,7 +569,7 @@
         $("start-btn").hidden = !isHost;
         $("start-btn").disabled = count < (r.min || r.seats);
         $("waiting-note").textContent = count < r.seats
-          ? `${count} of ${r.seats} here.${isHost && count >= (r.min || 2) ? " Start now or wait for more." : isHost ? " Waiting for friends…" : " Waiting for the host to start…"}`
+          ? `${count} of ${r.seats} here.${isHost && count >= (r.min || 2) ? " Start now or wait for more." : isHost ? ` Waiting for ${r.min === r.seats ? "everyone" : "friends"}…` : " Waiting for the host to start…"}`
           : isHost ? "Everyone's here." : "Waiting for the host to start…";
         $("status").textContent = "";
         $("hint").textContent = "";
@@ -544,7 +586,7 @@
         const was = lastBoard ? lastBoard[i] : v;
         const chip = v !== "-" && v !== "*";
         sq.className = "sq" + (LAYOUT[i] ? "" : " free") + (targets.has(i) ? " ok" : "") + (removing && targets.has(i) ? " remove" : "") +
-          (locked.has(i) ? " locked" : "") + (r.last === i ? " last" : "") + (chip && was === "-" ? " placed" : "");
+          (locked.has(i) ? " locked" : "") + (r.last === i ? " last" : "") + (r.last === i && !chip && LAYOUT[i] ? " taken" : "") + (chip && was === "-" ? " placed" : "");
         sq.innerHTML = (LAYOUT[i] ? LAYOUT[i].slice(1) : "★") + (chip ? `<span class="chipd" style="--cc: var(--c${v}); --cr: var(--c${v}-ring)"></span>` : "");
         sq.disabled = !targets.has(i);
         sq.setAttribute("aria-label", `${LAYOUT[i] ? cardLabel(LAYOUT[i] + "a") : "Free corner"}${chip ? `, ${CHIP_NAMES[v]} chip` : ""}${targets.has(i) ? ", tap to play here" : ""}`);
@@ -564,30 +606,41 @@
       const st = r.state?.deck ? parseState(r) : null;
       const online = (s) => rooms.isOnline(r, s);
       let status = "", hint = "";
+      // The last move was a Take: tell everyone but the taker which square was emptied.
+      const taker = st && playing ? lastMover(r) : -1;
+      const took = taker >= 0 && taker !== mine && st.played[taker] && kindOf(st.played[taker]) === "X" && typeof r.last === "number" && r.board[r.last] === "-"
+        ? `${label(taker)} took a chip from ${cardLabel(LAYOUT[r.last] + "a")}.` : "";
       if (playing) {
         if (myTurn) {
           status = "Your turn";
-          hint = picked ? (kindOf(picked) === "X" ? "Tap an opponent's chip to take it." : "Tap a highlighted square.") : hand?.length ? "Tap a card to play." : "No cards left: your turn is skipped.";
+          hint = picked ? (kindOf(picked) === "X" ? "Tap an opponent's chip to take it." : "Tap a highlighted square.") : hand?.length ? "Tap a card to play." : "No cards left.";
           if (!picked && hand?.some(isDead)) hint = "A faded card is dead: tap it to swap it.";
+          if (!canPlay()) hint = hand?.length ? "Nothing to play: pass your turn." : "No cards left: pass your turn.";
+          if (!picked && took) hint = `${took} ${hint}`;
         } else {
           status = `${label(r.turn)}'s turn${online(r.turn) ? "…" : " (away)"}`;
+          hint = took;
         }
-      } else if (r.winner === "draw") status = "No cards left: it's a draw";
-      else if (typeof r.left === "number") status = r.left === mine ? "You left this game" : `${label(r.left)} left. ${r.teams === 2 ? "Game over" : r.winner === myTeam() ? "You win 🎉" : `${label(r.winner)} wins`}`;
+      } else if (typeof r.left === "number") status = r.left === mine ? "You left this game" : `${label(r.left)} left. ${r.winner === "draw" ? "Game over" : r.winner === myTeam() ? "You win 🎉" : r.teams === 2 ? `Team ${r.winner + 1} wins` : `${label(r.winner)} wins`}`;
+      else if (r.winner === "draw") status = st && st.passes ? "Nobody can play: it's a draw" : "No cards left: it's a draw";
       else if (r.winner === myTeam()) status = r.teams === 2 ? "Your team wins! 🎉" : "You win! 🎉";
       else status = r.teams === 2 ? `Team ${r.winner + 1} wins` : `${label(r.winner)} wins`;
       $("status").textContent = status;
       $("hint").textContent = hint || (st && playing ? `${st.deck.length - st.next} cards in the pile · ${seats.map((u, s) => u && s !== mine ? `${label(s)}: ${st.hands[s]}` : "").filter(Boolean).join(" · ")}` : "");
-      $("rematch").hidden = r.status !== "done";
+      // Play again waits for a player who left to come back.
+      $("rematch").hidden = r.status !== "done" || (typeof r.left === "number" && r.left !== mine && !online(r.left));
+      $("pass").hidden = !(myTurn && !canPlay());
       $("leave").disabled = false;
     }
+    // The seat that moved last: the one before `turn` in seating order (or the mover of the winning move).
+    const lastMover = (r) => { const l = rooms.seatList(r); for (let k = 1; k <= l.length; k++) { const s = (r.turn - k + l.length) % l.length; if (l[s]) return s; } return r.turn; };
 
     // ---------- actions ----------
     async function createRoom() {
       setBusy(true);
       $("home-error").textContent = "";
       try {
-        start(await rooms.createRoom(GAME, { seats: mode, min: 2, auto: false, makeRoom: () => ({ ...initialRoom(), teams: mode === 4 ? 2 : 0 }) }));
+        start(await rooms.createRoom(GAME, { seats: mode, min: mode === 4 ? 4 : 2, auto: false, makeRoom: () => ({ ...initialRoom(), teams: mode === 4 ? 2 : 0 }) }));
       } catch (err) {
         console.error(err);
         showHome(err instanceof rooms.RoomError ? err.message : "Couldn't create a room. Check your connection and try again.");
@@ -619,6 +672,7 @@
     });
     $("start-btn").addEventListener("click", startGame);
     $("rematch").addEventListener("click", rematch);
+    $("pass").addEventListener("click", pass);
     $("hand").addEventListener("click", (e) => {
       const b = e.target.closest(".hcard");
       if (!b || b.disabled) return;
@@ -635,7 +689,7 @@
       if (!seat || !room) return showHome();
       const s = seat;
       const others = rooms.seatList(room).filter((u, i) => u && i !== me() && rooms.isOnline(room, i)).length;
-      if (room.status === "playing" && others && !confirm(room.seats === 2 ? "Leave the game? Your friend wins this round." : "Leave the game? The others will be left without you.")) return;
+      if (room.status === "playing" && others && !confirm(room.teams === 2 ? "Leave the game? The other team wins this round." : rooms.playerCount(room) === 2 ? "Leave the game? Your friend wins this round." : "Leave the game? It ends in a draw for everyone.")) return;
       $("leave").disabled = true;
       await rooms.quit(s);
       showHome();
@@ -652,7 +706,7 @@
     const linked = rooms.roomFromUrl();
     if (linked) { $("join-code").value = linked; joinRoom(linked); }
 
-    window.__fl = { rooms, LAYOUT, get room() { return room; }, get hand() { return hand; }, get seat() { return seat; }, play, swapDead };
+    window.__fl = { rooms, LAYOUT, get room() { return room; }, get hand() { return hand; }, get seat() { return seat; }, play, swapDead, pass };
   </script>
 </body>
 </html>
