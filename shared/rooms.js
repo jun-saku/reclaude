@@ -5,14 +5,15 @@
 // A room is one object at rooms/<CODE> in Firebase Realtime Database:
 //   { game, host, seats, min, auto, teams, players: { s0: uid, s1?: uid, … },
 //     status: "waiting"|"playing"|"done", turn: <seat>, round, createdAt,
-//     board?, winner?: <seat|team> | "draw", line?, last?, state?: {…}, online?: { s0?: true, … } }
+//     board?, winner?: <seat|team> | "draw", line?, last?, left?: <seat>, state?: {…}, online?: { s0?: true, … } }
 // Seat keys are "s0".."s5" (not 0..5) so Firebase never turns them into arrays.
 // private/<CODE>/s<N> holds one string only that seat's player can read or write (e.g. a hand of cards).
 // Access rules: firebase/database.rules.json. Any field a game adds must be allowed there too
 // (free-form game data goes in `state`). The rules also enforce who may change what:
 //   waiting: the host sets the game up; others may only take an empty seat (filling an auto room starts it).
 //            `state` isn't protected yet, so deal hidden or random things in startGame's setup.
-//   playing: only the player in seat `turn` may change board/turn/winner/line/last/round/teams/state.
+//   playing: only the player in seat `turn` may change board/turn/winner/line/last/round/teams/state;
+//            any seated player may forfeit (quit): status "done", winner another seat, left their own seat.
 //   done:    the result is fixed; anyone seated may start the next round (round + 1).
 // A taken seat can't be emptied or reassigned, and each player sets only their own online flag.
 // Rooms can be deleted by the host while waiting, or by anyone once a day old (createdAt).
@@ -428,6 +429,26 @@ export function enter({ backend, code, seat }, onRoom, onGone) {
     // Give the presence removal a moment to send, then free the connection.
     if (!backend.local) setTimeout(() => { if (!inRoom) backend.offline(); }, 1500);
   };
+}
+
+// Leaves for good, so the others aren't left waiting: a waiting room with nobody else in it is deleted,
+// and a game in play is forfeited (status "done", winner the other seat, left this seat). Only rooms
+// without teams and with exactly one other player forfeit; otherwise this just leaves the room as it is.
+// Call it before leave() so presence is still valid; errors are ignored (the room may already be gone).
+export async function quit({ backend, code, seat }) {
+  if (backend.local) return;
+  await backend.transact(code, (cur) => {
+    if (cur === null) return null;
+    if (seatOf(cur, backend.uid) !== seat) return undefined;
+    if (cur.status === "waiting") return cur.host === backend.uid && playerCount(cur) === 1 ? null : undefined;
+    if (cur.status !== "playing" || cur.teams) return undefined;
+    const others = seatList(cur).flatMap((uid, i) => (uid && i !== seat ? [i] : []));
+    if (others.length !== 1) return undefined;
+    cur.status = "done";
+    cur.winner = others[0];
+    cur.left = seat;
+    return cur;
+  }).catch(() => {});
 }
 
 // Builds a same-device room: every seat is filled and the game starts immediately.

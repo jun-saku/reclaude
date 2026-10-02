@@ -75,6 +75,19 @@ const server = http.createServer((req, res) => {
   }, code);
   ok(early.startsWith('denied'), `a player can't change the board on the other player's turn (${early.slice(0, 40)})`);
   await A.screenshot({ path: `${out}/e2e-c4.png` });
+  // Red leaves mid-game (confirming the dialog): Yellow is told and wins the round
+  A.once('dialog', (d) => d.accept());
+  await A.click('#leave'); await A.waitForSelector('#home:not([hidden])', { timeout: 8000 });
+  ok(await statusIs(B, 'Your friend left. You win 🎉'), 'leaving mid-game forfeits; the friend sees it');
+  ok(await B.$eval('#rematch', (b) => b.hidden), 'play again waits until the friend is back');
+  // A waiting room is deleted when its host leaves it
+  const Z = await page(C4);
+  await Z.click('#create'); await Z.waitForSelector('#waiting:not([hidden])', { timeout: 15000 });
+  const zcode = (await Z.textContent('#waiting-code')).trim();
+  await Z.click('#leave'); await Z.waitForSelector('#home:not([hidden])', { timeout: 8000 });
+  await C.fill('#join-code', zcode); await C.click('#join');
+  await C.waitForFunction(() => document.getElementById('home-error').textContent.length > 0, null, { timeout: 8000 });
+  ok((await C.textContent('#home-error')).includes('No room called'), 'a waiting room is deleted when its host leaves');
 
   // ---- Tic-tac-toe on real Firebase ----
   const TT = BASE + 'tic-tac-toe/?backend=emulator';

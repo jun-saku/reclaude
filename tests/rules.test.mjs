@@ -121,7 +121,17 @@ await expect('creating an auto-start 2-seat room', true, () => set(A.r('rooms/TT
 await expect('B joining and starting it in one write', true, () => update(B.r('rooms/TTTT'), { 'players/s1': B.uid, status: 'playing' }));
 await expect('C joining a full 2-seat room', false, () => update(C.r('rooms/TTTT'), { 'players/s2': C.uid }));
 await expect('a joiner filling the board as they join', false, () => update(C.r('rooms/TTT2'), { 'players/s1': C.uid, status: 'playing', board: 'xxx------' }).catch((e) => { throw e; }));
+console.log('-- leaving mid-game (forfeit)');
+await expect('B forfeiting in their own favour', false, () => update(B.r('rooms/TTTT'), { status: 'done', winner: 1, left: 1 }));
+await expect('B forfeiting on A\'s behalf', false, () => update(B.r('rooms/TTTT'), { status: 'done', winner: 0, left: 0 }));
+await expect('B forfeiting to an empty seat', false, () => update(B.r('rooms/TTTT'), { status: 'done', winner: 2, left: 1 }));
+await expect('B forfeiting while also changing the board', false, () => update(B.r('rooms/TTTT'), { status: 'done', winner: 0, left: 1, board: 'xxx------' }));
+await expect('a stranger forfeiting for B', false, () => update(C.r('rooms/TTTT'), { status: 'done', winner: 0, left: 1 }));
+await expect('B (not on turn) forfeiting', true, () => update(B.r('rooms/TTTT'), { status: 'done', winner: 0, left: 1 }));
+await expect('changing who left afterwards', false, () => update(A.r('rooms/TTTT'), { left: 0 }));
 await expect('a seated player deleting the room mid-game', false, () => remove(A.r('rooms/TTTT')));
+await expect('A starting the next round after the forfeit', true, () => update(A.r('rooms/TTTT'), { status: 'playing', round: 1, turn: 1, winner: null, left: null }));
+await expect('a left seat outside 0–5', false, () => update(B.r('rooms/TTTT'), { status: 'done', winner: 0, left: 9 }));
 
 console.log('-- leaderboard (scores/2048)');
 const entry = (name, score) => ({ name, score, at: serverTimestamp() });
