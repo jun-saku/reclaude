@@ -8,6 +8,7 @@ toys) built by Claude from a phone, each published at its own link.
 
 ## Projects
 
+- [2048](https://jun-saku.github.io/reclaude/2048/): slide and merge tiles, with swipe controls, undo and saved progress
 - [Calculator](https://jun-saku.github.io/reclaude/calculator/): a pocket calculator with a live result preview
 
 See [CLAUDE.md](CLAUDE.md) for how projects are added, tested and deployed.
