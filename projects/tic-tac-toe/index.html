@@ -372,13 +372,10 @@
       }).catch((err) => { console.error(err); els.status.textContent = "Move didn't go through. Try again."; });
     }
 
+    // Play again starts once everyone still here has tapped it.
     function rematch() {
       if (!room || room.status !== "done") return;
-      const round = room.round + 1;
-      vtransact((cur) => {
-        if (cur.status !== "done" || cur.round !== round - 1) return undefined;
-        return freshRound(cur, round);
-      }).catch((err) => console.error(err));
+      rooms.playAgain(seat, (cur, round) => fromView(freshRound(toView(cur), round), cur)).catch((err) => console.error(err));
     }
 
     // ---------- rendering ----------
@@ -427,6 +424,9 @@
       els.status.textContent = status;
       // After a friend leaves, Play again waits until they're back.
       els.rematch.hidden = r.status !== "done" || (r.left === other && !online[other]);
+      const mine = !local && rooms.wantsAgain(r, MARK.indexOf(side)), theirs = !local && rooms.wantsAgain(r, MARK.indexOf(other));
+      els.rematch.disabled = mine;
+      els.rematch.textContent = mine ? "Waiting for your friend…" : theirs ? "Play again (friend is ready)" : "Play again";
     }
 
     // ---------- wiring ----------

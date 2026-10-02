@@ -74,7 +74,9 @@ The user usually works from their phone, so keep replies short and end with the 
   winner, state…); before the start only the host may set it up; a finished result is fixed until the next round
   (`round + 1`); taken seats can't be emptied or reassigned. Games must write in that order (see the top of
   `shared/rooms.js`). Any seated player may forfeit (`rooms.quit`: status `done`, `left` their own seat, and `winner`
-  the other player, the other team, or `draw` with 3+ players); games call it when a player taps Leave. Rooms over a
+  the other player, the other team, or `draw` with 3+ players); games call it when a player taps Leave. Play again is
+  by agreement (`rooms.playAgain`): each player sets only their own `again/<seat>` flag, and the round starts once
+  everyone still online has tapped; `rooms.wantsAgain` reads the flags for the button text. Rooms over a
   day old may be deleted by anyone; `rooms.js` clears them when it meets one, and a host leaving a waiting room
   closes it.
 - Testing online features: this environment can't reach real Firebase, but the emulator works. Use `?backend=fake`

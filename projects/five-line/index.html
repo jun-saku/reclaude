@@ -521,14 +521,11 @@
       finally { busy = false; render(); }
     }
 
+    // Play again starts once everyone still here has tapped it.
     async function rematch() {
       if (!room || room.status !== "done") return;
-      const round = room.round + 1;
       try {
-        await seat.backend.transact(seat.code, (cur) => {
-          if (!cur || cur.status !== "done" || cur.round !== round - 1) return undefined;
-          return dealRoom(cur, round);
-        });
+        await rooms.playAgain(seat, (cur, round) => dealRoom(cur, round));
       } catch (err) { console.error(err); $("hint").textContent = "Couldn't start a new game. Try again."; }
     }
 
@@ -629,6 +626,13 @@
       $("hint").textContent = hint || (st && playing ? `${st.deck.length - st.next} cards in the pile · ${seats.map((u, s) => u && s !== mine ? `${label(s)}: ${st.hands[s]}` : "").filter(Boolean).join(" · ")}` : "");
       // Play again waits for a player who left to come back.
       $("rematch").hidden = r.status !== "done" || (typeof r.left === "number" && r.left !== mine && !online(r.left));
+      if (r.status === "done") {
+        const ready = seats.flatMap((u, s) => (u && rooms.wantsAgain(r, s) ? [s] : []));
+        const waitingOn = seats.flatMap((u, s) => (u && s !== mine && online(s) && !rooms.wantsAgain(r, s) ? [label(s)] : []));
+        $("rematch").disabled = ready.includes(mine);
+        $("rematch").textContent = ready.includes(mine) ? `Waiting for ${waitingOn.join(", ") || "others"}…` : ready.length ? `Play again (${ready.map(label).join(", ")} ready)` : "Play again";
+        if (ready.length && !ready.includes(mine)) $("hint").textContent = `${ready.map(label).join(" and ")} want${ready.length === 1 ? "s" : ""} to play again.`;
+      }
       $("pass").hidden = !(myTurn && !canPlay());
       $("leave").disabled = false;
     }
