@@ -29,7 +29,7 @@ await expect('creating a room seating someone else in s0', false, () => set(B.r(
 await expect('a malformed room code', false, () => set(A.r('rooms/abcd'), room(A.uid)));
 await expect('a room with missing fields', false, () => set(A.r('rooms/ZZZX'), { game: 'test' }));
 await expect('a room with an unknown field', false, () => set(A.r('rooms/ZZZW'), { ...room(A.uid), cheat: 1 }));
-await expect('a room with 7 seats', false, () => set(A.r('rooms/ZZZV'), { ...room(A.uid), seats: 7 }));
+await expect('a room with 11 seats', false, () => set(A.r('rooms/ZZZV'), { ...room(A.uid), seats: 11 }));
 
 console.log('-- joining');
 await expect('a stranger editing the board without a seat', false, () => update(B.r(`rooms/${CODE}`), { board: 'x' }));
@@ -61,7 +61,7 @@ await expect('B deleting the board on A\'s turn', false, () => remove(B.r(`rooms
 await expect('A (whose turn it is) making a move', true, () => update(A.r(`rooms/${CODE}`), { board: '-x-', turn: 1, last: 1 }));
 await expect('B making a move on their turn', true, () => update(B.r(`rooms/${CODE}`), { board: '-xo', turn: 2, last: 2, 'state/deck': '2S' }));
 await expect('a non-player making a move', false, () => update(D.r(`rooms/${CODE}`), { turn: 0 }));
-await expect('a turn outside 0–5', false, () => update(C.r(`rooms/${CODE}`), { turn: 9 }));
+await expect('a turn outside 0–9', false, () => update(C.r(`rooms/${CODE}`), { turn: 10 }));
 await expect('a seated player setting their online flag', true, () => set(C.r(`rooms/${CODE}/online/s2`), true));
 await expect('another player clearing their online flag', false, () => remove(A.r(`rooms/${CODE}/online/s2`)));
 await expect('a bad online seat key', false, () => set(C.r(`rooms/${CODE}/online/s9`), true));
@@ -135,7 +135,7 @@ await expect('B (not on turn) forfeiting', true, () => update(B.r('rooms/TTTT'),
 await expect('changing who left afterwards', false, () => update(A.r('rooms/TTTT'), { left: 0 }));
 await expect('a seated player deleting the room mid-game', false, () => remove(A.r('rooms/TTTT')));
 await expect('A starting the next round after the forfeit', true, () => update(A.r('rooms/TTTT'), { status: 'playing', round: 1, turn: 1, winner: null, left: null }));
-await expect('a left seat outside 0–5', false, () => update(B.r('rooms/TTTT'), { status: 'done', winner: 0, left: 9 }));
+await expect('a left seat outside 0–9', false, () => update(B.r('rooms/TTTT'), { status: 'done', winner: 0, left: 10 }));
 // Forfeits in rooms with game state (a transaction rewrites the whole room, state included), teams and 3 players
 const whole = async (u, code, patch) => { const cur = (await get(u.r(`rooms/${code}`))).val(); await set(u.r(`rooms/${code}`), { ...cur, ...patch }); };
 await expect('creating a 2-team room with state', true, () => set(A.r('rooms/TEAM'), { ...room(A.uid), seats: 4, min: 4, teams: 2, auto: false, state: { deck: 'x' } }));
@@ -150,6 +150,39 @@ await expect('C forfeiting a 3-player game in their own favour', false, () => wh
 await expect('C (not on turn) forfeiting a 3-player game as a draw', true, () => whole(C, 'TRYZ', { status: 'done', winner: 'draw', left: 2 }));
 await expect('the host closing a waiting room with guests in it', true, async () => {
   await set(A.r('rooms/LQBY'), room(A.uid)); await update(B.r('rooms/LQBY'), { 'players/s1': B.uid }); await remove(A.r('rooms/LQBY'));
+});
+
+console.log('-- 10 seats, names, turn timer');
+const U = []; for (let i = 0; i < 10; i++) U.push(await user('P' + i));
+await expect('a 10-seat room', true, () => set(U[0].r('rooms/BXGA'), { ...room(U[0].uid), seats: 10, min: 2, names: { s0: 'Host' } }));
+for (let i = 1; i < 10; i++) await update(U[i].r('rooms/BXGA'), { [`players/s${i}`]: U[i].uid, [`names/s${i}`]: 'Player ' + i });
+await expect('seat s9 filled by the tenth player', true, async () => { if ((await get(U[9].r('rooms/BXGA/players/s9'))).val() !== U[9].uid) throw new Error('not seated'); });
+await expect('a seat s10', false, () => update(D.r('rooms/BXGA'), { 'players/s10': D.uid }));
+await expect('seat 9 writing their own hand', true, () => set(U[9].r('private/BXGA/s9'), 'X1'));
+await expect('changing your own name', true, () => set(U[3].r('rooms/BXGA/names/s3'), 'Jun 2'));
+await expect("changing someone else's name", false, () => set(U[3].r('rooms/BXGA/names/s4'), 'Rude'));
+await expect('a name with HTML characters', false, () => set(U[3].r('rooms/BXGA/names/s3'), '<b>x</b>'));
+await expect('a name over 16 characters', false, () => set(U[3].r('rooms/BXGA/names/s3'), 'ABCDEFGHIJKLMNOPQ'));
+await expect('an empty name', false, () => set(U[3].r('rooms/BXGA/names/s3'), ''));
+await expect('a turn of 9 and a winner of 9', true, () => update(U[0].r('rooms/BXGA'), { status: 'playing', turn: 9 }));
+await expect('the tenth player making a move', true, () => update(U[9].r('rooms/BXGA'), { board: 'x', turn: 0 }));
+// Turn timer
+await expect('a room with a 30-second turn timer', true, () => set(A.r('rooms/TQMA'), { ...room(A.uid), seats: 2, min: 2, turnSecs: 30, state: { deck: 'x' } }));
+await update(B.r('rooms/TQMA'), { 'players/s1': B.uid });
+await update(A.r('rooms/TQMA'), { status: 'playing', turn: 0, turnAt: Date.now() });
+await expect('changing the turn timer', false, () => update(A.r('rooms/TQMA'), { turnSecs: 5 }));
+await expect('a turn start far in the future', false, () => update(A.r('rooms/TQMA'), { turnAt: Date.now() + 3600000 }));
+await expect('B skipping A before the timer runs out', false, () => update(B.r('rooms/TQMA'), { turn: 1, turnAt: serverTimestamp() }));
+await update(A.r('rooms/TQMA'), { turnAt: Date.now() - 31000 });
+await expect('B skipping A while also changing the board', false, () => update(B.r('rooms/TQMA'), { turn: 1, turnAt: serverTimestamp(), board: 'x' }));
+await expect('B skipping A to an empty seat', false, () => update(B.r('rooms/TQMA'), { turn: 5, turnAt: serverTimestamp() }));
+await expect('a stranger skipping A', false, () => update(C.r('rooms/TQMA'), { turn: 1, turnAt: serverTimestamp() }));
+await expect('B skipping A once the 30 seconds are up', true, () => update(B.r('rooms/TQMA'), { turn: 1, turnAt: serverTimestamp() }));
+await expect('A skipping B straight away', false, () => update(A.r('rooms/TQMA'), { turn: 0, turnAt: serverTimestamp() }));
+await expect('a room without a timer: no skipping', false, async () => {
+  await set(A.r('rooms/TQMB'), { ...room(A.uid), seats: 2, min: 2 }); await update(B.r('rooms/TQMB'), { 'players/s1': B.uid });
+  await update(A.r('rooms/TQMB'), { status: 'playing', turn: 0, turnAt: Date.now() - 999999 });
+  await update(B.r('rooms/TQMB'), { turn: 1, turnAt: serverTimestamp() });
 });
 
 console.log('-- leaderboard (scores/2048)');

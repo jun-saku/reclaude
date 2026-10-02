@@ -243,6 +243,12 @@
       return room;
     }
 
+    // The friend's name when they have set one (escaped: it goes into HTML), else "Friend".
+    const friendName = (r, mark) => {
+      const n = r.names?.[`s${MARK.indexOf(mark)}`];
+      return n ? n.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`) : "Friend";
+    };
+
     // ---------- seats ↔ marks ----------
     // Rooms number their seats (0, 1); the game works in marks: seat 0 is "x" (Red), seat 1 is "o" (Yellow).
     const MARK = ["x", "o"];
@@ -386,7 +392,7 @@
         (dot === undefined ? "" : `<span class="dot${dot ? " on" : ""}"></span>`) + `</span>`;
       $("players").innerHTML = local
         ? chip("x", "Red") + chip("o", "Yellow")
-        : chip(side, "You", true) + (r.o ? chip(other, "Friend", !!online[other]) : "");
+        : chip(side, "You", true) + (r.o ? chip(other, friendName(r, other), !!online[other]) : "");
 
       $("waiting").hidden = r.status !== "waiting";
       $("waiting-code").textContent = code;

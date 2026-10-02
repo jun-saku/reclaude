@@ -90,6 +90,14 @@
     .seg { display: flex; background: var(--soft); border-radius: 12px; padding: 4px; gap: 4px; }
     .seg button { flex: 1; background: transparent; color: var(--text); padding: 9px 6px; font-size: 0.95rem; }
     .seg button[aria-pressed="true"] { background: var(--panel); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+    .name-row { display: flex; align-items: center; gap: 10px; font-weight: 650; }
+    .name-row span { white-space: nowrap; }
+    .name-row input {
+      flex: 1; min-width: 0; font: inherit; font-weight: 500; padding: 10px 12px; border-radius: 12px;
+      border: 1px solid var(--line); background: var(--bg); color: var(--text);
+    }
+    .clock { font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 600; }
+    .clock.low { color: var(--danger); }
 
     .bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
     .players { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -154,12 +162,23 @@
 
     <section id="home">
       <div class="card">
+        <label class="name-row"><span>Your name</span>
+          <input id="my-name" maxlength="16" autocomplete="nickname" spellcheck="false" placeholder="So friends know it's you">
+        </label>
+      </div>
+      <div class="card">
         <h2>Play friends online</h2>
         <p class="muted">Create a room, send the code or link, then start once everyone is in.</p>
-        <div class="seg" role="group" aria-label="Players">
+        <div class="seg" id="mode" role="group" aria-label="Players">
           <button type="button" data-mode="2" aria-pressed="true">2 players</button>
           <button type="button" data-mode="3" aria-pressed="false">3 players</button>
           <button type="button" data-mode="4" aria-pressed="false">2 teams of 2</button>
+        </div>
+        <div class="seg" id="timer" role="group" aria-label="Turn timer">
+          <button type="button" data-secs="0" aria-pressed="true">No timer</button>
+          <button type="button" data-secs="30" aria-pressed="false">30 s</button>
+          <button type="button" data-secs="60" aria-pressed="false">1 min</button>
+          <button type="button" data-secs="120" aria-pressed="false">2 min</button>
         </div>
         <button id="create">Create room</button>
       </div>
@@ -209,6 +228,7 @@
       <div class="row">
         <button id="rematch" hidden>Play again</button>
         <button id="pass" hidden>Pass</button>
+        <button id="skip" hidden>Skip</button>
         <button class="secondary" id="leave">Leave</button>
       </div>
     </section>
@@ -342,7 +362,9 @@
 
     const me = () => seat.seat;
     const myTeam = () => teamOf(room, me());
-    const label = (s) => (s === me() ? "You" : `P${s + 1}`);
+    const esc = (t) => String(t).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+    // "You" for this player, otherwise their name (or P1, P2… when unnamed). Escaped: names go into HTML.
+    const label = (s) => (s === me() ? "You" : esc(rooms.nameOf(room, s)));
 
     function setBusy(b) { for (const id of ["create", "join"]) $(id).disabled = b; }
 
@@ -546,7 +568,7 @@
       const playing = r.status === "playing";
       const seats = rooms.seatList(r);
 
-      $("room-label").innerHTML = `Room <b>${seat.code}</b>`;
+      $("room-label").innerHTML = `Room <b>${seat.code}</b>${r.turnSecs ? ` · ⏱ ${r.turnSecs < 60 ? `${r.turnSecs} s` : `${r.turnSecs / 60} min`}` : ""}`;
       $("players").innerHTML = seats.map((uid, s) => {
         if (!uid) return "";
         const t = teamOf(r, s);
@@ -561,7 +583,7 @@
       if (waiting) {
         $("waiting-code").textContent = seat.code;
         const count = rooms.playerCount(r);
-        $("seated").innerHTML = seats.map((uid, s) => uid ? `<div><span class="chip"><span class="disc" style="background: var(--c${teamOf(r, s)}); border-color: var(--c${teamOf(r, s)}-ring)"></span>${label(s)}${s === 0 ? " (host)" : ""}</span>${r.teams === 2 ? `<span class="muted">Team ${teamOf(r, s) + 1}</span>` : ""}</div>` : "").join("");
+        $("seated").innerHTML = seats.map((uid, s) => uid ? `<div><span class="chip"><span class="disc" style="background: var(--c${teamOf(r, s)}); border-color: var(--c${teamOf(r, s)}-ring)"></span>${label(s)}${s === mine && rooms.nameOf(r, s) !== `P${s + 1}` ? ` (${esc(rooms.nameOf(r, s))})` : ""}${s === 0 ? " (host)" : ""}</span>${r.teams === 2 ? `<span class="muted">Team ${teamOf(r, s) + 1}</span>` : ""}</div>` : "").join("");
         const isHost = r.host === seat.backend.uid;
         $("start-btn").hidden = !isHost;
         $("start-btn").disabled = count < (r.min || r.seats);
@@ -571,6 +593,7 @@
         $("status").textContent = "";
         $("hint").textContent = "";
         $("rematch").hidden = true;
+        $("skip").hidden = true;
         return;
       }
 
@@ -618,12 +641,14 @@
           status = `${label(r.turn)}'s turn${online(r.turn) ? "…" : " (away)"}`;
           hint = took;
         }
+        const left = rooms.turnLeft(r);
+        if (left !== null) status += ` <span class="clock${left <= 10 ? " low" : ""}">${left ? `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}` : "time's up"}</span>`;
       } else if (typeof r.left === "number") status = r.left === mine ? "You left this game" : `${label(r.left)} left. ${r.winner === "draw" ? "Game over" : r.winner === myTeam() ? "You win 🎉" : r.teams === 2 ? `Team ${r.winner + 1} wins` : `${label(r.winner)} wins`}`;
       else if (r.winner === "draw") status = st && st.passes ? "Nobody can play: it's a draw" : "No cards left: it's a draw";
       else if (r.winner === myTeam()) status = r.teams === 2 ? "Your team wins! 🎉" : "You win! 🎉";
       else status = r.teams === 2 ? `Team ${r.winner + 1} wins` : `${label(r.winner)} wins`;
-      $("status").textContent = status;
-      $("hint").textContent = hint || (st && playing ? `${st.deck.length - st.next} cards in the pile · ${seats.map((u, s) => u && s !== mine ? `${label(s)}: ${st.hands[s]}` : "").filter(Boolean).join(" · ")}` : "");
+      $("status").innerHTML = playing ? status : esc(status).replace(/&#39;/g, "'");
+      $("hint").innerHTML = hint || (st && playing ? `${st.deck.length - st.next} cards in the pile · ${seats.map((u, s) => u && s !== mine ? `${label(s)}: ${st.hands[s]}` : "").filter(Boolean).join(" · ")}` : "");
       // Play again waits for a player who left to come back.
       $("rematch").hidden = r.status !== "done" || (typeof r.left === "number" && r.left !== mine && !online(r.left));
       if (r.status === "done") {
@@ -634,6 +659,9 @@
         if (ready.length && !ready.includes(mine)) $("hint").textContent = `${ready.map(label).join(" and ")} want${ready.length === 1 ? "s" : ""} to play again.`;
       }
       $("pass").hidden = !(myTurn && !canPlay());
+      // Turn timer ran out on someone else's turn: anyone may pass it on.
+      $("skip").hidden = !(playing && !myTurn && rooms.turnLeft(r) === 0);
+      $("skip").textContent = `Skip ${label(r.turn)}`;
       $("leave").disabled = false;
     }
     // The seat that moved last: the one before `turn` in seating order (or the mover of the winning move).
@@ -643,8 +671,9 @@
     async function createRoom() {
       setBusy(true);
       $("home-error").textContent = "";
+      await rooms.setMyName($("my-name").value);
       try {
-        start(await rooms.createRoom(GAME, { seats: mode, min: mode === 4 ? 4 : 2, auto: false, makeRoom: () => ({ ...initialRoom(), teams: mode === 4 ? 2 : 0 }) }));
+        start(await rooms.createRoom(GAME, { seats: mode, min: mode === 4 ? 4 : 2, auto: false, turnSecs, makeRoom: () => ({ ...initialRoom(), teams: mode === 4 ? 2 : 0 }) }));
       } catch (err) {
         console.error(err);
         showHome(err instanceof rooms.RoomError ? err.message : "Couldn't create a room. Check your connection and try again.");
@@ -653,6 +682,7 @@
     async function joinRoom(code) {
       setBusy(true);
       $("home-error").textContent = "";
+      await rooms.setMyName($("my-name").value);
       try {
         start(await rooms.joinRoom(GAME, code));
       } catch (err) {
@@ -662,12 +692,28 @@
     }
 
     // ---------- wiring ----------
-    for (const b of document.querySelectorAll(".seg button")) {
+    for (const b of document.querySelectorAll("#mode button")) {
       b.addEventListener("click", () => {
         mode = Number(b.dataset.mode);
-        for (const o of document.querySelectorAll(".seg button")) o.setAttribute("aria-pressed", String(o === b));
+        for (const o of document.querySelectorAll("#mode button")) o.setAttribute("aria-pressed", String(o === b));
       });
     }
+    let turnSecs = 0;
+    for (const b of document.querySelectorAll("#timer button")) {
+      b.addEventListener("click", () => {
+        turnSecs = Number(b.dataset.secs);
+        for (const o of document.querySelectorAll("#timer button")) o.setAttribute("aria-pressed", String(o === b));
+      });
+    }
+    $("my-name").value = rooms.myName();
+    $("my-name").addEventListener("change", () => { $("my-name").value = rooms.cleanRoomName($("my-name").value); });
+    $("skip").addEventListener("click", async () => {
+      $("skip").disabled = true;
+      if (!(await rooms.skipTurn(seat, room))) $("hint").textContent = "Couldn't skip yet.";
+      $("skip").disabled = false;
+    });
+    // The countdown ticks every second while a timed game is on.
+    setInterval(() => { if (room?.turnSecs && room.status === "playing") render(); }, 1000);
     $("create").addEventListener("click", createRoom);
     $("join-form").addEventListener("submit", (e) => { e.preventDefault(); joinRoom($("join-code").value); });
     $("join-code").addEventListener("input", () => {

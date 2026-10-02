@@ -4,7 +4,7 @@
   "type": "module",
   "description": "Dev-only tests; nothing here is published to the site.",
   "scripts": {
-    "rules": "cp ../firebase/database.rules.json .rules.json && firebase emulators:exec --only database,auth --project demo-reclaude \"node rules.test.mjs\"",
+    "rules": "node ../scripts/rules.mjs --check && cp ../firebase/database.rules.json .rules.json && firebase emulators:exec --only database,auth --project demo-reclaude \"node rules.test.mjs\"",
     "e2e": "cp ../firebase/database.rules.json .rules.json && firebase emulators:exec --only database,auth --project demo-reclaude \"node e2e.cjs\""
   },
   "devDependencies": {
