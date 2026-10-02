@@ -61,15 +61,18 @@ The user usually works from their phone, so keep replies short and end with the 
 
 - Project `reclaude-67a01`, Realtime Database in asia-southeast1, anonymous sign-in. The web config in a page
   is public by design; access is controlled by `firebase/database.rules.json`.
-- Rules live only in the repo until the user pastes them into Firebase console → Realtime Database → Rules.
-  When you change them, say so in the PR and give the user the new rules to paste.
+- Rules are published automatically: on `main`, the workflow's `publish_rules` job deploys
+  `firebase/database.rules.json` (after the rules tests pass, before the site deploys), signing in to Google with
+  Workload Identity Federation (no stored key; only this repo's `main` is trusted). Never ask the user to paste
+  rules. Because a rules PR goes live on merge, call out rules changes clearly in the PR.
 - Rooms are shared by all games: each room has a `game` field, seats `players.s0`..`s5`, and a numeric `turn` (seat).
   Every field a game writes must be allowed in the rules (unknown fields are rejected); put free-form game data in
   `state`, and anything a player must not see (their hand) in private data.
 - Testing online features: this environment can't reach real Firebase, but the emulator works. Use `?backend=fake`
   (tabs share rooms, no rules) for quick UI tests, then `cd tests && npm run e2e` / `npm run rules` for the real SDK
-  and rules. Any rules change needs a passing `npm run rules`, new cases in `tests/rules.test.mjs`, and the user
-  republishing the rules (say so in the PR). Then ask the user to try the real thing.
+  and rules. Any rules change needs a passing `npm run rules` and new cases in `tests/rules.test.mjs`. Rules must stay
+  compatible with the site currently live, since the rules publish a moment before the new site does. Then ask
+  the user to try the real thing.
 
 ## Rules
 
