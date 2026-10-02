@@ -1,7 +1,8 @@
 name: Build and deploy
 
-# Every PR and push is built, so broken projects are caught before merging.
-# main is published to Cloudflare Pages (production) and, for old links, GitHub Pages.
+# Every PR and push is built and the database rules are tested, so problems are caught before merging.
+# On main, the database rules are published to Firebase first, then the site goes to Cloudflare Pages
+# (production) and, for old links, GitHub Pages.
 # PRs get a Cloudflare preview link, posted as a PR comment.
 # Cloudflare steps are skipped until the CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets exist.
 on:
@@ -56,10 +57,36 @@ jobs:
       - run: npm ci
       - run: npm run rules
 
+  # Publishes firebase/database.rules.json to the live database, on main only, after the rules tests pass.
+  # Signs in to Google with GitHub's short-lived ID token (Workload Identity Federation): no stored key.
+  # Google only accepts tokens from jun-saku/reclaude on refs/heads/main (set up once in Cloud Shell).
+  publish_rules:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: [build, rules]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: firebase
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/720774301235/locations/global/workloadIdentityPools/github/providers/reclaude
+          service_account: rules-deployer@reclaude-67a01.iam.gserviceaccount.com
+      - name: Publish database rules
+        run: npx --yes firebase-tools@13.35.1 deploy --only database --project reclaude-67a01 --non-interactive
+
   # GitHub Pages: kept so jun-saku.github.io/reclaude/... links keep working.
+  # Waits for the rules so the site and the rules it expects go live together.
   deploy:
-    if: github.ref == 'refs/heads/main'
-    needs: build
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && needs.build.result == 'success' && needs.publish_rules.result == 'success' }}
+    needs: [build, publish_rules]
     runs-on: ubuntu-latest
     permissions:
       pages: write
@@ -73,9 +100,10 @@ jobs:
 
   # Cloudflare Pages: production from main, previews for PRs. Uploads the built site directly
   # (no Cloudflare-GitHub connection needed, and direct uploads don't use Cloudflare's build quota).
+  # On main it waits for the rules to publish; PR previews use the live rules.
   cloudflare:
-    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
-    needs: build
+    if: ${{ !cancelled() && needs.build.result == 'success' && (github.event_name == 'pull_request' || (github.ref == 'refs/heads/main' && needs.publish_rules.result == 'success')) }}
+    needs: [build, publish_rules]
     runs-on: ubuntu-latest
     permissions:
       contents: read

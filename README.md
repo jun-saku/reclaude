@@ -26,8 +26,14 @@ python3 -m http.server 8000 -d /tmp/serve   # open http://localhost:8000/reclaud
 ## Firebase
 
 Online games use Firebase (Realtime Database + anonymous sign-in, free Spark plan). The database access
-rules are in [`firebase/database.rules.json`](firebase/database.rules.json); paste them into
-Firebase console → Realtime Database → Rules → Publish whenever they change.
+rules are in [`firebase/database.rules.json`](firebase/database.rules.json) and are **published automatically**
+when a change reaches `main`: GitHub Actions signs in to Google with Workload Identity Federation (no stored
+key; Google trusts only this repo's `main` branch) as the `rules-deployer` service account.
+
+One-time setup (done) in Cloud Shell for project `reclaude-67a01`: a `rules-deployer` service account with
+*Firebase Realtime Database Admin* and *Firebase Viewer*, a workload identity pool `github` with provider
+`reclaude` limited to `jun-saku/reclaude` on `refs/heads/main`, and *Workload Identity User* for that repo on the
+service account. To revoke, delete the service account or the pool in Google Cloud console.
 
 ## Tests
 
