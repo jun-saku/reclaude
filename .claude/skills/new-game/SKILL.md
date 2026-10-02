@@ -62,7 +62,8 @@ secret goal) goes in private data: one string per seat, ≤ 512 chars, readable 
 | `seatList`, `playerCount`, `seatOf`, `nextSeat`, `teamOf`, `isOnline`, `wantsAgain` | Small helpers. |
 | `localRoom(game, players, makeRoom)` | Same-phone mode, no network. |
 | `share(code, title)`, `roomFromUrl()` | Share links; open `?room=CODE` to join directly. |
-| `topScores(game)`, `myScore(game)`, `saveScore(game, name, score)` | Public leaderboard at `scores/<game>`. |
+| `topScores(game, n, order)`, `myScore(game)`, `saveScore(game, name, score, { order })` | Public leaderboard at `scores/<game>`, one entry per player. `order: "high"` (default) or `"low"` is better; `saveScore` only saves an improvement and throws `RoomError` with a message otherwise. |
+| `topTen({ game, rooms, button, order, format })` from `shared/leaderboard.js` | The shared 🏆 Top 10 sheet (Reload, close, your entry highlighted, fits the page's colours). Pass `rooms: () => import("../shared/rooms.js")`; call `sheet.stale()` after saving. See 2048. |
 
 ## What the rules enforce (write your game to fit)
 
@@ -76,8 +77,8 @@ secret goal) goes in private data: one string per seat, ≤ 512 chars, readable 
 - `turnAt` is stamped automatically whenever a write changes `turn`, `round` or starts the game. Don't set it.
 - The rules check whose turn it is, not whether a move is legal: the player on turn is trusted. This is a personal
   project, so that's fine; just check moves in your own code so honest mistakes can't happen.
-- Leaderboard scores are currently validated for 2048 (a positive even number up to 3,932,156). A game with
-  other scores needs an engine PR to `scripts/rules.mjs`.
+- Leaderboards are generic: a name (1–12 letters, numbers, spaces), any number as the score, at most one save
+  every 5 seconds. **What a valid score is belongs in your game** (2048 checks it's even and possible, for example).
 
 ## Patterns that already work
 
@@ -89,6 +90,8 @@ secret goal) goes in private data: one string per seat, ≤ 512 chars, readable 
 - **End of game:** set `status: "done"` and `winner` in the winning move's write. Keep the result on screen; Play
   again waits for everyone.
 - **Leaving:** confirm mid-game ("Your friend wins this round"), then `await rooms.quit(seat)` and go home.
+- **Leaderboard:** check the score yourself, `rooms.saveScore(game, name, score, { order })`, show the error message
+  if it throws, then `sheet.stale()`. Open the sheet with `topTen({ …, button })`.
 
 ## Testing
 

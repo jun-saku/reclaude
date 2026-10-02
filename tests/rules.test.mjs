@@ -3,7 +3,7 @@
 
 import { initializeApp } from "firebase/app";
 import { getAuth, connectAuthEmulator, signInAnonymously } from "firebase/auth";
-import { getDatabase, connectDatabaseEmulator, ref, set, get, update, remove, query, orderByChild, limitToLast, serverTimestamp } from "firebase/database";
+import { getDatabase, connectDatabaseEmulator, ref, set, get, update, remove, query, orderByChild, limitToLast, limitToFirst, serverTimestamp } from "firebase/database";
 
 let n = 0, fails = 0;
 async function user(name) {
@@ -185,7 +185,7 @@ await expect('a room without a timer: no skipping', false, async () => {
   await update(B.r('rooms/TQMB'), { turn: 1, turnAt: serverTimestamp() });
 });
 
-console.log('-- leaderboard (scores/2048)');
+console.log('-- leaderboards (scores/<game>): generic, each game checks its own scores');
 const entry = (name, score) => ({ name, score, at: serverTimestamp() });
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 await expect('saving your own score', true, () => set(A.r(`scores/2048/${A.uid}`), entry('Jun', 2048)));
@@ -194,10 +194,14 @@ await expect('a second save within 5 seconds', false, () => set(A.r(`scores/2048
 await wait(5200);
 await expect('a higher score after 5 seconds', true, () => set(A.r(`scores/2048/${A.uid}`), entry('Jun', 4096)));
 await wait(5200);
-await expect('lowering your score', false, () => set(A.r(`scores/2048/${A.uid}`), entry('Jun', 100)));
-await expect('an odd score', false, () => set(B.r(`scores/2048/${B.uid}`), entry('Bo', 1001)));
-await expect('a negative score', false, () => set(B.r(`scores/2048/${B.uid}`), entry('Bo', -10)));
-await expect('an impossible score (over 3,932,156)', false, () => set(B.r(`scores/2048/${B.uid}`), entry('Bo', 99999998)));
+// Games decide what counts as a better or valid score (lower is better for times, …): the rules don't.
+await expect('a lower score (the game decides; rules.saveScore only saves improvements)', true, () => set(A.r(`scores/2048/${A.uid}`), entry('Jun', 100)));
+await expect('an odd, negative or fractional score in another game', true, async () => {
+  await set(U[0].r(`scores/golf/${U[0].uid}`), entry('Ann', -3));
+  await set(U[1].r(`scores/golf/${U[1].uid}`), entry('Ben', 71.5));
+  await set(U[2].r(`scores/golf/${U[2].uid}`), entry('Cy', 1001));
+});
+await expect('a score beyond a trillion', false, () => set(U[3].r(`scores/golf/${U[3].uid}`), entry('Dee', 2e12)));
 await expect('a score as text', false, () => set(B.r(`scores/2048/${B.uid}`), entry('Bo', '5000')));
 await expect('a name with symbols', false, () => set(B.r(`scores/2048/${B.uid}`), entry('<b>hi</b>', 512)));
 await expect('a name over 12 characters', false, () => set(B.r(`scores/2048/${B.uid}`), entry('ABCDEFGHIJKLM', 512)));
@@ -214,7 +218,14 @@ await expect('reading the top 10 without signing in', true, async () => {
   top = []; snap.forEach((c) => { top.push(c.val().score); });
 });
 console.log(`     top scores read back: ${JSON.stringify(top)}`);
-if (JSON.stringify(top) !== '[512,4096]') { fails++; console.log('FAIL top 10 order/content'); }
+if (JSON.stringify(top) !== '[100,512]') { fails++; console.log('FAIL top 10 order/content'); }
+let low = null;
+await expect('reading a lower-is-better top 10', true, async () => {
+  const snap = await get(query(ref(dbNoAuth, 'scores/golf'), orderByChild('score'), limitToFirst(2)));
+  low = []; snap.forEach((c) => { low.push(c.val().score); });
+});
+console.log(`     lowest golf scores read back: ${JSON.stringify(low)}`);
+if (JSON.stringify(low) !== '[-3,71.5]') { fails++; console.log('FAIL low-first order'); }
 await expect('writing a score without signing in', false, () => set(ref(dbNoAuth, 'scores/2048/someone'), entry('Anon', 64)));
 await expect('a malformed game name', false, () => get(ref(dbNoAuth, 'scores/Bad Game')));
 
