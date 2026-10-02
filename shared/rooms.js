@@ -15,6 +15,7 @@
 //   uid, local?, watch(code, cb) → unsubscribe, transact(code, fn) → { committed, value },
 //   watchPrivate(code, seat, cb) → unsubscribe, setPrivate(code, seat, value),
 //   presence(code, seat) → stop, online(), offline()
+//   topScores(game, n) → [{ uid, name, score }] best first, myScore(game) → entry|null, saveScore(game, name, score)
 // transact's fn returns the new room, null to delete it, or undefined to abort.
 // Firebase may call fn with null before it has the room cached: transactions on a room you aren't
 // watching (via enter) should return null for a null room, not abort, so Firebase retries with real data.
@@ -124,6 +125,18 @@ async function firebaseBackend({ emulator = false } = {}) {
         db$.remove(r).catch(() => {});
       };
     },
+    async topScores(game, n) {
+      const snap = await db$.get(db$.query(db$.ref(db, `scores/${game}`), db$.orderByChild("score"), db$.limitToLast(n)));
+      const out = [];
+      snap.forEach((c) => { out.push({ uid: c.key, ...c.val() }); });
+      return out.reverse();
+    },
+    async myScore(game) {
+      return (await db$.get(db$.ref(db, `scores/${game}/${user.uid}`))).val();
+    },
+    saveScore(game, name, score) {
+      return db$.set(db$.ref(db, `scores/${game}/${user.uid}`), { name, score, at: db$.serverTimestamp() });
+    },
     online() { if (!online) { online = true; db$.goOnline(db); } },
     offline() { if (online) { online = false; db$.goOffline(db); } },
   };
@@ -134,7 +147,7 @@ async function firebaseBackend({ emulator = false } = {}) {
 function fakeBackend() {
   const KEY = "rooms-fake-db";
   const channel = new BroadcastChannel("rooms-fake");
-  const read = () => JSON.parse(localStorage.getItem(KEY) || '{"rooms":{},"private":{}}');
+  const read = () => JSON.parse(localStorage.getItem(KEY) || '{"rooms":{},"private":{},"scores":{}}');
   const write = (db) => localStorage.setItem(KEY, JSON.stringify(db));
   let uid = sessionStorage.getItem("rooms-fake-uid");
   if (!uid) { uid = "u" + Math.random().toString(36).slice(2, 10); sessionStorage.setItem("rooms-fake-uid", uid); }
@@ -189,6 +202,22 @@ function fakeBackend() {
       present.add(`${code}/${seat}`);
       if (online) flag(code, seat, true);
       return () => { present.delete(`${code}/${seat}`); flag(code, seat, false); };
+    },
+    async topScores(game, n) {
+      const all = Object.entries(read().scores?.[game] || {}).map(([uid, v]) => ({ uid, ...v }));
+      return all.sort((a, b) => b.score - a.score).slice(0, n);
+    },
+    async myScore(game) {
+      return read().scores?.[game]?.[uid] ?? null;
+    },
+    async saveScore(game, name, score) {
+      const db = read();
+      db.scores = db.scores || {};
+      db.scores[game] = db.scores[game] || {};
+      const prev = db.scores[game][uid];
+      if (prev && score < prev.score) throw new Error("permission_denied: score can only go up");
+      db.scores[game][uid] = { name, score, at: Date.now() };
+      write(db);
     },
     online() {
       if (online) return;
@@ -375,6 +404,29 @@ export function localRoom(game, players, makeRoom = () => ({})) {
   }));
   return { backend, code: "LOCAL", seat: "local" };
 }
+
+// ---------- leaderboards ----------
+// Public top-N lists, one entry per player at scores/<game>/<uid>. The rules allow saving only your own
+// entry, only upward, at most every 5 seconds, with a 1–12 character name of letters, numbers and spaces.
+
+export const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9 ]{0,11}$/;
+export function cleanName(raw) {
+  return String(raw || "").replace(/[^A-Za-z0-9 ]/g, "").replace(/\s+/g, " ").trim().slice(0, 12).trim();
+}
+
+// Leaderboard calls connect briefly, then let the connection go unless the player is in a room.
+async function briefly(fn) {
+  const b = await connect();
+  try { return await fn(b); } finally { setTimeout(() => { if (!inRoom) b.offline(); }, 1500); }
+}
+export const topScores = (game, n = 10) => briefly((b) => b.topScores(game, n));
+export const myScore = (game) => briefly((b) => b.myScore(game));
+export async function saveScore(game, name, score) {
+  const clean = cleanName(name);
+  if (!NAME_RE.test(clean)) throw new RoomError("Pick a name of up to 12 letters, numbers or spaces.");
+  return briefly(async (b) => { await b.saveScore(game, clean, score); return { uid: b.uid, name: clean, score }; });
+}
+export const myUid = () => briefly((b) => b.uid);
 
 // ---------- links ----------
 

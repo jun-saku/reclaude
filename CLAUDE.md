@@ -21,6 +21,8 @@ The user usually works from their phone, so keep replies short and end with the 
   `shared/rooms.js` is the multiplayer room system: 2–6 seats, teams, auto-start or a host-started lobby, codes, share
   links, presence, private per-seat data (`setPrivate`/`watchPrivate`, e.g. hands of cards), idle disconnect, and
   Firebase / emulator / stand-in / same-device backends. New multiplayer games must use it rather than copying room code.
+  It also has public leaderboards (`topScores`, `myScore`, `saveScore`; `scores/<game>/<uid>` in the rules), which
+  connect only briefly; 2048 uses one.
 - `scripts/build.mjs`: builds `_site/`. Fails on bad or reserved names and missing `index.html`.
 - `scripts/new-project.mjs`: creates a project from the template.
 - `tests/`: dev-only tests, never published. `npm run rules` checks the database rules on the Firebase emulator (CI runs

@@ -177,6 +177,88 @@
     @keyframes fade { from { opacity: 0; } }
 
     .hint { margin: 0; color: var(--muted); font-size: 0.9rem; text-align: center; }
+
+    .trophy {
+      position: relative;
+      align-self: stretch;
+      min-width: 44px;
+      padding: 0 10px;
+      border-radius: 10px;
+      background: var(--board);
+      font-size: 1.25rem;
+      line-height: 1;
+    }
+    .trophy .dot {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 0 2px var(--board);
+    }
+    .trophy .dot[hidden] { display: none; }
+
+    /* Bottom sheet on phones, centred card on wider screens. */
+    .leaders {
+      width: min(100% - 16px, 448px);
+      max-height: min(80vh, 640px);
+      margin: auto auto max(8px, env(safe-area-inset-bottom));
+      border: 0;
+      border-radius: 16px;
+      padding: 16px 16px max(16px, env(safe-area-inset-bottom));
+      background: var(--panel);
+      color: var(--text);
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+      overflow-y: auto;
+    }
+    .leaders[open] { display: flex; flex-direction: column; gap: 10px; animation: rise 200ms ease-out; }
+    .leaders::backdrop { background: rgba(0, 0, 0, 0.35); }
+    @media (min-width: 600px) { .leaders { margin: auto; } }
+    @keyframes rise { from { transform: translateY(24px); opacity: 0; } }
+    @media (prefers-reduced-motion: reduce) { .leaders[open] { animation: none; } }
+    .leaders-head { display: flex; align-items: center; gap: 8px; }
+    .leaders-head .note { margin-left: auto; }
+    .leaders .close {
+      width: 34px;
+      height: 34px;
+      padding: 0;
+      border-radius: 50%;
+      background: var(--board);
+      color: var(--text);
+      font-size: 0.95rem;
+    }
+    .leaders h2 { margin: 0; font-size: 1.05rem; }
+    .leaders .note { color: var(--muted); font-size: 0.85rem; }
+    .leaders ol { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; }
+    .leaders li {
+      display: grid;
+      grid-template-columns: 2em 1fr auto;
+      gap: 8px;
+      align-items: baseline;
+      padding: 5px 8px;
+      border-radius: 8px;
+      font-variant-numeric: tabular-nums;
+    }
+    .leaders li .rank { color: var(--muted); font-size: 0.85rem; }
+    .leaders li .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .leaders li .pts { font-weight: 700; }
+    .leaders li.me { background: var(--board); }
+    .leaders .empty { color: var(--muted); font-size: 0.9rem; margin: 0; }
+    .save { display: flex; gap: 8px; }
+    .save[hidden] { display: none; }
+    .save input {
+      flex: 1;
+      min-width: 0;
+      font: inherit;
+      padding: 9px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--board);
+      background: var(--bg);
+      color: var(--text);
+    }
+    .save-msg { margin: 0; font-size: 0.85rem; color: var(--muted); min-height: 1.2em; }
   </style>
 </head>
 <body>
@@ -185,6 +267,7 @@
       <h1>2048</h1>
       <div class="score"><span>Score</span><b id="score">0</b></div>
       <div class="score"><span>Best</span><b id="best">0</b></div>
+      <button class="trophy" id="trophy" aria-label="Top 10 leaderboard" aria-haspopup="dialog">🏆<span class="dot" id="trophy-dot" hidden></span></button>
     </header>
 
     <div class="actions">
@@ -204,6 +287,20 @@
     </div>
 
     <p class="hint">Swipe on the board, or use the arrow keys.</p>
+
+    <dialog class="leaders" id="leaders" aria-labelledby="leaders-title">
+      <div class="leaders-head">
+        <h2 id="leaders-title">Top 10</h2>
+        <span class="note" id="leaders-note">Loading…</span>
+        <button class="close" id="leaders-close" aria-label="Close">✕</button>
+      </div>
+      <ol id="leader-list"></ol>
+      <form class="save" id="save-form" autocomplete="off" hidden>
+        <input id="save-name" maxlength="12" placeholder="Your name" aria-label="Name for the leaderboard" enterkeyhint="done">
+        <button id="save-btn" type="submit">Save</button>
+      </form>
+      <p class="save-msg" id="save-msg" role="status"></p>
+    </dialog>
   </main>
 
   <script>
@@ -341,9 +438,11 @@
       }
       if (spawnEnabled) spawn();
       if (!won && tiles.some((t) => t.value >= 2048)) won = true;
+      const wasOver = over;
       over = !canMove();
       save();
       render();
+      if (over && !wasOver) loadLeaderboard(); // fresh standings for the game-over screen
     }
 
     function undo() {
@@ -404,6 +503,7 @@
       bestEl.textContent = best;
       undoBtn.disabled = !history;
       renderMessage();
+      renderSaveForm();
     }
 
     function renderMessage() {
@@ -418,7 +518,10 @@
       } else if (over) {
         title.textContent = "Game over";
         text.textContent = `Score: ${score}`;
-        buttons.innerHTML = (history ? '<button class="secondary" data-action="undo">Undo</button>' : "") + '<button data-action="new">Try again</button>';
+        buttons.innerHTML = (history ? '<button class="secondary" data-action="undo">Undo</button>' : "") +
+          (canSave() ? '<button class="secondary" data-action="save">Save score</button>' : "") +
+          '<button data-action="new">Try again</button>';
+        if (canSave()) text.textContent = `Score: ${score} · a new personal best`;
         messageEl.classList.add("show");
       } else {
         messageEl.classList.remove("show");
@@ -433,6 +536,7 @@
       if (action === "new") newGame();
       if (action === "undo") undo();
       if (action === "continue") { keepPlaying = true; save(); render(); }
+      if (action === "save") openLeaders({ focusName: true });
     });
 
     const KEYS = {
@@ -441,6 +545,7 @@
     };
     document.addEventListener("keydown", (e) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.target.closest("input, textarea") || leadersEl.open) return; // typing a name shouldn't move tiles
       if (KEYS[e.key]) { e.preventDefault(); move(KEYS[e.key]); }
       else if (e.key === "u" || e.key === "U") undo();
     });
@@ -462,6 +567,123 @@
     });
     board.addEventListener("pointercancel", () => { start = null; });
 
+    // ---------- leaderboard ----------
+    // Shared top 10 in Firebase (see shared/rooms.js). Loaded only when needed, so the game itself
+    // keeps working offline; saving is offered whenever the current score beats your saved best.
+    const GAME_ID = "2048";
+    const NAME_KEY = "reclaude-2048-name";
+    const leadersEl = document.getElementById("leaders");
+    const trophyDot = document.getElementById("trophy-dot");
+    const listEl = document.getElementById("leader-list");
+    const noteEl = document.getElementById("leaders-note");
+    const saveForm = document.getElementById("save-form");
+    const nameInput = document.getElementById("save-name");
+    const saveBtn = document.getElementById("save-btn");
+    const saveMsg = document.getElementById("save-msg");
+    const lb = { top: null, mine: null, uid: null, error: false, saving: false };
+    let roomsModule = null;
+    const leaderboardApi = () => (roomsModule ??= import("../shared/rooms.js"));
+    const fmt = (n) => Number(n).toLocaleString("en-US");
+
+    function canSave() {
+      return lb.uid !== null && !lb.error && score > 0 && score > (lb.mine?.score || 0);
+    }
+
+    async function loadLeaderboard() {
+      try {
+        const api = await leaderboardApi();
+        const [top, mine, uid] = await Promise.all([api.topScores(GAME_ID, 10), api.myScore(GAME_ID), api.myUid()]);
+        Object.assign(lb, { top, mine, uid, error: false });
+      } catch (err) {
+        console.error(err);
+        lb.error = true;
+      }
+      renderLeaders();
+      renderMessage();
+    }
+
+    function renderLeaders() {
+      noteEl.textContent = lb.error ? "Offline" : lb.top === null ? "Loading…" : lb.mine ? `Your best: ${fmt(lb.mine.score)}` : "";
+      listEl.replaceChildren();
+      if (lb.top && !lb.top.length) {
+        const li = document.createElement("li");
+        li.className = "empty";
+        li.textContent = "No scores yet. Be the first!";
+        listEl.append(li);
+      }
+      (lb.top || []).forEach((entry, i) => {
+        const li = document.createElement("li");
+        if (entry.uid === lb.uid) li.className = "me";
+        for (const [cls, text] of [["rank", `${i + 1}.`], ["name", entry.name], ["pts", fmt(entry.score)]]) {
+          const span = document.createElement("span");
+          span.className = cls;
+          span.textContent = text;
+          li.append(span);
+        }
+        listEl.append(li);
+      });
+      renderSaveForm();
+    }
+
+    function openLeaders({ focusName = false } = {}) {
+      if (!leadersEl.open) leadersEl.showModal();
+      loadLeaderboard();
+      if (focusName && !saveForm.hidden) nameInput.focus();
+      else document.getElementById("leaders-close").focus();
+    }
+    document.getElementById("trophy").addEventListener("click", () => openLeaders());
+    document.getElementById("leaders-close").addEventListener("click", () => leadersEl.close());
+    // Tapping the dimmed area outside the sheet closes it.
+    leadersEl.addEventListener("click", (e) => {
+      const r = leadersEl.getBoundingClientRect();
+      const inside = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+      if (!inside) leadersEl.close();
+    });
+
+    function renderSaveForm() {
+      const show = canSave();
+      saveForm.hidden = !show;
+      trophyDot.hidden = !show;
+      if (!show) return;
+      saveBtn.textContent = `Save ${fmt(score)}`;
+      if (!nameInput.value) {
+        let remembered = "";
+        try { remembered = localStorage.getItem(NAME_KEY) || ""; } catch {}
+        nameInput.value = lb.mine?.name || remembered;
+      }
+    }
+
+    saveForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (lb.saving || !canSave()) return;
+      const api = await leaderboardApi();
+      const name = api.cleanName(nameInput.value);
+      if (!api.NAME_RE.test(name)) {
+        saveMsg.textContent = "Pick a name of up to 12 letters, numbers or spaces.";
+        nameInput.focus();
+        return;
+      }
+      lb.saving = true;
+      saveBtn.disabled = true;
+      saveMsg.textContent = "Saving…";
+      try {
+        await api.saveScore(GAME_ID, name, score);
+        try { localStorage.setItem(NAME_KEY, name); } catch {}
+        nameInput.value = name;
+        nameInput.blur();
+        saveMsg.textContent = `Saved ${fmt(score)} as ${name}.`;
+        await loadLeaderboard();
+      } catch (err) {
+        console.error(err);
+        saveMsg.textContent = /permission/i.test(err?.message || err?.code || "")
+          ? "Couldn't save just yet. Try again in a few seconds."
+          : "Couldn't save. Check your connection and try again.";
+      } finally {
+        lb.saving = false;
+        saveBtn.disabled = false;
+      }
+    });
+
     // ---------- start ----------
     const saved = load();
     if (saved && Array.isArray(saved.grid) && saved.grid.length === SIZE) {
@@ -478,7 +700,11 @@
     }
 
     // Hooks for automated tests; harmless for players.
+    setTimeout(loadLeaderboard, 300);
+
     window.__2048 = {
+      leaderboard: () => ({ ...lb }),
+      reloadLeaderboard: loadLeaderboard,
       move,
       finish: finishMove,
       setGrid(values, s = 0) { finishMove(); setGridValues(values); score = s; over = !canMove(); won = values.flat().some((v) => v >= 2048); keepPlaying = false; history = null; render(); },
