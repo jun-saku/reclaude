@@ -188,17 +188,6 @@
       font-size: 1.25rem;
       line-height: 1;
     }
-    .trophy .dot {
-      position: absolute;
-      top: 6px;
-      right: 6px;
-      width: 9px;
-      height: 9px;
-      border-radius: 50%;
-      background: var(--accent);
-      box-shadow: 0 0 0 2px var(--board);
-    }
-    .trophy .dot[hidden] { display: none; }
 
     /* Bottom sheet on phones, centred card on wider screens. */
     .leaders {
@@ -219,7 +208,8 @@
     @keyframes rise { from { transform: translateY(24px); opacity: 0; } }
     @media (prefers-reduced-motion: reduce) { .leaders[open] { animation: none; } }
     .leaders-head { display: flex; align-items: center; gap: 8px; }
-    .leaders-head .note { margin-left: auto; }
+    .leaders-head .reload { margin-left: auto; padding: 7px 12px; font-size: 0.85rem; }
+    .leaders .note:empty { display: none; }
     .leaders .close {
       width: 34px;
       height: 34px;
@@ -246,7 +236,7 @@
     .leaders li .pts { font-weight: 700; }
     .leaders li.me { background: var(--board); }
     .leaders .empty { color: var(--muted); font-size: 0.9rem; margin: 0; }
-    .save { display: flex; gap: 8px; }
+    .save { display: flex; gap: 8px; width: min(100% - 32px, 300px); }
     .save[hidden] { display: none; }
     .save input {
       flex: 1;
@@ -258,7 +248,8 @@
       background: var(--bg);
       color: var(--text);
     }
-    .save-msg { margin: 0; font-size: 0.85rem; color: var(--muted); min-height: 1.2em; }
+    .message .save-msg { margin: 0; font-size: 0.85rem; max-width: 300px; padding: 0 16px; }
+    .message .save-msg:empty { display: none; }
   </style>
 </head>
 <body>
@@ -267,7 +258,7 @@
       <h1>2048</h1>
       <div class="score"><span>Score</span><b id="score">0</b></div>
       <div class="score"><span>Best</span><b id="best">0</b></div>
-      <button class="trophy" id="trophy" aria-label="Top 10 leaderboard" aria-haspopup="dialog">🏆<span class="dot" id="trophy-dot" hidden></span></button>
+      <button class="trophy" id="trophy" aria-label="Top 10 leaderboard" aria-haspopup="dialog">🏆</button>
     </header>
 
     <div class="actions">
@@ -282,6 +273,11 @@
       <div class="message" id="message" role="alert">
         <h2 id="message-title"></h2>
         <p id="message-text"></p>
+        <form class="save" id="save-form" autocomplete="off" hidden>
+          <input id="save-name" maxlength="12" placeholder="Your name" aria-label="Name for the leaderboard" enterkeyhint="done">
+          <button id="save-btn" type="submit">Save</button>
+        </form>
+        <p class="save-msg" id="save-msg" role="status"></p>
         <div class="buttons" id="message-buttons"></div>
       </div>
     </div>
@@ -291,15 +287,11 @@
     <dialog class="leaders" id="leaders" aria-labelledby="leaders-title">
       <div class="leaders-head">
         <h2 id="leaders-title">Top 10</h2>
-        <span class="note" id="leaders-note">Loading…</span>
+        <button class="secondary reload" id="leaders-reload">Reload</button>
         <button class="close" id="leaders-close" aria-label="Close">✕</button>
       </div>
+      <p class="note" id="leaders-status" role="status"></p>
       <ol id="leader-list"></ol>
-      <form class="save" id="save-form" autocomplete="off" hidden>
-        <input id="save-name" maxlength="12" placeholder="Your name" aria-label="Name for the leaderboard" enterkeyhint="done">
-        <button id="save-btn" type="submit">Save</button>
-      </form>
-      <p class="save-msg" id="save-msg" role="status"></p>
     </dialog>
   </main>
 
@@ -438,15 +430,14 @@
       }
       if (spawnEnabled) spawn();
       if (!won && tiles.some((t) => t.value >= 2048)) won = true;
-      const wasOver = over;
       over = !canMove();
       save();
       render();
-      if (over && !wasOver) loadLeaderboard(); // fresh standings for the game-over screen
     }
 
     function undo() {
       if (!history) return;
+      savedThisGame = false;
       finishMove();
       setGridValues(history.grid);
       score = history.score;
@@ -457,6 +448,7 @@
     }
 
     function newGame() {
+      savedThisGame = false;
       finishMove();
       tiles = [];
       score = 0;
@@ -503,7 +495,6 @@
       bestEl.textContent = best;
       undoBtn.disabled = !history;
       renderMessage();
-      renderSaveForm();
     }
 
     function renderMessage() {
@@ -519,13 +510,12 @@
         title.textContent = "Game over";
         text.textContent = `Score: ${score}`;
         buttons.innerHTML = (history ? '<button class="secondary" data-action="undo">Undo</button>' : "") +
-          (canSave() ? '<button class="secondary" data-action="save">Save score</button>' : "") +
           '<button data-action="new">Try again</button>';
-        if (canSave()) text.textContent = `Score: ${score} · a new personal best`;
         messageEl.classList.add("show");
       } else {
         messageEl.classList.remove("show");
       }
+      showSaveForm(over && score > 0 && !savedThisGame);
     }
 
     // ---------- input ----------
@@ -536,7 +526,6 @@
       if (action === "new") newGame();
       if (action === "undo") undo();
       if (action === "continue") { keepPlaying = true; save(); render(); }
-      if (action === "save") openLeaders({ focusName: true });
     });
 
     const KEYS = {
@@ -553,7 +542,7 @@
     const board = document.getElementById("board");
     let start = null;
     board.addEventListener("pointerdown", (e) => {
-      if (e.target.closest("button")) return;
+      if (e.target.closest("button, input, form")) return;
       start = { x: e.clientX, y: e.clientY, id: e.pointerId };
     });
     board.addEventListener("pointerup", (e) => {
@@ -568,49 +557,55 @@
     board.addEventListener("pointercancel", () => { start = null; });
 
     // ---------- leaderboard ----------
-    // Shared top 10 in Firebase (see shared/rooms.js). Loaded only when needed, so the game itself
-    // keeps working offline; saving is offered whenever the current score beats your saved best.
+    // Shared top 10 in Firebase (see shared/rooms.js). Fetched when the 🏆 sheet opens (and on Reload),
+    // and a score can be saved from the game-over screen. Nothing connects until then, so the game
+    // itself keeps working offline.
     const GAME_ID = "2048";
     const NAME_KEY = "reclaude-2048-name";
     const leadersEl = document.getElementById("leaders");
-    const trophyDot = document.getElementById("trophy-dot");
     const listEl = document.getElementById("leader-list");
-    const noteEl = document.getElementById("leaders-note");
+    const statusEl = document.getElementById("leaders-status");
+    const reloadBtn = document.getElementById("leaders-reload");
     const saveForm = document.getElementById("save-form");
     const nameInput = document.getElementById("save-name");
     const saveBtn = document.getElementById("save-btn");
     const saveMsg = document.getElementById("save-msg");
-    const lb = { top: null, mine: null, uid: null, error: false, saving: false };
+    const lb = { top: null, uid: null, loading: false, saving: false };
+    let savedThisGame = false;
     let roomsModule = null;
     const leaderboardApi = () => (roomsModule ??= import("../shared/rooms.js"));
     const fmt = (n) => Number(n).toLocaleString("en-US");
 
-    function canSave() {
-      return lb.uid !== null && !lb.error && score > 0 && score > (lb.mine?.score || 0);
+    // A short, specific reason for a failed load or save.
+    function reason(err) {
+      const msg = String(err?.code || err?.message || err || "");
+      if (/permission/i.test(msg)) return "the database refused it (check the rules are published)";
+      if (/network|offline|fetch|timeout|unavailable/i.test(msg) || !navigator.onLine) return "no connection";
+      return msg.slice(0, 80) || "unknown error";
     }
 
-    async function loadLeaderboard() {
+    async function loadTop() {
+      if (lb.loading) return;
+      lb.loading = true;
+      reloadBtn.disabled = true;
+      statusEl.textContent = "Loading…";
       try {
         const api = await leaderboardApi();
-        const [top, mine, uid] = await Promise.all([api.topScores(GAME_ID, 10), api.myScore(GAME_ID), api.myUid()]);
-        Object.assign(lb, { top, mine, uid, error: false });
+        const [top, uid] = await Promise.all([api.topScores(GAME_ID, 10), api.myUid()]);
+        Object.assign(lb, { top, uid });
+        statusEl.textContent = top.length ? "" : "No scores yet. Be the first!";
       } catch (err) {
         console.error(err);
-        lb.error = true;
+        statusEl.textContent = `Couldn't load the Top 10: ${reason(err)}.`;
+      } finally {
+        lb.loading = false;
+        reloadBtn.disabled = false;
+        renderTop();
       }
-      renderLeaders();
-      renderMessage();
     }
 
-    function renderLeaders() {
-      noteEl.textContent = lb.error ? "Offline" : lb.top === null ? "Loading…" : lb.mine ? `Your best: ${fmt(lb.mine.score)}` : "";
+    function renderTop() {
       listEl.replaceChildren();
-      if (lb.top && !lb.top.length) {
-        const li = document.createElement("li");
-        li.className = "empty";
-        li.textContent = "No scores yet. Be the first!";
-        listEl.append(li);
-      }
       (lb.top || []).forEach((entry, i) => {
         const li = document.createElement("li");
         if (entry.uid === lb.uid) li.className = "me";
@@ -622,16 +617,14 @@
         }
         listEl.append(li);
       });
-      renderSaveForm();
     }
 
-    function openLeaders({ focusName = false } = {}) {
-      if (!leadersEl.open) leadersEl.showModal();
-      loadLeaderboard();
-      if (focusName && !saveForm.hidden) nameInput.focus();
-      else document.getElementById("leaders-close").focus();
-    }
-    document.getElementById("trophy").addEventListener("click", () => openLeaders());
+    document.getElementById("trophy").addEventListener("click", () => {
+      leadersEl.showModal();
+      document.getElementById("leaders-close").focus();
+      if (lb.top === null) loadTop();
+    });
+    reloadBtn.addEventListener("click", loadTop);
     document.getElementById("leaders-close").addEventListener("click", () => leadersEl.close());
     // Tapping the dimmed area outside the sheet closes it.
     leadersEl.addEventListener("click", (e) => {
@@ -640,22 +633,22 @@
       if (!inside) leadersEl.close();
     });
 
-    function renderSaveForm() {
-      const show = canSave();
+    function showSaveForm(show) {
+      const wasHidden = saveForm.hidden;
       saveForm.hidden = !show;
-      trophyDot.hidden = !show;
       if (!show) return;
       saveBtn.textContent = `Save ${fmt(score)}`;
-      if (!nameInput.value) {
-        let remembered = "";
-        try { remembered = localStorage.getItem(NAME_KEY) || ""; } catch {}
-        nameInput.value = lb.mine?.name || remembered;
+      if (wasHidden) {
+        saveMsg.textContent = "";
+        if (!nameInput.value) {
+          try { nameInput.value = localStorage.getItem(NAME_KEY) || ""; } catch {}
+        }
       }
     }
 
     saveForm.addEventListener("submit", async (e) => {
       e.preventDefault();
-      if (lb.saving || !canSave()) return;
+      if (lb.saving || !over || savedThisGame) return;
       const api = await leaderboardApi();
       const name = api.cleanName(nameInput.value);
       if (!api.NAME_RE.test(name)) {
@@ -671,13 +664,15 @@
         try { localStorage.setItem(NAME_KEY, name); } catch {}
         nameInput.value = name;
         nameInput.blur();
-        saveMsg.textContent = `Saved ${fmt(score)} as ${name}.`;
-        await loadLeaderboard();
+        savedThisGame = true;
+        lb.top = null; // the next 🏆 opens with fresh standings
+        saveMsg.textContent = `Saved ${fmt(score)} as ${name}. Tap 🏆 to see the Top 10.`;
+        render();
       } catch (err) {
         console.error(err);
-        saveMsg.textContent = /permission/i.test(err?.message || err?.code || "")
-          ? "Couldn't save just yet. Try again in a few seconds."
-          : "Couldn't save. Check your connection and try again.";
+        saveMsg.textContent = /permission/i.test(String(err?.code || err?.message || ""))
+          ? "Not saved: your score on the board is already higher, or you saved a few seconds ago."
+          : `Couldn't save: ${reason(err)}.`;
       } finally {
         lb.saving = false;
         saveBtn.disabled = false;
@@ -700,11 +695,9 @@
     }
 
     // Hooks for automated tests; harmless for players.
-    setTimeout(loadLeaderboard, 300);
-
     window.__2048 = {
       leaderboard: () => ({ ...lb }),
-      reloadLeaderboard: loadLeaderboard,
+      reloadLeaderboard: loadTop,
       move,
       finish: finishMove,
       setGrid(values, s = 0) { finishMove(); setGridValues(values); score = s; over = !canMove(); won = values.flat().some((v) => v >= 2048); keepPlaying = false; history = null; render(); },

@@ -113,72 +113,73 @@ const server = http.createServer((req, res) => {
 
   // ---- 2048 leaderboard on real Firebase ----
   const G = BASE + '2048/?backend=emulator';
-  const loaded = (p) => p.waitForFunction(() => window.__2048 && window.__2048.leaderboard().uid !== null, null, { timeout: 15000 });
-  const names = (p) => p.$$eval('#leader-list li', (lis) => lis.map((li) => li.children.length ? [...li.children].map((c) => c.textContent).join(' ') : li.textContent.trim()));
-  const settled = (p) => p.waitForFunction(() => document.getElementById('leaders-note').textContent !== 'Loading…' && !document.getElementById('save-btn').disabled, null, { timeout: 8000 });
-  // Checks what's on screen (an element can have hidden set and still be shown by CSS).
-  const formHidden = (p) => p.waitForFunction(() => getComputedStyle(document.getElementById('save-form')).display === 'none', null, { timeout: 5000 }).then(() => true).catch(() => false);
+  const names = (p) => p.$$eval('#leader-list li', (lis) => lis.map((li) => [...li.children].map((c) => c.textContent).join(' ')));
+  const shown = (p, sel) => p.evaluate((sel) => getComputedStyle(document.querySelector(sel)).display !== 'none', sel);
+  const openTop = async (p) => { await p.click('#trophy'); await p.waitForFunction(() => !document.getElementById('leaders-reload').disabled, null, { timeout: 15000 }); };
+  const closeTop = (p) => p.click('#leaders-close');
+  const lose = (p, s) => p.evaluate((s) => { window.__2048.setSpawn(false); window.__2048.setGrid([[2,4,2,4],[4,2,4,2],[2,4,2,4],[4,2,4,8]], s); }, s);
+  const saveAs = async (p, name) => { await p.fill('#save-name', name); await p.click('#save-btn'); await p.waitForFunction(() => !/Saving/.test(document.getElementById('save-msg').textContent) && document.getElementById('save-msg').textContent, null, { timeout: 8000 }); return p.textContent('#save-msg'); };
+
   const P = await page(G);
-  await loaded(P);
-  ok((await names(P)).join() === 'No scores yet. Be the first!', 'leaderboard starts empty');
-  await P.evaluate(() => { window.__2048.setSpawn(false); window.__2048.setGrid([[2,4,2,4],[4,2,4,2],[2,4,2,4],[4,2,4,8]], 1840); });
-  await P.waitForSelector('button[data-action="save"]', { timeout: 5000 });
-  ok((await P.textContent('#message-text')).includes('personal best'), 'game over offers "Save score" for a new personal best');
-  await P.click('button[data-action="save"]');
-  ok(await P.evaluate(() => document.activeElement.id === 'save-name'), 'Save score jumps to the name field');
+  await P.waitForTimeout(1500);
+  ok(await P.evaluate(async () => (await window.__2048.leaderboard()).top === null) && await P.evaluate(async () => (await import('../shared/rooms.js')).__test.isOnline()) === null,
+    'nothing connects to Firebase until the 🏆 is tapped');
+  ok(!(await shown(P, '#save-form')), 'no save form during play');
+  await openTop(P);
+  ok((await P.textContent('#leaders-status')) === 'No scores yet. Be the first!', 'opening 🏆 fetches the Top 10 (empty)');
+  await closeTop(P);
+
+  await lose(P, 1840);
+  ok(await shown(P, '#save-form') && (await P.textContent('#save-btn')) === 'Save 1,840', 'losing shows a name box and "Save 1,840" on the game-over screen');
+  await P.click('#save-name');
   const before = await P.evaluate(() => JSON.stringify(window.__2048.grid()));
   await P.keyboard.type('Jun wasd');
   ok(await P.evaluate(() => JSON.stringify(window.__2048.grid())) === before, 'typing a name (incl. w/a/s/d) does not move tiles');
-  await P.fill('#save-name', '<b>Jun</b>!!');
-  await P.click('#save-btn');
-  await P.waitForFunction(() => /Saved/.test(document.getElementById('save-msg').textContent), null, { timeout: 8000 });
-  await P.waitForFunction(() => document.querySelector('#leader-list li.me'), null, { timeout: 8000 });
+  const m1 = await saveAs(P, '<b>Jun</b>!!');
+  ok(m1.startsWith('Saved 1,840 as bJunb'), `saved through the real rules; name cleaned of symbols (${m1})`);
+  ok(!(await shown(P, '#save-form')), 'the save form goes away once saved');
+  await openTop(P);
   const n1 = await names(P);
-  ok(n1.length === 1 && n1[0] === '1. bJunb 1,840', `saved through the real rules; name cleaned of symbols (${n1[0]})`);
-  ok(await P.$eval('#leader-list li', (li) => li.classList.contains('me')) && (await P.textContent('#leaders-note')) === 'Your best: 1,840', 'your own entry is highlighted, with "Your best"');
-  ok(await formHidden(P), 'no save offered once your best is saved');
+  ok(n1.length === 1 && n1[0] === '1. bJunb 1,840' && await P.$eval('#leader-list li', (li) => li.classList.contains('me')), 'the 🏆 shows the new entry, highlighted as yours');
+  await closeTop(P);
 
   const Q = await page(G);
-  await loaded(Q); await settled(Q);
-  ok((await names(Q))[0] === '1. bJunb 1,840', 'another player sees the score');
-  await Q.evaluate(() => { window.__2048.setSpawn(false); window.__2048.setGrid([[2,4,2,4],[4,2,4,2],[2,4,2,4],[4,2,4,8]], 3000); });
-  await Q.click('#trophy'); await Q.waitForSelector('#save-form:not([hidden])');
-  ok(await Q.evaluate(() => document.getElementById('leaders').open), 'trophy opens the sheet');
-  await Q.fill('#save-name', 'Bo'); await Q.click('#save-btn');
-  await Q.waitForFunction(() => /Saved/.test(document.getElementById('save-msg').textContent), null, { timeout: 8000 });
-  await P.evaluate(() => window.__2048.reloadLeaderboard());
-  ok(JSON.stringify(await names(P)) === JSON.stringify(['1. Bo 3,000', '2. bJunb 1,840']), 'ranked best first');
+  await openTop(Q);
+  ok((await names(Q))[0] === '1. bJunb 1,840', 'another player sees it');
+  await closeTop(Q);
+  await lose(Q, 3000);
+  ok((await saveAs(Q, 'Bo')).startsWith('Saved 3,000'), 'another player saves a higher score');
+  await openTop(P);
+  ok(JSON.stringify(await names(P)) === JSON.stringify(['1. bJunb 1,840']), 'the open sheet keeps what it fetched…');
+  await P.click('#leaders-reload');
+  await P.waitForFunction(() => document.querySelectorAll('#leader-list li').length === 2, null, { timeout: 8000 });
+  ok(JSON.stringify(await names(P)) === JSON.stringify(['1. Bo 3,000', '2. bJunb 1,840']), '…and Reload fetches the new standings, best first');
+  await closeTop(P);
 
-  await P.evaluate(() => window.__2048.setGrid([[2,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]], 500));
-  ok(await formHidden(P), 'a lower score is not offered for saving');
-  await P.evaluate(() => window.__2048.setGrid([[2,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]], 2500));
-  ok(await P.isVisible('#trophy-dot'), 'a new unsaved best shows a dot on the trophy');
-  await P.evaluate(() => document.getElementById('leaders').open || document.getElementById('trophy').click());
-  await P.waitForSelector('#save-form:not([hidden])');
-  await P.click('#save-btn');
-  await P.waitForFunction(() => /just yet|Saved/.test(document.getElementById('save-msg').textContent), null, { timeout: 8000 });
-  ok((await P.textContent('#save-msg')).includes('just yet'), 'saving again within 5 seconds is refused by the rules, with a friendly message');
+  await P.click('button[data-action="new"]');
+  await lose(P, 500);
+  const low = await saveAs(P, 'Jun');
+  ok(low.includes('already higher'), `saving a lower score is refused by the rules with a clear message (${low.slice(0, 50)}…)`);
   await P.waitForTimeout(5200);
-  await P.click('#save-btn');
-  await P.waitForFunction(() => /Saved 2,500/.test(document.getElementById('save-msg').textContent), null, { timeout: 8000 });
-  await P.waitForFunction(() => /2,500/.test(document.getElementById('leaders-note').textContent), null, { timeout: 8000 });
-  ok(JSON.stringify(await names(P)) === JSON.stringify(['1. Bo 3,000', '2. bJunb 2,500']), 'a higher score after the wait replaces your entry');
-  ok(await formHidden(P), 'the save form disappears from the screen after saving');
-  ok(!(await P.isVisible('#trophy-dot')), 'the trophy dot clears once saved');
-  await P.screenshot({ path: `${out}/e2e-2048-sheet.png` });
-  await P.click('#leaders-close');
-  ok(!(await P.evaluate(() => document.getElementById('leaders').open)), '✕ closes the sheet');
-  await P.click('#trophy'); await P.mouse.click(195, 30);
-  ok(!(await P.evaluate(() => document.getElementById('leaders').open)), 'tapping outside closes the sheet');
-  await P.click('#trophy'); await P.click('.leaders-head h2');
-  ok(await P.evaluate(() => document.getElementById('leaders').open), 'tapping inside the sheet keeps it open');
-  await P.keyboard.press('Escape');
+  await P.click('button[data-action="new"]');
+  await lose(P, 2500);
+  ok((await saveAs(P, 'Jun')).startsWith('Saved 2,500'), 'a higher score replaces your entry');
+  await P.click('button[data-action="new"]');
+  await lose(P, 2600);
+  const quick = await saveAs(P, 'Jun');
+  ok(quick.includes('a few seconds ago'), 'saving again within 5 seconds is refused, with a clear message');
   const forged = await P.evaluate(async () => {
     const b = await (await import('../shared/rooms.js')).__test.backend();
     try { await b.saveScore('2048', 'Hax', 99999998); return 'saved'; } catch (e) { return 'denied'; }
   });
   ok(forged === 'denied', 'a forged impossible score is rejected by the rules');
-  await P.screenshot({ path: `${out}/e2e-2048.png`, fullPage: true });
+  await openTop(P);
+  await P.screenshot({ path: `${out}/e2e-2048-sheet.png` });
+  await P.mouse.click(195, 30);
+  ok(!(await P.evaluate(() => document.getElementById('leaders').open)), 'tapping outside closes the sheet');
+  await P.click('#trophy'); await P.click('.leaders-head h2');
+  ok(await P.evaluate(() => document.getElementById('leaders').open), 'tapping inside keeps it open');
+  await P.keyboard.press('Escape');
 
   ok(errs.length === 0, 'no JavaScript errors ' + errs.join(' | '));
   console.log('\nFAILS:', fails);
