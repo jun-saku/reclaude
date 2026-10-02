@@ -70,6 +70,10 @@ The user usually works from their phone, so keep replies short and end with the 
 - Rooms are shared by all games: each room has a `game` field, seats `players.s0`..`s5`, and a numeric `turn` (seat).
   Every field a game writes must be allowed in the rules (unknown fields are rejected); put free-form game data in
   `state`, and anything a player must not see (their hand) in private data.
+- The rules also enforce play: while `playing`, only the player in seat `turn` may change the game (board, turn,
+  winner, state…); before the start only the host may set it up; a finished result is fixed until the next round
+  (`round + 1`); taken seats can't be emptied or reassigned. Games must write in that order (see the top of
+  `shared/rooms.js`). Rooms over a day old may be deleted by anyone; `rooms.js` clears them when it meets one.
 - Testing online features: this environment can't reach real Firebase, but the emulator works. Use `?backend=fake`
   (tabs share rooms, no rules) for quick UI tests, then `cd tests && npm run e2e` / `npm run rules` for the real SDK
   and rules. Any rules change needs a passing `npm run rules` and new cases in `tests/rules.test.mjs`. Rules must stay
