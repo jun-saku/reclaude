@@ -10,7 +10,7 @@ toys) built by Claude from a phone, each published at its own link.
 
 - [Four in a Row](https://reclaude.junsaku.dev/four-in-a-row/): drop discs and line up four, online with a room code or on one phone
 - [Tic-tac-toe](https://reclaude.junsaku.dev/tic-tac-toe/): play a friend online with a room code, or on one phone
-- [2048](https://reclaude.junsaku.dev/2048/): slide and merge tiles, with swipe controls, undo and saved progress
+- [2048](https://reclaude.junsaku.dev/2048/): slide and merge tiles, with swipe controls, undo, saved progress and a shared Top 10
 - [Calculator](https://reclaude.junsaku.dev/calculator/): a pocket calculator with a live result preview
 
 See [CLAUDE.md](CLAUDE.md) for how projects are added, tested and deployed.

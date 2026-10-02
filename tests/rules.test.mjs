@@ -3,7 +3,7 @@
 
 import { initializeApp } from "firebase/app";
 import { getAuth, connectAuthEmulator, signInAnonymously } from "firebase/auth";
-import { getDatabase, connectDatabaseEmulator, ref, set, get, update, remove } from "firebase/database";
+import { getDatabase, connectDatabaseEmulator, ref, set, get, update, remove, query, orderByChild, limitToLast, serverTimestamp } from "firebase/database";
 
 let n = 0, fails = 0;
 async function user(name) {
@@ -71,6 +71,39 @@ await expect('creating an auto-start 2-seat room', true, () => set(A.r('rooms/TT
 await expect('B joining and starting it in one write', true, () => update(B.r('rooms/TTTT'), { 'players/s1': B.uid, status: 'playing' }));
 await expect('C joining a full 2-seat room', false, () => update(C.r('rooms/TTTT'), { 'players/s2': C.uid }));
 await expect('a seated player deleting the room', true, () => remove(A.r('rooms/TTTT')));
+
+console.log('-- leaderboard (scores/2048)');
+const entry = (name, score) => ({ name, score, at: serverTimestamp() });
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+await expect('saving your own score', true, () => set(A.r(`scores/2048/${A.uid}`), entry('Jun', 2048)));
+await expect("saving into someone else's entry", false, () => set(B.r(`scores/2048/${A.uid}`), entry('Fake', 9000)));
+await expect('a second save within 5 seconds', false, () => set(A.r(`scores/2048/${A.uid}`), entry('Jun', 4096)));
+await wait(5200);
+await expect('a higher score after 5 seconds', true, () => set(A.r(`scores/2048/${A.uid}`), entry('Jun', 4096)));
+await wait(5200);
+await expect('lowering your score', false, () => set(A.r(`scores/2048/${A.uid}`), entry('Jun', 100)));
+await expect('an odd score', false, () => set(B.r(`scores/2048/${B.uid}`), entry('Bo', 1001)));
+await expect('a negative score', false, () => set(B.r(`scores/2048/${B.uid}`), entry('Bo', -10)));
+await expect('an impossible score (over 3,932,156)', false, () => set(B.r(`scores/2048/${B.uid}`), entry('Bo', 99999998)));
+await expect('a score as text', false, () => set(B.r(`scores/2048/${B.uid}`), entry('Bo', '5000')));
+await expect('a name with symbols', false, () => set(B.r(`scores/2048/${B.uid}`), entry('<b>hi</b>', 512)));
+await expect('a name over 12 characters', false, () => set(B.r(`scores/2048/${B.uid}`), entry('ABCDEFGHIJKLM', 512)));
+await expect('an empty name', false, () => set(B.r(`scores/2048/${B.uid}`), entry('', 512)));
+await expect('a made-up timestamp', false, () => set(B.r(`scores/2048/${B.uid}`), { name: 'Bo', score: 512, at: 1 }));
+await expect('an extra field', false, () => set(B.r(`scores/2048/${B.uid}`), { ...entry('Bo', 512), level: 99 }));
+await expect('a valid first score with a space in the name', true, () => set(B.r(`scores/2048/${B.uid}`), entry('Bo B', 512)));
+await expect('deleting your own entry', false, () => remove(A.r(`scores/2048/${A.uid}`)).then(() => wait(0)));
+const appNoAuth = initializeApp({ apiKey: 'fake', projectId: 'demo-reclaude', databaseURL: 'http://127.0.0.1:9000?ns=demo-reclaude-default-rtdb' }, 'anon');
+const dbNoAuth = getDatabase(appNoAuth); connectDatabaseEmulator(dbNoAuth, '127.0.0.1', 9000);
+let top = null;
+await expect('reading the top 10 without signing in', true, async () => {
+  const snap = await get(query(ref(dbNoAuth, 'scores/2048'), orderByChild('score'), limitToLast(10)));
+  top = []; snap.forEach((c) => { top.push(c.val().score); });
+});
+console.log(`     top scores read back: ${JSON.stringify(top)}`);
+if (JSON.stringify(top) !== '[512,4096]') { fails++; console.log('FAIL top 10 order/content'); }
+await expect('writing a score without signing in', false, () => set(ref(dbNoAuth, 'scores/2048/someone'), entry('Anon', 64)));
+await expect('a malformed game name', false, () => get(ref(dbNoAuth, 'scores/Bad Game')));
 
 console.log(`\nFAILS: ${fails}`);
 process.exit(fails ? 1 : 0);
