@@ -3,15 +3,15 @@
 claudeOS for remote and mobile friendly development: small web projects (calculators, games,
 toys) built by Claude from a phone, each published at its own link.
 
-- `projects/<name>/` → `https://jun-saku.github.io/reclaude/<name>/`
+- `projects/<name>/` → `https://reclaude.junsaku.dev/<name>/`
 - There's no index page; share each project's link directly.
 
 ## Projects
 
-- [Four in a Row](https://jun-saku.github.io/reclaude/four-in-a-row/): drop discs and line up four, online with a room code or on one phone
-- [Tic-tac-toe](https://jun-saku.github.io/reclaude/tic-tac-toe/): play a friend online with a room code, or on one phone
-- [2048](https://jun-saku.github.io/reclaude/2048/): slide and merge tiles, with swipe controls, undo and saved progress
-- [Calculator](https://jun-saku.github.io/reclaude/calculator/): a pocket calculator with a live result preview
+- [Four in a Row](https://reclaude.junsaku.dev/four-in-a-row/): drop discs and line up four, online with a room code or on one phone
+- [Tic-tac-toe](https://reclaude.junsaku.dev/tic-tac-toe/): play a friend online with a room code, or on one phone
+- [2048](https://reclaude.junsaku.dev/2048/): slide and merge tiles, with swipe controls, undo and saved progress
+- [Calculator](https://reclaude.junsaku.dev/calculator/): a pocket calculator with a live result preview
 
 See [CLAUDE.md](CLAUDE.md) for how projects are added, tested and deployed.
 
@@ -32,7 +32,7 @@ Firebase console → Realtime Database → Rules → Publish whenever they chang
 ## Deploying
 
 `claude/...` → PR → `main`. Each PR gets a Cloudflare preview link (posted as a comment); merging into
-`main` publishes to **Cloudflare Pages** (`reclaude.pages.dev`, plus any custom domain) and to GitHub Pages
+`main` publishes to **Cloudflare Pages** (`reclaude.junsaku.dev`, also `reclaude.pages.dev`) and to GitHub Pages
 (`jun-saku.github.io/reclaude`, kept for old links).
 
 Cloudflare setup (once):
@@ -41,8 +41,8 @@ Cloudflare setup (once):
 2. Copy your **Account ID** (Workers & Pages overview sidebar, or the long ID in the dashboard URL).
 3. GitHub → repo **Settings → Secrets and variables → Actions → New repository secret**:
    `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
-4. The next deploy creates the `reclaude` Pages project. Attach a domain under Workers & Pages → reclaude →
-   **Custom domains**.
+4. The next deploy creates the `reclaude` Pages project (done). Custom domain `reclaude.junsaku.dev` is attached
+   under Workers & Pages → reclaude → **Custom domains** (done).
 
 Repo settings (done):
 - Settings → Pages → Source: **GitHub Actions**.

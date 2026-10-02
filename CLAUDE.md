@@ -5,9 +5,9 @@ The user usually works from their phone, so keep replies short and end with the 
 
 ## Addresses
 
-- `https://reclaude.pages.dev/<name>/` (Cloudflare Pages, main host; a custom domain may be attached): one
-  project, from `projects/<name>/`. Also still published at `https://jun-saku.github.io/reclaude/<name>/` so
-  old links keep working.
+- `https://reclaude.junsaku.dev/<name>/`: one project, from `projects/<name>/`. This is the address to share
+  (Cloudflare Pages custom domain; `https://reclaude.pages.dev/<name>/` is the same site). Also still published at
+  `https://jun-saku.github.io/reclaude/<name>/` so old links keep working.
 - Anything else, including the root: the blank 404 page. There is no index page and projects
   don't link to each other.
 
@@ -33,8 +33,8 @@ The user usually works from their phone, so keep replies short and end with the 
    short and lowercase-kebab-case.
 2. Keep it self-contained: no build step, no npm packages. External scripts only from
    cdn.jsdelivr.net, cdnjs.cloudflare.com, or www.gstatic.com/firebasejs (Firebase).
-3. Use relative paths only (`./sprite.png`, never `/sprite.png`): the site is served under `/reclaude/`
-   and may move to a custom domain later.
+3. Use relative paths only (`./sprite.png`, never `/sprite.png`): the same build is served at the domain root
+   on Cloudflare and under `/reclaude/` on GitHub Pages.
 4. It must work on a phone: touch controls (not only keyboard), no horizontal scroll, safe-area
    padding, and both light and dark mode.
 5. Test it: `node scripts/build.mjs`, serve `_site` under a `/reclaude/` path, then drive it with
