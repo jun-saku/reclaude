@@ -143,6 +143,27 @@ const server = http.createServer((req, res) => {
   leaver.once('dialog', (d) => d.accept()); await leaver.click('#leave'); await leaver.waitForSelector('#home:not([hidden])', { timeout: 8000 });
   ok(await statusIs(stayer, `P${2 - fr1.turn} left. You win 🎉`), 'leaving off-turn forfeits a game with state; the other player wins');
 
+  // ---- Names and the turn timer on real Firebase (a 3-seat Five Line room with a 30 s timer) ----
+  const T1 = await page(FL); await T1.fill('#my-name', 'Jun'); await T1.click('#mode button[data-mode="3"]'); await T1.click('#timer button[data-secs="30"]');
+  await T1.click('#create'); await T1.waitForSelector('#waiting:not([hidden])', { timeout: 15000 });
+  const tmcode = (await T1.textContent('#waiting-code')).trim();
+  const T2 = await page(FL); await T2.fill('#my-name', 'Bo'); await T2.fill('#join-code', tmcode); await T2.click('#join'); await T2.waitForSelector('#waiting:not([hidden])', { timeout: 15000 });
+  await T1.waitForFunction(() => document.getElementById('seated').textContent.includes('Bo'), null, { timeout: 8000 });
+  ok((await T2.textContent('#seated')).includes('Jun'), 'names reach the other players through the real rules');
+  await T1.waitForFunction(() => !document.getElementById('start-btn').disabled, null, { timeout: 8000 });
+  await T1.click('#start-btn'); await T1.waitForTimeout(3000);
+  console.log('DEBUG note:', await T1.textContent('#waiting-note'), JSON.stringify(await T1.evaluate(() => { const r = window.__fl.room; return { status: r.status, turnSecs: r.turnSecs, turnAt: r.turnAt, names: r.names, keys: Object.keys(r) }; })));
+  await T2.waitForFunction(() => window.__fl.room?.status === 'playing' && window.__fl.room.turnAt, null, { timeout: 15000 });
+  ok(await T2.waitForFunction(() => document.getElementById('status').textContent.startsWith("Jun's turn"), null, { timeout: 8000 }).then(() => true).catch(() => false), 'turns are shown by name');
+  const tooSoon = await T2.evaluate(() => window.__fl.rooms.skipTurn(window.__fl.seat, { ...window.__fl.room, turnAt: Date.now() - 60000 }));
+  await T1.waitForTimeout(500);
+  ok((await T1.evaluate(() => window.__fl.room.turn)) === 0, `skipping before the 30 seconds are up is refused by the rules (the page asked: ${tooSoon})`);
+  // The player on turn backdates their own turn start, standing in for 30 seconds of waiting
+  await T1.evaluate(() => { const s = window.__fl.seat; return s.backend.update(s.code, { turnAt: Date.now() - 31000 }); });
+  await T2.waitForFunction(() => !document.getElementById('skip').hidden, null, { timeout: 8000 });
+  await T2.click('#skip'); await T1.waitForFunction(() => window.__fl.room.turn === 1, null, { timeout: 8000 });
+  ok(await T2.waitForFunction(() => document.getElementById('status').textContent.startsWith('Your turn'), null, { timeout: 8000 }).then(() => true).catch(() => false), 'once time is up, Skip passes the turn on through the real rules');
+
   // ---- Tic-tac-toe on real Firebase ----
   const TT = BASE + 'tic-tac-toe/?backend=emulator';
   const X = await page(TT);

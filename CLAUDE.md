@@ -18,15 +18,18 @@ The user usually works from their phone, so keep replies short and end with the 
 - `projects/_template/`: starting point for new projects.
 - `site/`: files copied to the site root (`404.html`).
 - `shared/`: code used by several projects, published at `/shared/` and imported as `../shared/<file>`.
-  `shared/rooms.js` is the multiplayer room system: 2–6 seats, teams, auto-start or a host-started lobby, codes, share
-  links, presence, private per-seat data (`setPrivate`/`watchPrivate`, e.g. hands of cards), idle disconnect, and
-  Firebase / emulator / stand-in / same-device backends. New multiplayer games must use it rather than copying room code.
+  `shared/rooms.js` is the multiplayer room system: 2–10 seats, teams, auto-start or a host-started lobby, codes, share
+  links, presence, player names (`myName`/`setMyName`/`nameOf`, remembered per device), an optional turn timer
+  (`turnSecs` on `createRoom`, `turnLeft`, `skipTurn`), private per-seat data (`setPrivate`/`watchPrivate`, e.g. hands
+  of cards), idle disconnect, and Firebase / emulator / stand-in / same-device backends. New multiplayer games must use it rather than copying room code.
   It also has public leaderboards (`topScores`, `myScore`, `saveScore`; `scores/<game>/<uid>` in the rules), which
   connect only briefly; 2048 uses one.
 - `scripts/build.mjs`: builds `_site/`. Fails on bad or reserved names and missing `index.html`. It rewrites every
   `../shared/<file>` link in project files to `../shared/<file>?v=<content hash>`, so browsers never mix a new
   page with an old cached shared file. Always reference shared code with exactly that `../shared/<file>` form.
 - `scripts/new-project.mjs`: creates a project from the template.
+- `scripts/rules.mjs`: generates `firebase/database.rules.json` (room rules repeat per seat). Edit the rules there, never
+  the JSON, then run `node scripts/rules.mjs`; `npm run rules` fails if the two don't match.
 - `tests/`: dev-only tests, never published. `npm run rules` checks the database rules on the Firebase emulator (CI runs
   it); `npm run e2e` plays the online games on the real Firebase SDK + emulator in headless Chromium.
 - `.github/workflows/pages.yml`: builds every push and PR (the `build` check `main` requires) and runs the rules test; from `main` it
@@ -76,7 +79,10 @@ The user usually works from their phone, so keep replies short and end with the 
   `shared/rooms.js`). Any seated player may forfeit (`rooms.quit`: status `done`, `left` their own seat, and `winner`
   the other player, the other team, or `draw` with 3+ players); games call it when a player taps Leave. Play again is
   by agreement (`rooms.playAgain`): each player sets only their own `again/<seat>` flag, and the round starts once
-  everyone still online has tapped; `rooms.wantsAgain` reads the flags for the button text. Rooms over a
+  everyone still online has tapped; `rooms.wantsAgain` reads the flags for the button text. Names live in
+  `names/<seat>` (each player sets only their own, no `<>&`; escape them anyway when building HTML). With a turn timer,
+  every write that starts a new turn stamps `turnAt` automatically, and once `turnSecs` have passed any seated player
+  may move `turn` on (`rooms.skipTurn`); the skipped player just misses that turn. Rooms over a
   day old may be deleted by anyone; `rooms.js` clears them when it meets one, and a host leaving a waiting room
   closes it.
 - Testing online features: this environment can't reach real Firebase, but the emulator works. Use `?backend=fake`

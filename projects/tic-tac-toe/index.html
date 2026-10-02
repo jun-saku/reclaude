@@ -254,6 +254,12 @@
       return room;
     }
 
+    // The friend's name when they have set one (escaped: it goes into HTML), else "Friend".
+    const friendName = (r, mark) => {
+      const n = r.names?.[`s${MARK.indexOf(mark)}`];
+      return n ? n.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`) : "Friend";
+    };
+
     // ---------- seats ↔ marks ----------
     // Rooms number their seats (0, 1); the game works in marks: seat 0 is "x", seat 1 is "o".
     const MARK = ["x", "o"];
@@ -392,7 +398,7 @@
         `<span class="mark">${s.toUpperCase()}</span>${label}${dot === undefined ? "" : `<span class="dot${dot ? " on" : ""}"></span>`}</span>`;
       els.players.innerHTML = local
         ? chip("x", "", undefined) + chip("o", "", undefined)
-        : chip(side, "You", true) + (r.o ? chip(other, "Friend", !!online[other]) : "");
+        : chip(side, "You", true) + (r.o ? chip(other, friendName(r, other), !!online[other]) : "");
 
       els.waiting.hidden = r.status !== "waiting";
       els.waitingCode.textContent = code;
