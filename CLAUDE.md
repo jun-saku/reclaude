@@ -24,7 +24,7 @@ The user usually works from their phone, so keep replies short and end with the 
 1. `node scripts/new-project.mjs <name> "Title" "Description"`. The name is the URL, so keep it
    short and lowercase-kebab-case.
 2. Keep it self-contained: no build step, no npm packages. External scripts only from
-   cdn.jsdelivr.net or cdnjs.cloudflare.com.
+   cdn.jsdelivr.net, cdnjs.cloudflare.com, or www.gstatic.com/firebasejs (Firebase).
 3. Use relative paths only (`./sprite.png`, never `/sprite.png`): the site is served under `/reclaude/`
    and may move to a custom domain later.
 4. It must work on a phone: touch controls (not only keyboard), no horizontal scroll, safe-area
@@ -43,6 +43,15 @@ The user usually works from their phone, so keep replies short and end with the 
 - Before asking for a merge, make sure the build check passed and give a short summary of what will go live,
   with the project links.
 - Keep PRs small: one project or one change per PR.
+
+## Firebase (online features)
+
+- Project `reclaude-67a01`, Realtime Database in asia-southeast1, anonymous sign-in. The web config in a page
+  is public by design; access is controlled by `firebase/database.rules.json`.
+- Rules live only in the repo until the user pastes them into Firebase console → Realtime Database → Rules.
+  When you change them, say so in the PR and give the user the new rules to paste.
+- This environment can't reach Firebase, so test online features with the page's stand-in backend
+  (`?backend=fake`: tabs in one browser share rooms), then ask the user to try the real thing.
 
 ## Rules
 
