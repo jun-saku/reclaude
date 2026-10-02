@@ -9,11 +9,17 @@
 // Seat keys are "s0".."s5" (not 0..5) so Firebase never turns them into arrays.
 // private/<CODE>/s<N> holds one string only that seat's player can read or write (e.g. a hand of cards).
 // Access rules: firebase/database.rules.json. Any field a game adds must be allowed there too
-// (free-form game data goes in `state`).
+// (free-form game data goes in `state`). The rules also enforce who may change what:
+//   waiting: the host sets the game up; others may only take an empty seat (filling an auto room starts it).
+//            `state` isn't protected yet, so deal hidden or random things in startGame's setup.
+//   playing: only the player in seat `turn` may change board/turn/winner/line/last/round/teams/state.
+//   done:    the result is fixed; anyone seated may start the next round (round + 1).
+// A taken seat can't be emptied or reassigned, and each player sets only their own online flag.
+// Rooms can be deleted by the host while waiting, or by anyone once a day old (createdAt).
 //
 // Backends all expose:
-//   uid, local?, watch(code, cb) → unsubscribe, transact(code, fn) → { committed, value },
-//   watchPrivate(code, seat, cb) → unsubscribe, setPrivate(code, seat, value),
+//   uid, local?, watch(code, cb) → unsubscribe, transact(code, fn) → { committed, value }, removeRoom(code),
+//   watchPrivate(code, seat, cb) → unsubscribe, setPrivate(code, seat, value), clearPrivate(code),
 //   presence(code, seat) → stop, online(), offline()
 //   topScores(game, n) → [{ uid, name, score }] best first, myScore(game) → entry|null, saveScore(game, name, score)
 // transact's fn returns the new room, null to delete it, or undefined to abort.
@@ -34,6 +40,8 @@ const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no I, O, 0, 1
 export const CODE_RE = /^[A-HJ-NP-Z2-9]{4}$/;
 export const MAX_SEATS = 6;
 const IDLE_MS = 60_000; // disconnect after this long in the background
+const STALE_MS = 86_400_000; // rooms older than a day may be deleted by anyone (see the rules)
+const isStale = (room) => !(room.createdAt > Date.now() - STALE_MS);
 
 export class RoomError extends Error {}
 
@@ -105,11 +113,17 @@ async function firebaseBackend({ emulator = false } = {}) {
       const r = await db$.runTransaction(roomRef(code), (cur) => fn(cur), { applyLocally: false });
       return { committed: r.committed, value: r.snapshot.val() };
     },
+    removeRoom(code) {
+      return db$.remove(roomRef(code));
+    },
     watchPrivate(code, seat, cb) {
       return db$.onValue(privRef(code, seat), (s) => cb(s.val()), (err) => cb(null, err));
     },
     setPrivate(code, seat, value) {
       return db$.set(privRef(code, seat), value);
+    },
+    clearPrivate(code) {
+      return db$.remove(db$.ref(db, `private/${code}`));
     },
     // Marks this player online while connected; Firebase clears it if the connection drops,
     // and it is set again on every reconnect.
@@ -190,7 +204,20 @@ function fakeBackend() {
     get isOnline() { return online; },
     watch: (code, cb) => listen(`rooms/${code}`, cb),
     transact,
+    async removeRoom(code) {
+      const db = read();
+      delete db.rooms[code];
+      write(db);
+      changed(`rooms/${code}`);
+    },
     watchPrivate: (code, seat, cb) => listen(`private/${code}/${seatKey(seat)}`, cb),
+    async clearPrivate(code) {
+      const db = read();
+      const seats = Object.keys(db.private[code] || {});
+      delete db.private[code];
+      write(db);
+      for (const s of seats) changed(`private/${code}/${s}`);
+    },
     async setPrivate(code, seat, value) {
       const db = read();
       db.private[code] = db.private[code] || {};
@@ -305,14 +332,22 @@ export async function createRoom(game, { seats = 2, min = seats, auto = true, ma
   const b = await connect();
   for (let attempt = 0; attempt < 6; attempt++) {
     const code = randomCode();
+    let stale = false;
     const r = await b.transact(code, (cur) => {
+      stale = cur !== null && isStale(cur);
       if (cur !== null) return undefined; // code taken, try another
       return {
         turn: 0, round: 0, teams: 0, ...makeRoom(),
         status: "waiting", game, host: b.uid, seats, min, auto, players: { s0: b.uid }, createdAt: Date.now(),
       };
     });
-    if (r.committed) return { backend: b, code, seat: 0 };
+    if (r.committed) {
+      // Hands left from an earlier room with this code must not leak into this one.
+      await b.clearPrivate(code).catch(() => {});
+      return { backend: b, code, seat: 0 };
+    }
+    // A day-old room is free to delete: clear it so the code can be used again.
+    if (stale) await b.removeRoom(code).catch(() => {});
   }
   throw new RoomError("Couldn't find a free room code. Try again.");
 }
@@ -327,7 +362,10 @@ export async function joinRoom(game, raw) {
     let off = null;
     off = b.watch(code, (v, err) => { setTimeout(() => off && off(), 0); err ? reject(err) : resolve(v); });
   });
-  if (!current) throw new RoomError(`No room called ${code}. Check the code with your friend.`);
+  if (!current || isStale(current)) {
+    if (current) await b.removeRoom(code).catch(() => {});
+    throw new RoomError(`No room called ${code}. Check the code with your friend.`);
+  }
   if ((current.game || "tic-tac-toe") !== game || !current.players) throw new RoomError(`${code} is a room for a different game.`);
   const mine = seatOf(current, b.uid);
   if (mine !== null) return { backend: b, code, seat: mine };

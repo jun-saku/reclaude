@@ -67,6 +67,13 @@ const server = http.createServer((req, res) => {
   ok(sneak.startsWith('denied'), `a non-player can't change the board (${sneak.slice(0, 40)})`);
   await A.reload(); await A.waitForSelector('#board:not([hidden])', { timeout: 15000 });
   ok(await statusIs(A, "Friend's turn…"), 'reload: Red rejoins the same seat');
+  // Red is seated but it's Yellow's turn: the rules must refuse Red's write
+  const early = await A.evaluate(async (code) => {
+    const b = await window.__c4.rooms.__test.backend();
+    try { const r = await b.transact(code, (cur) => cur ? { ...cur, board: 'x'.repeat(42) } : null); return r.committed ? 'written' : 'aborted'; }
+    catch (e) { return 'denied: ' + e.message; }
+  }, code);
+  ok(early.startsWith('denied'), `a player can't change the board on the other player's turn (${early.slice(0, 40)})`);
   await A.screenshot({ path: `${out}/e2e-c4.png` });
 
   // ---- Tic-tac-toe on real Firebase ----
