@@ -6,7 +6,8 @@
 // Folders starting with "_" (templates, drafts) are skipped. There is no index page.
 // shared/ is published at /shared/ for code used by several projects.
 
-import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { join } from "node:path";
 
 const ROOT = new URL("..", import.meta.url).pathname;
@@ -51,6 +52,24 @@ if (errors.length) {
 cpSync(join(ROOT, "site"), OUT, { recursive: true });
 // Code shared between projects, imported as ../shared/<file>.
 cpSync(join(ROOT, "shared"), join(OUT, "shared"), { recursive: true });
+// Cache-busting: links to shared files get ?v=<content hash>, so a browser holding an old copy
+// (say, from playing another game) fetches the new one as soon as it changes.
+const version = {};
+for (const f of readdirSync(join(ROOT, "shared"))) {
+  version[f] = createHash("sha256").update(readFileSync(join(ROOT, "shared", f))).digest("hex").slice(0, 10);
+}
+function stamp(dir) {
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, e.name);
+    if (e.isDirectory()) { stamp(full); continue; }
+    if (!/\.(html|js|mjs)$/.test(e.name)) continue;
+    const text = readFileSync(full, "utf8");
+    const out = text.replace(/(\.\.\/shared\/)([\w.-]+)(?![\w.?-])/g, (m, pre, file) => (version[file] ? `${pre}${file}?v=${version[file]}` : m));
+    if (out !== text) writeFileSync(full, out);
+  }
+}
+for (const name of built) stamp(join(OUT, name));
+
 // Serve files as-is; don't let GitHub Pages run Jekyll over them.
 writeFileSync(join(OUT, ".nojekyll"), "");
 
