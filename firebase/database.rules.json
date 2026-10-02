@@ -3,23 +3,75 @@
     "rooms": {
       "$code": {
         ".read": "auth != null && $code.matches(/^[A-HJ-NP-Z2-9]{4}$/)",
-        ".write": "auth != null && $code.matches(/^[A-HJ-NP-Z2-9]{4}$/) && (!data.exists() || data.child('x').val() === auth.uid || data.child('o').val() === auth.uid || (!data.child('o').exists() && newData.child('o').val() === auth.uid))",
-        ".validate": "newData.hasChildren(['x', 'board', 'turn', 'status', 'round', 'createdAt'])",
-        "x": { ".validate": "newData.isString() && (data.exists() ? newData.val() === data.val() : newData.val() === auth.uid)" },
-        "o": { ".validate": "newData.isString() && (data.exists() ? newData.val() === data.val() : newData.val() === auth.uid)" },
-        "game": { ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9-]{1,24}$/)" },
-        "board": { ".validate": "newData.isString() && newData.val().matches(/^[-xo]{9,64}$/)" },
-        "turn": { ".validate": "newData.val() === 'x' || newData.val() === 'o'" },
-        "status": { ".validate": "newData.val() === 'waiting' || newData.val() === 'playing' || newData.val() === 'done'" },
-        "winner": { ".validate": "newData.val() === 'x' || newData.val() === 'o' || newData.val() === 'draw'" },
-        "line": { ".validate": "newData.isString() && newData.val().matches(/^[0-9,]{3,32}$/)" },
-        "last": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 64" },
-        "round": { ".validate": "newData.isNumber() && newData.val() >= 0" },
-        "createdAt": { ".validate": "newData.isNumber()" },
-        "online": {
-          "$side": { ".validate": "($side === 'x' || $side === 'o') && newData.isBoolean()" }
+        ".write": "auth != null && $code.matches(/^[A-HJ-NP-Z2-9]{4}$/) && (!data.exists() || data.child('players/s0').val() === auth.uid || data.child('players/s1').val() === auth.uid || data.child('players/s2').val() === auth.uid || data.child('players/s3').val() === auth.uid || data.child('players/s4').val() === auth.uid || data.child('players/s5').val() === auth.uid || (data.child('status').val() === 'waiting' && ((!data.child('players/s0').exists() && newData.child('players/s0').val() === auth.uid) || (!data.child('players/s1').exists() && newData.child('players/s1').val() === auth.uid) || (!data.child('players/s2').exists() && newData.child('players/s2').val() === auth.uid) || (!data.child('players/s3').exists() && newData.child('players/s3').val() === auth.uid) || (!data.child('players/s4').exists() && newData.child('players/s4').val() === auth.uid) || (!data.child('players/s5').exists() && newData.child('players/s5').val() === auth.uid))))",
+        ".validate": "newData.hasChildren(['game', 'host', 'seats', 'players', 'status', 'turn', 'round', 'createdAt'])",
+        "game": {
+          ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9-]{1,24}$/) && (!data.exists() || newData.val() === data.val())"
         },
-        "$other": { ".validate": false }
+        "host": {
+          ".validate": "newData.isString() && (data.exists() ? newData.val() === data.val() : newData.val() === auth.uid && newData.parent().child('players/s0').val() === auth.uid)"
+        },
+        "seats": {
+          ".validate": "newData.isNumber() && newData.val() >= 2 && newData.val() <= 6 && (!data.exists() || newData.val() === data.val())"
+        },
+        "min": {
+          ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 6 && (!data.exists() || newData.val() === data.val())"
+        },
+        "auto": {
+          ".validate": "newData.isBoolean() && (!data.exists() || newData.val() === data.val())"
+        },
+        "teams": {
+          ".validate": "newData.val() === 0 || newData.val() === 2 || newData.val() === 3"
+        },
+        "players": {
+          "$seat": {
+            ".validate": "($seat === 's0' || $seat === 's1' || ($seat === 's2' && newData.parent().parent().child('seats').val() >= 3) || ($seat === 's3' && newData.parent().parent().child('seats').val() >= 4) || ($seat === 's4' && newData.parent().parent().child('seats').val() >= 5) || ($seat === 's5' && newData.parent().parent().child('seats').val() >= 6)) && newData.isString() && (data.exists() ? newData.val() === data.val() : newData.val() === auth.uid)"
+          }
+        },
+        "status": {
+          ".validate": "newData.val() === 'waiting' || newData.val() === 'playing' || newData.val() === 'done'"
+        },
+        "turn": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 5"
+        },
+        "round": {
+          ".validate": "newData.isNumber() && newData.val() >= 0"
+        },
+        "createdAt": {
+          ".validate": "newData.isNumber()"
+        },
+        "board": {
+          ".validate": "newData.isString() && newData.val().length <= 256"
+        },
+        "winner": {
+          ".validate": "(newData.isNumber() && newData.val() >= 0 && newData.val() <= 5) || newData.val() === 'draw'"
+        },
+        "line": {
+          ".validate": "newData.isString() && newData.val().length <= 128 && newData.val().matches(/^[0-9,]*$/)"
+        },
+        "last": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 256"
+        },
+        "state": {
+          ".validate": "newData.hasChildren()"
+        },
+        "online": {
+          "$seat": {
+            ".validate": "$seat.matches(/^s[0-5]$/) && newData.isBoolean()"
+          }
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+    "private": {
+      "$code": {
+        "$seat": {
+          ".read": "auth != null && $seat.matches(/^s[0-5]$/) && root.child('rooms').child($code).child('players').child($seat).val() === auth.uid",
+          ".write": "auth != null && $seat.matches(/^s[0-5]$/) && root.child('rooms').child($code).child('players').child($seat).val() === auth.uid",
+          ".validate": "newData.isString() && newData.val().length <= 512"
+        }
       }
     }
   }

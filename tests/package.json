@@ -1,0 +1,14 @@
+{
+  "name": "reclaude-tests",
+  "private": true,
+  "type": "module",
+  "description": "Dev-only tests; nothing here is published to the site.",
+  "scripts": {
+    "rules": "cp ../firebase/database.rules.json .rules.json && firebase emulators:exec --only database,auth --project demo-reclaude \"node rules.test.mjs\"",
+    "e2e": "cp ../firebase/database.rules.json .rules.json && firebase emulators:exec --only database,auth --project demo-reclaude \"node e2e.cjs\""
+  },
+  "devDependencies": {
+    "firebase": "10.14.1",
+    "firebase-tools": "13.35.1"
+  }
+}

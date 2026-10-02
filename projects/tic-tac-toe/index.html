@@ -228,129 +228,10 @@
   </main>
 
   <script type="module">
-    // ---------- configuration ----------
-    // Firebase web config is public by design; access is controlled by firebase/database.rules.json.
-    const FIREBASE_CONFIG = {
-      apiKey: "AIzaSyCCRIEJKgWbghpEhua1HlBvSoAuJ7ffDhE",
-      authDomain: "reclaude-67a01.firebaseapp.com",
-      databaseURL: "https://reclaude-67a01-default-rtdb.asia-southeast1.firebasedatabase.app",
-      projectId: "reclaude-67a01",
-      storageBucket: "reclaude-67a01.firebasestorage.app",
-      messagingSenderId: "720774301235",
-      appId: "1:720774301235:web:d91c1208d791c73b684546",
-    };
-    const FIREBASE_VERSION = "10.14.1";
-    const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no I, O, 0, 1
+    import * as rooms from "../shared/rooms.js";
+
+    const GAME = "tic-tac-toe";
     const LINES = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
-    const params = new URLSearchParams(location.search);
-
-    // ---------- backends ----------
-    // Both expose: uid, watch(code, cb) → unsubscribe, transact(code, fn) → { committed, value },
-    // setOnline(code, side), clearOnline(code, side). transact's fn returns the new room,
-    // null to delete it, or undefined to abort.
-
-    async function firebaseBackend() {
-      const base = `https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/`;
-      const [appMod, authMod, dbMod] = await Promise.all([
-        import(base + "firebase-app.js"),
-        import(base + "firebase-auth.js"),
-        import(base + "firebase-database.js"),
-      ]);
-      const app = appMod.initializeApp(FIREBASE_CONFIG);
-      const auth = authMod.getAuth(app);
-      const db = dbMod.getDatabase(app);
-      const user = await new Promise((resolve, reject) => {
-        const off = authMod.onAuthStateChanged(auth, (u) => { if (u) { off(); resolve(u); } });
-        authMod.signInAnonymously(auth).catch(reject);
-      });
-      const roomRef = (code, path = "") => dbMod.ref(db, `rooms/${code}${path}`);
-      return {
-        uid: user.uid,
-        watch(code, cb) {
-          return dbMod.onValue(roomRef(code), (s) => cb(s.val()), (err) => cb(null, err));
-        },
-        async transact(code, fn) {
-          const r = await dbMod.runTransaction(roomRef(code), (cur) => fn(cur), { applyLocally: false });
-          return { committed: r.committed, value: r.snapshot.val() };
-        },
-        async setOnline(code, side) {
-          const r = roomRef(code, `/online/${side}`);
-          await dbMod.onDisconnect(r).remove();
-          await dbMod.set(r, true);
-        },
-        clearOnline(code, side) {
-          return dbMod.remove(roomRef(code, `/online/${side}`)).catch(() => {});
-        },
-      };
-    }
-
-    // Stand-in used by automated tests (?backend=fake): tabs in one browser share rooms
-    // through localStorage and BroadcastChannel.
-    function fakeBackend() {
-      const KEY = "ttt-fake-db";
-      const channel = new BroadcastChannel("ttt-fake");
-      const read = () => JSON.parse(localStorage.getItem(KEY) || "{}");
-      let uid = sessionStorage.getItem("ttt-fake-uid");
-      if (!uid) { uid = "u" + Math.random().toString(36).slice(2, 10); sessionStorage.setItem("ttt-fake-uid", uid); }
-      const listeners = new Map();
-      const notify = (code) => {
-        const v = read()[code] ?? null;
-        for (const cb of listeners.get(code) || []) cb(v === null ? null : structuredClone(v));
-      };
-      channel.onmessage = (e) => notify(e.data);
-      const transact = async (code, fn) => {
-        const db = read();
-        const cur = db[code] ?? null;
-        const next = fn(cur === null ? null : structuredClone(cur));
-        if (next === undefined) return { committed: false, value: cur };
-        if (next === null) delete db[code]; else db[code] = next;
-        localStorage.setItem(KEY, JSON.stringify(db));
-        notify(code);
-        channel.postMessage(code);
-        return { committed: true, value: next };
-      };
-      const setOnlineFlag = (code, side, on) => transact(code, (room) => {
-        if (!room) return undefined;
-        room.online = room.online || {};
-        if (on) room.online[side] = true; else delete room.online[side];
-        return room;
-      });
-      return {
-        uid,
-        watch(code, cb) {
-          if (!listeners.has(code)) listeners.set(code, new Set());
-          listeners.get(code).add(cb);
-          setTimeout(() => cb(read()[code] ?? null), 0);
-          return () => listeners.get(code).delete(cb);
-        },
-        transact,
-        async setOnline(code, side) {
-          await setOnlineFlag(code, side, true);
-          addEventListener("pagehide", () => setOnlineFlag(code, side, false), { once: true });
-        },
-        clearOnline: (code, side) => setOnlineFlag(code, side, false),
-      };
-    }
-
-    // Two players sharing this device; no network at all.
-    function localBackend() {
-      let room = null;
-      let cb = null;
-      return {
-        uid: "local",
-        local: true,
-        watch(code, fn) { cb = fn; setTimeout(() => cb(room), 0); return () => { cb = null; }; },
-        async transact(code, fn) {
-          const next = fn(room === null ? null : structuredClone(room));
-          if (next === undefined) return { committed: false, value: room };
-          room = next;
-          if (cb) cb(room === null ? null : structuredClone(room));
-          return { committed: true, value: room };
-        },
-        async setOnline() {},
-        clearOnline() {},
-      };
-    }
 
     // ---------- game rules ----------
     function outcome(board) {
@@ -372,14 +253,39 @@
       return room;
     }
 
+    // ---------- seats ↔ marks ----------
+    // Rooms number their seats (0, 1); the game works in marks: seat 0 is "x", seat 1 is "o".
+    const MARK = ["x", "o"];
+    function toView(r) {
+      return {
+        ...r,
+        turn: MARK[r.turn],
+        winner: typeof r.winner === "number" ? MARK[r.winner] : r.winner ?? null,
+        x: r.players?.s0 ?? null,
+        o: r.players?.s1 ?? null,
+        online: { x: rooms.isOnline(r, 0), o: rooms.isOnline(r, 1) },
+      };
+    }
+    function fromView(v, orig) {
+      const r = { ...orig, board: v.board, round: v.round, status: v.status, line: v.line ?? null };
+      r.turn = MARK.indexOf(v.turn);
+      r.winner = v.winner == null ? null : v.winner === "draw" ? "draw" : MARK.indexOf(v.winner);
+      return r;
+    }
+    // A transaction written against the mark view of the room.
+    function vtransact(fn) {
+      return seat.backend.transact(seat.code, (cur) => {
+        if (!cur) return undefined;
+        const out = fn(toView(cur));
+        return out === undefined ? undefined : fromView(out, cur);
+      });
+    }
+    const initialRoom = () => ({ board: "---------", round: 0, turn: 0 });
+
     // ---------- state ----------
-    let net = null;          // online backend, created on first use
-    let netPromise = null;
-    let api = null;          // backend for the current game
-    let code = null;
-    let side = null;         // "x" | "o" | "both" (local)
+    let seat = null;   // { backend, code, seat, side } — side is "x"/"o", or "both" on one device
+    let leave = null;
     let room = null;
-    let unwatch = null;
     let lastBoard = null;
 
     const $ = (id) => document.getElementById(id);
@@ -393,52 +299,26 @@
       `<button class="cell" data-i="${i}" aria-label="Square ${i + 1}"><span></span></button>`).join("");
     const cells = [...els.board.children];
 
-    function connectOnline() {
-      if (!netPromise) {
-        netPromise = (params.get("backend") === "fake" ? Promise.resolve(fakeBackend()) : firebaseBackend())
-          .then((b) => (net = b))
-          .catch((err) => { netPromise = null; throw err; });
-      }
-      return netPromise;
-    }
-
     function setBusy(busy) {
       for (const id of ["create", "join", "local"]) $(id).disabled = busy;
     }
 
     function showHome(error = "") {
-      if (unwatch) unwatch();
-      unwatch = null;
-      if (api && code && side && side !== "both") api.clearOnline(code, side);
-      api = code = side = room = lastBoard = null;
+      if (leave) leave();
+      leave = null;
+      seat = room = lastBoard = null;
       els.game.hidden = true;
       els.home.hidden = false;
       els.homeError.textContent = error;
       setBusy(false);
-      const url = new URL(location.href);
-      url.searchParams.delete("room");
-      history.replaceState(null, "", url);
     }
 
-    function enterRoom(backend, roomCode, mySide) {
-      api = backend;
-      code = roomCode;
-      side = mySide;
+    function start(s) {
+      seat = { ...s, side: s.seat === "local" ? "both" : MARK[s.seat] };
       lastBoard = null;
       els.home.hidden = true;
       els.game.hidden = false;
-      if (!backend.local) {
-        const url = new URL(location.href);
-        url.searchParams.set("room", roomCode);
-        history.replaceState(null, "", url);
-        backend.setOnline(roomCode, mySide).catch(() => {});
-      }
-      unwatch = backend.watch(roomCode, (value, err) => {
-        if (err) return showHome("Lost access to the room. Check your connection and try again.");
-        if (!value) return showHome(backend.local ? "" : "That room has closed.");
-        room = value;
-        render();
-      });
+      leave = rooms.enter(s, (value) => { room = toView(value); render(); }, showHome);
     }
 
     // ---------- actions ----------
@@ -446,72 +326,36 @@
       setBusy(true);
       els.homeError.textContent = "";
       try {
-        const b = await connectOnline();
-        for (let attempt = 0; attempt < 6; attempt++) {
-          const c = Array.from(crypto.getRandomValues(new Uint8Array(4)), (n) => CODE_CHARS[n % 32]).join("");
-          const r = await b.transact(c, (cur) => {
-            if (cur !== null) return undefined; // code taken, try another
-            return freshRound({ x: b.uid, createdAt: Date.now() }, 0);
-          });
-          if (r.committed) return enterRoom(b, c, "x");
-        }
-        throw new Error("no free code");
+        start(await rooms.createRoom(GAME, { seats: 2, makeRoom: initialRoom }));
       } catch (err) {
         console.error(err);
-        showHome("Couldn't create a room. Check your connection and try again.");
+        showHome(err instanceof rooms.RoomError ? err.message : "Couldn't create a room. Check your connection and try again.");
       }
     }
 
-    async function joinRoom(raw) {
-      const c = String(raw || "").trim().toUpperCase();
-      if (!/^[A-HJ-NP-Z2-9]{4}$/.test(c)) {
-        els.homeError.textContent = "Room codes are 4 letters or numbers.";
-        return;
-      }
+    async function joinRoom(code) {
       setBusy(true);
       els.homeError.textContent = "";
       try {
-        const b = await connectOnline();
-        // Read the room first so the transaction starts from real data, not an empty cache.
-        const current = await new Promise((resolve, reject) => {
-          const off = b.watch(c, (v, err) => { setTimeout(() => off && off(), 0); err ? reject(err) : resolve(v); });
-        });
-        if (!current) return showHome(`No room called ${c}. Check the code with your friend.`);
-        if (current.x === b.uid) return enterRoom(b, c, "x");
-        if (current.o === b.uid) return enterRoom(b, c, "o");
-        if (current.o) return showHome("That room already has two players.");
-        const r = await b.transact(c, (cur) => {
-          // Firebase may first call this with an empty local cache. Returning null (not aborting)
-          // makes the server reject it and retry with the real room; if the room really is gone,
-          // writing null is a no-op.
-          if (cur === null) return null;
-          if (cur.o || cur.x === b.uid) return undefined;
-          cur.o = b.uid;
-          cur.status = "playing";
-          return cur;
-        });
-        if (r.committed && !r.value) return showHome(`No room called ${c}. Check the code with your friend.`);
-        if (!r.committed || r.value.o !== b.uid) return showHome("That room already has two players.");
-        enterRoom(b, c, "o");
+        start(await rooms.joinRoom(GAME, code));
       } catch (err) {
         console.error(err);
-        showHome("Couldn't join. Check your connection and try again.");
+        showHome(err instanceof rooms.RoomError ? err.message : "Couldn't join. Check your connection and try again.");
       }
     }
 
     function playLocal() {
-      const b = localBackend();
-      b.transact("LOCAL", () => freshRound({ x: "local", o: "local", createdAt: Date.now() }, 0));
-      enterRoom(b, "LOCAL", "both");
+      start(rooms.localRoom(GAME, 2, initialRoom));
     }
 
     function play(i) {
       if (!room || room.status !== "playing") return;
+      const { side, backend } = seat;
       if (side !== "both" && room.turn !== side) return;
       const mover = room.turn;
-      api.transact(code, (cur) => {
-        if (!cur || cur.status !== "playing" || cur.turn !== mover || cur.board[i] !== "-") return undefined;
-        if (side !== "both" && cur[mover] !== api.uid) return undefined;
+      vtransact((cur) => {
+        if (cur.status !== "playing" || cur.turn !== mover || cur.board[i] !== "-") return undefined;
+        if (side !== "both" && cur[mover] !== backend.uid) return undefined;
         cur.board = cur.board.slice(0, i) + mover + cur.board.slice(i + 1);
         const result = outcome(cur.board);
         if (result) {
@@ -528,8 +372,8 @@
     function rematch() {
       if (!room || room.status !== "done") return;
       const round = room.round + 1;
-      api.transact(code, (cur) => {
-        if (!cur || cur.status !== "done" || cur.round !== round - 1) return undefined;
+      vtransact((cur) => {
+        if (cur.status !== "done" || cur.round !== round - 1) return undefined;
         return freshRound(cur, round);
       }).catch((err) => console.error(err));
     }
@@ -537,6 +381,7 @@
     // ---------- rendering ----------
     function render() {
       const r = room;
+      const { side, code } = seat;
       const local = side === "both";
       const online = r.online || {};
       const other = side === "x" ? "o" : "x";
@@ -592,34 +437,23 @@
       els.joinCode.value = els.joinCode.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
       els.homeError.textContent = "";
     });
-
-    function shareUrl() {
-      const url = new URL(location.href);
-      url.search = "";
-      url.searchParams.set("room", code);
-      if (params.get("backend")) url.searchParams.set("backend", params.get("backend"));
-      return url.toString();
-    }
     $("share").addEventListener("click", async () => {
-      const url = shareUrl();
-      try {
-        if (navigator.share) await navigator.share({ title: "Tic-tac-toe", text: `Join my game: ${code}`, url });
-        else { await navigator.clipboard.writeText(url); $("share").textContent = "Link copied"; }
-      } catch {}
+      if ((await rooms.share(seat.code, "Tic-tac-toe")) === "copied") $("share").textContent = "Link copied";
     });
     $("copy").addEventListener("click", async () => {
-      try { await navigator.clipboard.writeText(code); $("copy").textContent = "Copied"; } catch { prompt("Room code:", code); }
+      try { await navigator.clipboard.writeText(seat.code); $("copy").textContent = "Copied"; } catch { prompt("Room code:", seat.code); }
       setTimeout(() => ($("copy").textContent = "Copy code"), 1500);
     });
 
     // Opening a shared link (?room=CODE) joins straight away.
-    if (params.get("room")) {
-      els.joinCode.value = params.get("room").toUpperCase();
-      joinRoom(params.get("room"));
-    }
+    const linked = rooms.roomFromUrl();
+    if (linked) { els.joinCode.value = linked.toUpperCase(); joinRoom(linked); }
 
     // Hooks for automated tests.
-    window.__ttt = { state: () => ({ code, side, room, uid: api?.uid ?? net?.uid ?? null }) };
+    window.__ttt = {
+      state: () => ({ code: seat?.code ?? null, side: seat?.side ?? null, room, uid: seat?.backend?.uid ?? null }),
+      rooms,
+    };
   </script>
 </body>
 </html>

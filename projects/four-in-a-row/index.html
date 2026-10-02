@@ -242,8 +242,37 @@
       return room;
     }
 
+    // ---------- seats ↔ marks ----------
+    // Rooms number their seats (0, 1); the game works in marks: seat 0 is "x" (Red), seat 1 is "o" (Yellow).
+    const MARK = ["x", "o"];
+    function toView(r) {
+      return {
+        ...r,
+        turn: MARK[r.turn],
+        winner: typeof r.winner === "number" ? MARK[r.winner] : r.winner ?? null,
+        x: r.players?.s0 ?? null,
+        o: r.players?.s1 ?? null,
+        online: { x: rooms.isOnline(r, 0), o: rooms.isOnline(r, 1) },
+      };
+    }
+    function fromView(v, orig) {
+      const r = { ...orig, board: v.board, round: v.round, status: v.status, line: v.line ?? null, last: v.last ?? null };
+      r.turn = MARK.indexOf(v.turn);
+      r.winner = v.winner == null ? null : v.winner === "draw" ? "draw" : MARK.indexOf(v.winner);
+      return r;
+    }
+    // A transaction written against the mark view of the room.
+    function vtransact(fn) {
+      return seat.backend.transact(seat.code, (cur) => {
+        if (!cur) return undefined;
+        const out = fn(toView(cur));
+        return out === undefined ? undefined : fromView(out, cur);
+      });
+    }
+    const initialRoom = () => ({ board: EMPTY, round: 0, turn: 0 });
+
     // ---------- state ----------
-    let seat = null;   // { backend, code, side } — side is "both" on one device
+    let seat = null;   // { backend, code, seat, side } — side is "x"/"o", or "both" on one device
     let leave = null;
     let room = null;
     let lastBoard = null;
@@ -268,11 +297,11 @@
     }
 
     function start(s) {
-      seat = s;
+      seat = { ...s, side: s.seat === "local" ? "both" : MARK[s.seat] };
       lastBoard = null;
       $("home").hidden = true;
       $("game").hidden = false;
-      leave = rooms.enter(s, (value) => { room = value; render(); }, showHome);
+      leave = rooms.enter(s, (value) => { room = toView(value); render(); }, showHome);
     }
 
     // ---------- actions ----------
@@ -280,7 +309,7 @@
       setBusy(true);
       $("home-error").textContent = "";
       try {
-        start(await rooms.createRoom(GAME, () => freshRound({}, 0)));
+        start(await rooms.createRoom(GAME, { seats: 2, makeRoom: initialRoom }));
       } catch (err) {
         console.error(err);
         showHome(err instanceof rooms.RoomError ? err.message : "Couldn't create a room. Check your connection and try again.");
@@ -299,9 +328,7 @@
     }
 
     function playLocal() {
-      const backend = rooms.localBackend();
-      backend.transact("LOCAL", () => freshRound({ game: GAME, x: "local", o: "local", createdAt: Date.now() }, 0));
-      start({ backend, code: "LOCAL", side: "both" });
+      start(rooms.localRoom(GAME, 2, initialRoom));
     }
 
     function play(col) {
@@ -309,7 +336,7 @@
       const { backend, code, side } = seat;
       if (side !== "both" && room.turn !== side) return;
       const mover = room.turn;
-      backend.transact(code, (cur) => {
+      vtransact((cur) => {
         if (!cur || cur.status !== "playing" || cur.turn !== mover) return undefined;
         if (side !== "both" && cur[mover] !== backend.uid) return undefined;
         const r = landingRow(cur.board, col);
@@ -335,8 +362,8 @@
     function rematch() {
       if (!room || room.status !== "done") return;
       const round = room.round + 1;
-      seat.backend.transact(seat.code, (cur) => {
-        if (!cur || cur.status !== "done" || cur.round !== round - 1) return undefined;
+      vtransact((cur) => {
+        if (cur.status !== "done" || cur.round !== round - 1) return undefined;
         return freshRound(cur, round);
       }).catch((err) => console.error(err));
     }
@@ -460,7 +487,7 @@
     // Hooks for automated tests.
     window.__c4 = {
       state: () => ({ room, side: seat?.side, code: seat?.code }), winningLine, landingRow, rooms,
-      setBoard: (board, turn) => seat.backend.transact(seat.code, (cur) => ({ ...cur, board, turn, status: "playing", winner: null, line: null, last: null })),
+      setBoard: (board, turn) => vtransact((cur) => ({ ...cur, board, turn, status: "playing", winner: null, line: null, last: null })),
     };
   </script>
 </body>
