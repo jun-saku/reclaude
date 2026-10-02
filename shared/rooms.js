@@ -5,7 +5,8 @@
 // A room is one object at rooms/<CODE> in Firebase Realtime Database:
 //   { game, host, seats, min, auto, teams, players: { s0: uid, s1?: uid, … },
 //     status: "waiting"|"playing"|"done", turn: <seat>, round, createdAt,
-//     board?, winner?: <seat|team> | "draw", line?, last?, left?: <seat>, state?: {…}, online?: { s0?: true, … } }
+//     board?, winner?: <seat|team> | "draw", line?, last?, left?: <seat>, state?: {…}, online?: { s0?: true, … },
+//     again?: { s0?: true, … } }
 // Seat keys are "s0".."s5" (not 0..5) so Firebase never turns them into arrays.
 // private/<CODE>/s<N> holds one string only that seat's player can read or write (e.g. a hand of cards).
 // Access rules: firebase/database.rules.json. Any field a game adds must be allowed there too
@@ -16,11 +17,13 @@
 //            any seated player may forfeit (quit): status "done", left their own seat, and winner another
 //            seat (no teams), the other team (2 teams) or "draw" (3+ players); nothing else changes.
 //   done:    the result is fixed; anyone seated may start the next round (round + 1).
-// A taken seat can't be emptied or reassigned, and each player sets only their own online flag.
+// A taken seat can't be emptied or reassigned, and each player sets only their own online and again flags
+// (again is cleared when a new round starts).
 // Rooms can be deleted by the host while waiting, or by anyone once a day old (createdAt).
 //
 // Backends all expose:
 //   uid, local?, watch(code, cb) → unsubscribe, transact(code, fn) → { committed, value }, removeRoom(code),
+//   setAgain(code, seat) (writes only rooms/<code>/again/<seat>: a finished room's other fields are fixed),
 //   watchPrivate(code, seat, cb) → unsubscribe, setPrivate(code, seat, value), clearPrivate(code),
 //   presence(code, seat) → stop, online(), offline()
 //   topScores(game, n) → [{ uid, name, score }] best first, myScore(game) → entry|null, saveScore(game, name, score)
@@ -78,6 +81,10 @@ export function teamOf(room, seat) {
 export function isOnline(room, seat) {
   return !!room.online?.[seatKey(seat)];
 }
+// Has this seat asked to play again (see playAgain)?
+export function wantsAgain(room, seat) {
+  return !!room.again?.[seatKey(seat)];
+}
 
 // ---------- backends ----------
 
@@ -117,6 +124,9 @@ async function firebaseBackend({ emulator = false } = {}) {
     },
     removeRoom(code) {
       return db$.remove(roomRef(code));
+    },
+    setAgain(code, seat) {
+      return db$.set(roomRef(code, `/again/${seatKey(seat)}`), true);
     },
     watchPrivate(code, seat, cb) {
       return db$.onValue(privRef(code, seat), (s) => cb(s.val()), (err) => cb(null, err));
@@ -212,6 +222,7 @@ function fakeBackend() {
       write(db);
       changed(`rooms/${code}`);
     },
+    setAgain: (code, seat) => transact(code, (room) => { if (!room) return undefined; room.again = { ...(room.again || {}), [seatKey(seat)]: true }; return room; }),
     watchPrivate: (code, seat, cb) => listen(`private/${code}/${seatKey(seat)}`, cb),
     async clearPrivate(code) {
       const db = read();
@@ -450,6 +461,26 @@ export async function quit({ backend, code, seat }) {
     cur.left = seat;
     return cur;
   }).catch(() => {});
+}
+
+// Play again by agreement: marks this seat ready (its own again flag: a finished room's other fields are
+// fixed by the rules), and once every other seated player who is online is ready too, starts the next round
+// with deal(room, round + 1) (which returns the room set up for the new round, with status "playing").
+// Returns "started", "waiting" (others are still deciding) or "none" (the game isn't over).
+export async function playAgain({ backend, code, seat }, deal) {
+  if (!backend.local) await backend.setAgain(code, seat);
+  const r = await backend.transact(code, (cur) => {
+    if (cur === null) return null;
+    if (cur.status !== "done") return undefined;
+    const pending = seatList(cur).some((uid, i) => uid && i !== seat && isOnline(cur, i) && !wantsAgain(cur, i));
+    if (pending) return undefined;
+    const next = deal(cur, cur.round + 1);
+    if (!next) return undefined;
+    delete next.again;
+    return next;
+  });
+  if (r.committed && r.value && r.value.status !== "done") return "started";
+  return r.value?.status === "done" ? "waiting" : "none";
 }
 
 // Builds a same-device room: every seat is filled and the game starts immediately.

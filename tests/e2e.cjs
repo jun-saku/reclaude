@@ -53,7 +53,9 @@ const server = http.createServer((req, res) => {
   await drop(A, 0);
   ok(await statusIs(A, 'You win! 🎉') && await statusIs(B, 'Friend wins'), 'moves sync both ways and the win shows on both phones');
   await B.click('#rematch');
-  ok(await statusIs(B, 'Your turn') && await statusIs(A, "Friend's turn…"), 'play again: Yellow starts round 2');
+  ok(await A.waitForFunction(() => document.getElementById('rematch').textContent.includes('friend is ready'), null, { timeout: 8000 }).then(() => true).catch(() => false) && await B.$eval('#rematch', (b) => b.disabled), 'play again waits for both: Red sees Yellow is ready, Yellow waits');
+  await A.click('#rematch');
+  ok(await statusIs(B, 'Your turn') && await statusIs(A, "Friend's turn…"), 'play again: Yellow starts round 2 once both tapped');
   const C = await page(C4);
   await C.fill('#join-code', code); await C.click('#join');
   await C.waitForFunction(() => document.getElementById('home-error').textContent.length > 0, null, { timeout: 8000 });
@@ -132,8 +134,9 @@ const server = http.createServer((req, res) => {
   ok(fr.status === 'done' && typeof fr.winner === 'number' && winnerLines === 2, `the rules accept every move; 2 players need two lines to win (${fturns} turns, ${swaps} dead-card swaps, winner seat ${fr.winner} with ${winnerLines} lines)`);
   ok(await statusIs([F1, F2][fr.winner], 'You win! 🎉'), 'the winner is told');
   await F1.screenshot({ path: `${out}/e2e-fl.png` });
-  await F2.click('#rematch'); await F2.waitForFunction(() => window.__fl.room.round === 1 && window.__fl.hand && window.__fl.hand.length === 6, null, { timeout: 8000 });
-  ok(true, 'play again deals a new round');
+  await F2.click('#rematch'); await F1.waitForFunction(() => document.getElementById('hint').textContent.includes('wants to play again'), null, { timeout: 8000 });
+  await F1.click('#rematch'); await F2.waitForFunction(() => window.__fl.room.round === 1 && window.__fl.hand && window.__fl.hand.length === 6, null, { timeout: 8000 });
+  ok(true, 'play again deals a new round once both tapped');
   // Leaving when it isn't your turn forfeits under the real rules (the room is rewritten whole, state included)
   const fr1 = await F1.evaluate(() => window.__fl.room);
   const leaver = [F1, F2][1 - fr1.turn], stayer = [F1, F2][fr1.turn];

@@ -65,6 +65,9 @@ await expect('a turn outside 0–5', false, () => update(C.r(`rooms/${CODE}`), {
 await expect('a seated player setting their online flag', true, () => set(C.r(`rooms/${CODE}/online/s2`), true));
 await expect('another player clearing their online flag', false, () => remove(A.r(`rooms/${CODE}/online/s2`)));
 await expect('a bad online seat key', false, () => set(C.r(`rooms/${CODE}/online/s9`), true));
+await expect('a seated player asking to play again', true, () => set(C.r(`rooms/${CODE}/again/s2`), true));
+await expect("a player setting someone else's play-again flag", false, () => set(A.r(`rooms/${CODE}/again/s2`), false));
+await expect('a non-boolean play-again flag', false, () => set(B.r(`rooms/${CODE}/again/s1`), 'yes'));
 await expect('the player on turn rewriting the room with the others\' flags as they were', true, async () => {
   const cur = (await get(C.r(`rooms/${CODE}`))).val();
   await set(C.r(`rooms/${CODE}`), { ...cur, board: 'xxo', turn: 0 });
@@ -78,7 +81,8 @@ await expect('a seated player reading the room', true, () => get(C.r(`rooms/${CO
 await expect('anyone signed in reading a room by its code', true, () => get(D.r(`rooms/${CODE}`)));
 await expect('listing all rooms', false, () => get(D.r('rooms')));
 
-await expect('any player starting the next round', true, () => update(B.r(`rooms/${CODE}`), { status: 'playing', round: 1, turn: 1, board: '---', winner: null, line: null }));
+await expect('clearing everyone\'s play-again flags without a new round', false, () => update(B.r(`rooms/${CODE}`), { again: null }));
+await expect('any player starting the next round, clearing the play-again flags', true, () => update(B.r(`rooms/${CODE}`), { status: 'playing', round: 1, turn: 1, board: '---', winner: null, line: null, again: null }));
 
 console.log('-- private hands');
 await expect('B writing their own hand', true, () => set(B.r(`private/${CODE}/s1`), 'QH,2S,7D'));
