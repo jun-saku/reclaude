@@ -29,6 +29,11 @@ Online games use Firebase (Realtime Database + anonymous sign-in, free Spark pla
 rules are in [`firebase/database.rules.json`](firebase/database.rules.json); paste them into
 Firebase console → Realtime Database → Rules → Publish whenever they change.
 
+## Tests
+
+Dev-only, in `tests/` (needs Java): `npm install`, then `npm run rules` to check the database rules on the Firebase
+emulator (also run by CI), or `npm run e2e` to play the online games on the real Firebase SDK and emulator.
+
 ## Deploying
 
 `claude/...` → PR → `main`. Each PR gets a Cloudflare preview link (posted as a comment); merging into

@@ -18,11 +18,14 @@ The user usually works from their phone, so keep replies short and end with the 
 - `projects/_template/`: starting point for new projects.
 - `site/`: files copied to the site root (`404.html`).
 - `shared/`: code used by several projects, published at `/shared/` and imported as `../shared/<file>`.
-  `shared/rooms.js` is the two-player room system (codes, share links, presence, Firebase / stand-in / same-device
-  backends, idle disconnect). New multiplayer games should use it rather than copying room code.
+  `shared/rooms.js` is the multiplayer room system: 2–6 seats, teams, auto-start or a host-started lobby, codes, share
+  links, presence, private per-seat data (`setPrivate`/`watchPrivate`, e.g. hands of cards), idle disconnect, and
+  Firebase / emulator / stand-in / same-device backends. New multiplayer games must use it rather than copying room code.
 - `scripts/build.mjs`: builds `_site/`. Fails on bad or reserved names and missing `index.html`.
 - `scripts/new-project.mjs`: creates a project from the template.
-- `.github/workflows/pages.yml`: builds every push and PR (the `build` check `main` requires); from `main` it
+- `tests/`: dev-only tests, never published. `npm run rules` checks the database rules on the Firebase emulator (CI runs
+  it); `npm run e2e` plays the online games on the real Firebase SDK + emulator in headless Chromium.
+- `.github/workflows/pages.yml`: builds every push and PR (the `build` check `main` requires) and runs the rules test; from `main` it
   deploys to Cloudflare Pages and GitHub Pages; on PRs it uploads a Cloudflare preview and comments its link.
   Cloudflare uploads use the `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` repo secrets (set by the user;
   never ask for their values) and are skipped while those are missing.
@@ -58,10 +61,13 @@ The user usually works from their phone, so keep replies short and end with the 
   is public by design; access is controlled by `firebase/database.rules.json`.
 - Rules live only in the repo until the user pastes them into Firebase console → Realtime Database → Rules.
   When you change them, say so in the PR and give the user the new rules to paste.
-- Rooms are shared by all games: each room has a `game` field, and every field a game writes must be allowed
-  in the rules (unknown fields are rejected).
-- This environment can't reach Firebase, so test online features with the page's stand-in backend
-  (`?backend=fake`: tabs in one browser share rooms), then ask the user to try the real thing.
+- Rooms are shared by all games: each room has a `game` field, seats `players.s0`..`s5`, and a numeric `turn` (seat).
+  Every field a game writes must be allowed in the rules (unknown fields are rejected); put free-form game data in
+  `state`, and anything a player must not see (their hand) in private data.
+- Testing online features: this environment can't reach real Firebase, but the emulator works. Use `?backend=fake`
+  (tabs share rooms, no rules) for quick UI tests, then `cd tests && npm run e2e` / `npm run rules` for the real SDK
+  and rules. Any rules change needs a passing `npm run rules`, new cases in `tests/rules.test.mjs`, and the user
+  republishing the rules (say so in the PR). Then ask the user to try the real thing.
 
 ## Rules
 

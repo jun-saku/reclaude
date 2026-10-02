@@ -1,15 +1,23 @@
-// Shared two-player rooms for reclaude games: room codes, share links, presence, and three backends.
+// Shared multiplayer rooms for reclaude games: room codes, seats (2–6 players), teams, lobby,
+// share links, presence, private per-player data, and four backends.
 // Import from a project page with:  import * as rooms from "../shared/rooms.js";
 //
 // A room is one object at rooms/<CODE> in Firebase Realtime Database:
-//   { game, x, o?, board, turn, status: "waiting"|"playing"|"done", round, createdAt,
-//     winner?, line?, last?, online?: { x?: true, o?: true } }
-// Access rules: firebase/database.rules.json. Any field a game adds must be allowed there too.
+//   { game, host, seats, min, auto, teams, players: { s0: uid, s1?: uid, … },
+//     status: "waiting"|"playing"|"done", turn: <seat>, round, createdAt,
+//     board?, winner?: <seat|team> | "draw", line?, last?, state?: {…}, online?: { s0?: true, … } }
+// Seat keys are "s0".."s5" (not 0..5) so Firebase never turns them into arrays.
+// private/<CODE>/s<N> holds one string only that seat's player can read or write (e.g. a hand of cards).
+// Access rules: firebase/database.rules.json. Any field a game adds must be allowed there too
+// (free-form game data goes in `state`).
 //
 // Backends all expose:
 //   uid, local?, watch(code, cb) → unsubscribe, transact(code, fn) → { committed, value },
-//   presence(code, side) → stop, online(), offline()
+//   watchPrivate(code, seat, cb) → unsubscribe, setPrivate(code, seat, value),
+//   presence(code, seat) → stop, online(), offline()
 // transact's fn returns the new room, null to delete it, or undefined to abort.
+// Firebase may call fn with null before it has the room cached: transactions on a room you aren't
+// watching (via enter) should return null for a null room, not abort, so Firebase retries with real data.
 
 export const FIREBASE_CONFIG = {
   apiKey: "AIzaSyCCRIEJKgWbghpEhua1HlBvSoAuJ7ffDhE",
@@ -23,30 +31,72 @@ export const FIREBASE_CONFIG = {
 const FIREBASE_VERSION = "10.14.1";
 const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no I, O, 0, 1
 export const CODE_RE = /^[A-HJ-NP-Z2-9]{4}$/;
+export const MAX_SEATS = 6;
 const IDLE_MS = 60_000; // disconnect after this long in the background
 
 export class RoomError extends Error {}
 
+// ---------- seats ----------
+
+export const seatKey = (seat) => `s${seat}`;
+
+// Array of length room.seats: the uid in each seat, or null if empty.
+export function seatList(room) {
+  return Array.from({ length: room?.seats || 0 }, (_, i) => room.players?.[seatKey(i)] ?? null);
+}
+export function playerCount(room) {
+  return seatList(room).filter(Boolean).length;
+}
+export function seatOf(room, uid) {
+  const i = seatList(room).indexOf(uid);
+  return i < 0 ? null : i;
+}
+// Next occupied seat after `seat`, wrapping around.
+export function nextSeat(room, seat) {
+  const list = seatList(room);
+  for (let k = 1; k <= list.length; k++) {
+    const s = (seat + k) % list.length;
+    if (list[s]) return s;
+  }
+  return seat;
+}
+// Team for a seat: with `teams` set, seats alternate (2 teams: 0,1,0,1…; 3 teams: 0,1,2,0,1,2).
+export function teamOf(room, seat) {
+  return room.teams ? seat % room.teams : seat;
+}
+export function isOnline(room, seat) {
+  return !!room.online?.[seatKey(seat)];
+}
+
 // ---------- backends ----------
 
-async function firebaseBackend() {
+async function firebaseBackend({ emulator = false } = {}) {
   const base = `https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/`;
   const [appMod, authMod, db$] = await Promise.all([
     import(base + "firebase-app.js"),
     import(base + "firebase-auth.js"),
     import(base + "firebase-database.js"),
   ]);
-  const app = appMod.initializeApp(FIREBASE_CONFIG);
+  const config = emulator
+    ? { ...FIREBASE_CONFIG, projectId: "demo-reclaude", databaseURL: "http://127.0.0.1:9000?ns=demo-reclaude-default-rtdb" }
+    : FIREBASE_CONFIG;
+  const app = appMod.initializeApp(config);
   const auth = authMod.getAuth(app);
   const db = db$.getDatabase(app);
+  if (emulator) {
+    authMod.connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
+    db$.connectDatabaseEmulator(db, "127.0.0.1", 9000);
+  }
   const user = await new Promise((resolve, reject) => {
     const off = authMod.onAuthStateChanged(auth, (u) => { if (u) { off(); resolve(u); } });
     authMod.signInAnonymously(auth).catch(reject);
   });
   const roomRef = (code, path = "") => db$.ref(db, `rooms/${code}${path}`);
-  let isOnline = true;
+  const privRef = (code, seat) => db$.ref(db, `private/${code}/${seatKey(seat)}`);
+  let online = true;
   return {
     uid: user.uid,
+    get isOnline() { return online; },
     watch(code, cb) {
       return db$.onValue(roomRef(code), (s) => cb(s.val()), (err) => cb(null, err));
     },
@@ -54,10 +104,16 @@ async function firebaseBackend() {
       const r = await db$.runTransaction(roomRef(code), (cur) => fn(cur), { applyLocally: false });
       return { committed: r.committed, value: r.snapshot.val() };
     },
+    watchPrivate(code, seat, cb) {
+      return db$.onValue(privRef(code, seat), (s) => cb(s.val()), (err) => cb(null, err));
+    },
+    setPrivate(code, seat, value) {
+      return db$.set(privRef(code, seat), value);
+    },
     // Marks this player online while connected; Firebase clears it if the connection drops,
     // and it is set again on every reconnect.
-    presence(code, side) {
-      const r = roomRef(code, `/online/${side}`);
+    presence(code, seat) {
+      const r = roomRef(code, `/online/${seatKey(seat)}`);
       const off = db$.onValue(db$.ref(db, ".info/connected"), (s) => {
         if (s.val() !== true) return;
         db$.onDisconnect(r).remove().then(() => db$.set(r, true)).catch(() => {});
@@ -68,78 +124,91 @@ async function firebaseBackend() {
         db$.remove(r).catch(() => {});
       };
     },
-    online() { if (!isOnline) { isOnline = true; db$.goOnline(db); } },
-    offline() { if (isOnline) { isOnline = false; db$.goOffline(db); } },
+    online() { if (!online) { online = true; db$.goOnline(db); } },
+    offline() { if (online) { online = false; db$.goOffline(db); } },
   };
 }
 
-// Stand-in used by automated tests (?backend=fake): tabs in one browser share rooms
-// through localStorage and BroadcastChannel. offline() drops presence like a real disconnect.
+// Stand-in used by quick automated tests (?backend=fake): tabs in one browser share rooms
+// through localStorage and BroadcastChannel. It does not enforce the access rules.
 function fakeBackend() {
   const KEY = "rooms-fake-db";
   const channel = new BroadcastChannel("rooms-fake");
-  const read = () => JSON.parse(localStorage.getItem(KEY) || "{}");
+  const read = () => JSON.parse(localStorage.getItem(KEY) || '{"rooms":{},"private":{}}');
+  const write = (db) => localStorage.setItem(KEY, JSON.stringify(db));
   let uid = sessionStorage.getItem("rooms-fake-uid");
   if (!uid) { uid = "u" + Math.random().toString(36).slice(2, 10); sessionStorage.setItem("rooms-fake-uid", uid); }
-  const listeners = new Map();
-  const present = new Set(); // "CODE/side" entries this tab keeps online
-  let isOnline = true;
-  const notify = (code) => {
-    const v = read()[code] ?? null;
-    for (const cb of listeners.get(code) || []) cb(v === null ? null : structuredClone(v));
+  const listeners = new Map(); // "rooms/CODE" or "private/CODE/sN" → Set(cb)
+  const present = new Set();   // "CODE/seat" entries this tab keeps online
+  let online = true;
+  const get = (db, path) => path.split("/").reduce((o, k) => (o == null ? undefined : o[k]), db) ?? null;
+  const notify = (path) => {
+    const v = get(read(), path);
+    for (const cb of listeners.get(path) || []) cb(v === null ? null : structuredClone(v));
   };
   channel.onmessage = (e) => notify(e.data);
+  const changed = (path) => { notify(path); channel.postMessage(path); };
+  const listen = (path, cb) => {
+    if (!listeners.has(path)) listeners.set(path, new Set());
+    listeners.get(path).add(cb);
+    setTimeout(() => cb(get(read(), path)), 0);
+    return () => listeners.get(path).delete(cb);
+  };
   const transact = async (code, fn) => {
     const db = read();
-    const cur = db[code] ?? null;
+    const cur = db.rooms[code] ?? null;
     const next = fn(cur === null ? null : structuredClone(cur));
     if (next === undefined) return { committed: false, value: cur };
-    if (next === null) delete db[code]; else db[code] = next;
-    localStorage.setItem(KEY, JSON.stringify(db));
-    notify(code);
-    channel.postMessage(code);
+    if (next === null) delete db.rooms[code]; else db.rooms[code] = next;
+    write(db);
+    changed(`rooms/${code}`);
     return { committed: true, value: next };
   };
-  const flag = (code, side, on) => transact(code, (room) => {
+  const flag = (code, seat, on) => transact(code, (room) => {
     if (!room) return undefined;
     room.online = room.online || {};
-    if (on) room.online[side] = true; else delete room.online[side];
+    if (on) room.online[seatKey(seat)] = true; else delete room.online[seatKey(seat)];
     return room;
   });
-  addEventListener("pagehide", () => { for (const k of present) flag(...k.split("/"), false); });
+  addEventListener("pagehide", () => { for (const k of present) { const [c, s] = k.split("/"); flag(c, +s, false); } });
   return {
     uid,
     fake: true,
-    get isOnline() { return isOnline; },
-    watch(code, cb) {
-      if (!listeners.has(code)) listeners.set(code, new Set());
-      listeners.get(code).add(cb);
-      setTimeout(() => cb(read()[code] ?? null), 0);
-      return () => listeners.get(code).delete(cb);
-    },
+    get isOnline() { return online; },
+    watch: (code, cb) => listen(`rooms/${code}`, cb),
     transact,
-    presence(code, side) {
-      present.add(`${code}/${side}`);
-      if (isOnline) flag(code, side, true);
-      return () => { present.delete(`${code}/${side}`); flag(code, side, false); };
+    watchPrivate: (code, seat, cb) => listen(`private/${code}/${seatKey(seat)}`, cb),
+    async setPrivate(code, seat, value) {
+      const db = read();
+      db.private[code] = db.private[code] || {};
+      db.private[code][seatKey(seat)] = value;
+      write(db);
+      changed(`private/${code}/${seatKey(seat)}`);
+    },
+    presence(code, seat) {
+      present.add(`${code}/${seat}`);
+      if (online) flag(code, seat, true);
+      return () => { present.delete(`${code}/${seat}`); flag(code, seat, false); };
     },
     online() {
-      if (isOnline) return;
-      isOnline = true;
-      for (const k of present) flag(...k.split("/"), true);
+      if (online) return;
+      online = true;
+      for (const k of present) { const [c, s] = k.split("/"); flag(c, +s, true); }
     },
     offline() {
-      if (!isOnline) return;
-      isOnline = false;
-      for (const k of present) flag(...k.split("/"), false);
+      if (!online) return;
+      online = false;
+      for (const k of present) { const [c, s] = k.split("/"); flag(c, +s, false); }
     },
   };
 }
 
-// Two players sharing one device; no network at all.
+// Everyone sharing one device; no network at all. Every seat belongs to "local".
 export function localBackend() {
   let room = null;
   let cb = null;
+  const priv = {};
+  const privCbs = {};
   return {
     uid: "local",
     local: true,
@@ -150,6 +219,15 @@ export function localBackend() {
       room = next;
       if (cb) cb(room === null ? null : structuredClone(room));
       return { committed: true, value: room };
+    },
+    watchPrivate(code, seat, fn) {
+      privCbs[seat] = fn;
+      setTimeout(() => privCbs[seat] && privCbs[seat](priv[seat] ?? null), 0);
+      return () => { delete privCbs[seat]; };
+    },
+    async setPrivate(code, seat, value) {
+      priv[seat] = value;
+      if (privCbs[seat]) privCbs[seat](value);
     },
     presence() { return () => {}; },
     online() {},
@@ -166,8 +244,8 @@ let inRoom = false;
 // Connects on first use (creating or joining), so just opening a game costs no connection.
 export function connect() {
   if (!netPromise) {
-    const fake = new URLSearchParams(location.search).get("backend") === "fake";
-    netPromise = (fake ? Promise.resolve(fakeBackend()) : firebaseBackend())
+    const mode = new URLSearchParams(location.search).get("backend");
+    netPromise = (mode === "fake" ? Promise.resolve(fakeBackend()) : firebaseBackend({ emulator: mode === "emulator" }))
       .then((b) => { watchVisibility(b); return b; })
       .catch((err) => { netPromise = null; throw err; });
   }
@@ -189,21 +267,29 @@ function randomCode() {
   return Array.from(crypto.getRandomValues(new Uint8Array(4)), (n) => CODE_CHARS[n % 32]).join("");
 }
 
-// Creates a room with a fresh code. makeRoom(uid) returns the initial room (without game/x/createdAt).
-export async function createRoom(game, makeRoom) {
+// Creates a room with a fresh code; the creator is the host in seat 0.
+//   seats: maximum players (2–6); min: players needed to start (default: seats);
+//   auto: start as soon as every seat is filled (default true; false = host taps Start in a lobby);
+//   makeRoom(): the game's initial fields (board, state, …).
+export async function createRoom(game, { seats = 2, min = seats, auto = true, makeRoom = () => ({}) } = {}) {
+  if (seats < 2 || seats > MAX_SEATS) throw new RoomError("Rooms hold 2 to 6 players.");
   const b = await connect();
   for (let attempt = 0; attempt < 6; attempt++) {
     const code = randomCode();
     const r = await b.transact(code, (cur) => {
       if (cur !== null) return undefined; // code taken, try another
-      return { ...makeRoom(b.uid), game, x: b.uid, createdAt: Date.now() };
+      return {
+        turn: 0, round: 0, teams: 0, ...makeRoom(),
+        status: "waiting", game, host: b.uid, seats, min, auto, players: { s0: b.uid }, createdAt: Date.now(),
+      };
     });
-    if (r.committed) return { backend: b, code, side: "x" };
+    if (r.committed) return { backend: b, code, seat: 0 };
   }
   throw new RoomError("Couldn't find a free room code. Try again.");
 }
 
-// Joins (or rejoins) a room. Returns { backend, code, side } or throws RoomError with a message for players.
+// Joins (or rejoins) a room in the first free seat. Returns { backend, code, seat }
+// or throws RoomError with a message for players.
 export async function joinRoom(game, raw) {
   const code = String(raw || "").trim().toUpperCase();
   if (!CODE_RE.test(code)) throw new RoomError("Room codes are 4 letters or numbers.");
@@ -213,28 +299,54 @@ export async function joinRoom(game, raw) {
     off = b.watch(code, (v, err) => { setTimeout(() => off && off(), 0); err ? reject(err) : resolve(v); });
   });
   if (!current) throw new RoomError(`No room called ${code}. Check the code with your friend.`);
-  if ((current.game || "tic-tac-toe") !== game) throw new RoomError(`${code} is a room for a different game.`);
-  if (current.x === b.uid) return { backend: b, code, side: "x" };
-  if (current.o === b.uid) return { backend: b, code, side: "o" };
-  if (current.o) throw new RoomError("That room already has two players.");
+  if ((current.game || "tic-tac-toe") !== game || !current.players) throw new RoomError(`${code} is a room for a different game.`);
+  const mine = seatOf(current, b.uid);
+  if (mine !== null) return { backend: b, code, seat: mine };
+  if (playerCount(current) >= current.seats) throw new RoomError("That room is full.");
+  if (current.status !== "waiting") throw new RoomError("That game has already started.");
+
   const r = await b.transact(code, (cur) => {
     // Firebase may first call this with an empty local cache. Returning null (not aborting) makes the
     // server reject it and retry with the real room; if the room really is gone, writing null is a no-op.
     if (cur === null) return null;
-    if (cur.o || cur.x === b.uid) return undefined;
-    cur.o = b.uid;
-    cur.status = "playing";
+    if (seatOf(cur, b.uid) !== null || cur.status !== "waiting") return undefined;
+    const free = seatList(cur).indexOf(null);
+    if (free < 0) return undefined;
+    cur.players[seatKey(free)] = b.uid;
+    if (cur.auto && playerCount(cur) === cur.seats) cur.status = "playing";
     return cur;
   });
   if (r.committed && !r.value) throw new RoomError(`No room called ${code}. Check the code with your friend.`);
-  if (!r.committed || r.value.o !== b.uid) throw new RoomError("That room already has two players.");
-  return { backend: b, code, side: "o" };
+  const seat = r.value ? seatOf(r.value, b.uid) : null;
+  if (seat === null) {
+    throw new RoomError(r.value?.status === "waiting" ? "That room is full." : "That game has already started.");
+  }
+  return { backend: b, code, seat };
+}
+
+// Host only: starts a waiting room once enough players are seated. setup(room) prepares the game
+// (deal cards, pick teams, …) and returns the room; status becomes "playing".
+export async function startGame({ backend, code, seat }, setup = (room) => room) {
+  const r = await backend.transact(code, (cur) => {
+    // An empty local cache looks like a missing room; returning null lets Firebase retry with the real one
+    // (see joinRoom). If the room really is gone, writing null is a no-op.
+    if (cur === null) return null;
+    if (cur.status !== "waiting" || cur.host !== backend.uid || seat !== 0) return undefined;
+    if (playerCount(cur) < (cur.min || cur.seats)) return undefined;
+    const next = setup(cur);
+    if (!next) return undefined;
+    next.status = "playing";
+    return next;
+  });
+  if (r.committed && !r.value) throw new RoomError("That room has closed.");
+  if (!r.committed) throw new RoomError("Couldn't start: waiting for more players.");
+  return r.value;
 }
 
 // Watches a room and keeps this player's presence while they're in it. Returns leave().
-export function enter({ backend, code, side }, onRoom, onGone) {
+export function enter({ backend, code, seat }, onRoom, onGone) {
   inRoom = !backend.local;
-  const stopPresence = backend.local ? () => {} : backend.presence(code, side);
+  const stopPresence = backend.local ? () => {} : backend.presence(code, seat);
   const unwatch = backend.watch(code, (value, err) => {
     if (err) return onGone("Lost access to the room. Check your connection and try again.");
     if (!value) return onGone(backend.local ? "" : "That room has closed.");
@@ -249,6 +361,19 @@ export function enter({ backend, code, side }, onRoom, onGone) {
     // Give the presence removal a moment to send, then free the connection.
     if (!backend.local) setTimeout(() => { if (!inRoom) backend.offline(); }, 1500);
   };
+}
+
+// Builds a same-device room: every seat is filled and the game starts immediately.
+export function localRoom(game, players, makeRoom = () => ({})) {
+  const backend = localBackend();
+  const seats = players;
+  const ps = {};
+  for (let i = 0; i < seats; i++) ps[seatKey(i)] = "local";
+  backend.transact("LOCAL", () => ({
+    turn: 0, round: 0, teams: 0, ...makeRoom(),
+    status: "playing", game, host: "local", seats, min: seats, auto: true, players: ps, createdAt: Date.now(),
+  }));
+  return { backend, code: "LOCAL", seat: "local" };
 }
 
 // ---------- links ----------
@@ -285,4 +410,5 @@ export const __test = {
   idleNow: async () => (await netPromise)?.offline(),
   wake: async () => (await netPromise)?.online(),
   isOnline: async () => (netPromise ? (await netPromise).isOnline : null),
+  backend: () => netPromise,
 };
