@@ -23,7 +23,8 @@ The user usually works from their phone, so keep replies short and end with the 
   (`turnSecs` on `createRoom`, `turnLeft`, `skipTurn`), private per-seat data (`setPrivate`/`watchPrivate`, e.g. hands
   of cards), idle disconnect, and Firebase / emulator / stand-in / same-device backends. New multiplayer games must use it rather than copying room code.
   It also has public leaderboards (`topScores`, `myScore`, `saveScore`; `scores/<game>/<uid>` in the rules), which
-  connect only briefly; 2048 uses one.
+  connect only briefly. The rules only check a name and a number: each game validates its own scores. The 🏆 Top 10
+  sheet is shared too (`shared/leaderboard.js`, `topTen`); 2048 uses both.
 - `scripts/build.mjs`: builds `_site/`. Fails on bad or reserved names and missing `index.html`. It rewrites every
   `../shared/<file>` link in project files to `../shared/<file>?v=<content hash>`, so browsers never mix a new
   page with an old cached shared file. Always reference shared code with exactly that `../shared/<file>` form.
@@ -38,6 +39,9 @@ The user usually works from their phone, so keep replies short and end with the 
   never ask for their values) and are skipped while those are missing.
 
 ## Adding a project
+
+For games, follow `.claude/skills/new-game/SKILL.md` (the game engine guide and contribution rules: a game PR touches
+only its own `projects/<name>/` folder; engine changes to `shared/` or the rules go in their own PR).
 
 1. `node scripts/new-project.mjs <name> "Title" "Description"`. The name is the URL, so keep it
    short and lowercase-kebab-case.

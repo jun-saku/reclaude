@@ -29,7 +29,7 @@
 //   update(code, fields) (a plain multi-field write; skipTurn and setName use it),
 //   watchPrivate(code, seat, cb) → unsubscribe, setPrivate(code, seat, value), clearPrivate(code),
 //   presence(code, seat) → stop, online(), offline()
-//   topScores(game, n) → [{ uid, name, score }] best first, myScore(game) → entry|null, saveScore(game, name, score)
+//   topScores(game, n, order) → [{ uid, name, score }] best first, myScore(game) → entry|null, saveScore(game, name, score)
 // transact's fn returns the new room, null to delete it, or undefined to abort. Every backend stamps turnAt
 // whenever a write starts a new turn (see stamped), so games don't have to.
 // Firebase may call fn with null before it has the room cached: transactions on a room you aren't
@@ -182,11 +182,12 @@ async function firebaseBackend({ emulator = false } = {}) {
         db$.remove(r).catch(() => {});
       };
     },
-    async topScores(game, n) {
-      const snap = await db$.get(db$.query(db$.ref(db, `scores/${game}`), db$.orderByChild("score"), db$.limitToLast(n)));
+    async topScores(game, n, order = "high") {
+      const limit = order === "low" ? db$.limitToFirst(n) : db$.limitToLast(n);
+      const snap = await db$.get(db$.query(db$.ref(db, `scores/${game}`), db$.orderByChild("score"), limit));
       const out = [];
       snap.forEach((c) => { out.push({ uid: c.key, ...c.val() }); });
-      return out.reverse();
+      return order === "low" ? out : out.reverse();
     },
     async myScore(game) {
       return (await db$.get(db$.ref(db, `scores/${game}/${user.uid}`))).val();
@@ -283,9 +284,9 @@ function fakeBackend() {
       if (online) flag(code, seat, true);
       return () => { present.delete(`${code}/${seat}`); flag(code, seat, false); };
     },
-    async topScores(game, n) {
+    async topScores(game, n, order = "high") {
       const all = Object.entries(read().scores?.[game] || {}).map(([uid, v]) => ({ uid, ...v }));
-      return all.sort((a, b) => b.score - a.score).slice(0, n);
+      return all.sort((a, b) => (order === "low" ? a.score - b.score : b.score - a.score)).slice(0, n);
     },
     async myScore(game) {
       return read().scores?.[game]?.[uid] ?? null;
@@ -295,7 +296,7 @@ function fakeBackend() {
       db.scores = db.scores || {};
       db.scores[game] = db.scores[game] || {};
       const prev = db.scores[game][uid];
-      if (prev && score < prev.score) throw new Error("permission_denied: score can only go up");
+      if (prev && Date.now() - prev.at < 5000) throw new Error("permission_denied: saved a few seconds ago");
       db.scores[game][uid] = { name, score, at: Date.now() };
       write(db);
     },
@@ -578,25 +579,47 @@ export function localRoom(game, players, makeRoom = () => ({})) {
 }
 
 // ---------- leaderboards ----------
-// Public top-N lists, one entry per player at scores/<game>/<uid>. The rules allow saving only your own
-// entry, only upward, at most every 5 seconds, with a 1–12 character name of letters, numbers and spaces.
+// Public top-N lists, one entry per player at scores/<game>/<uid>. The rules allow saving only your own entry,
+// at most every 5 seconds, with a 1–12 character name of letters, numbers and spaces and any number as the
+// score. Each game decides what a valid score is; `order` says whether "high" (default) or "low" is better.
+// shared/leaderboard.js draws the Top 10 sheet on top of these.
 
 export const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9 ]{0,11}$/;
 export function cleanName(raw) {
   return String(raw || "").replace(/[^A-Za-z0-9 ]/g, "").replace(/\s+/g, " ").trim().slice(0, 12).trim();
 }
 
-// Leaderboard calls connect briefly, then let the connection go unless the player is in a room.
+// Leaderboard calls connect briefly, then let the connection go unless the player is in a room or another
+// leaderboard call is still running (a Reload tapped right after a fetch mustn't be cut off mid-request).
+let brief = 0;
 async function briefly(fn) {
-  const b = await connect();
-  try { return await fn(b); } finally { setTimeout(() => { if (!inRoom) b.offline(); }, 1500); }
+  brief++;
+  try {
+    const b = await connect();
+    try { return await fn(b); } finally { setTimeout(() => { if (!inRoom && !brief) b.offline(); }, 1500); }
+  } finally { brief--; }
 }
-export const topScores = (game, n = 10) => briefly((b) => b.topScores(game, n));
+export const topScores = (game, n = 10, order = "high") => briefly((b) => b.topScores(game, n, order));
 export const myScore = (game) => briefly((b) => b.myScore(game));
-export async function saveScore(game, name, score) {
+// Saves the score as this player's entry, but only if it beats the one already there. Throws RoomError with
+// a message for players when it's not better or was saved a few seconds ago.
+export async function saveScore(game, name, score, { order = "high" } = {}) {
   const clean = cleanName(name);
   if (!NAME_RE.test(clean)) throw new RoomError("Pick a name of up to 12 letters, numbers or spaces.");
-  return briefly(async (b) => { await b.saveScore(game, clean, score); return { uid: b.uid, name: clean, score }; });
+  if (typeof score !== "number" || !Number.isFinite(score)) throw new RoomError("That isn't a score.");
+  return briefly(async (b) => {
+    const prev = await b.myScore(game);
+    if (prev && (order === "low" ? score >= prev.score : score <= prev.score)) {
+      throw new RoomError(`Not saved: your score on the board is already ${order === "low" ? "lower" : "higher"}.`);
+    }
+    try {
+      await b.saveScore(game, clean, score);
+    } catch (err) {
+      if (/permission/i.test(String(err?.code || err?.message || ""))) throw new RoomError("Not saved: you saved a few seconds ago. Try again in a moment.");
+      throw err;
+    }
+    return { uid: b.uid, name: clean, score };
+  });
 }
 export const myUid = () => briefly((b) => b.uid);
 

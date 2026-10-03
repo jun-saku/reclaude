@@ -98,16 +98,18 @@ const priv = {
   },
 };
 
-// ---------- scores/<game>/<uid>: public leaderboards ----------
+// ---------- scores/<game>/<uid>: public leaderboards, one entry per player ----------
+// Generic for every game: a name, a number score and a server timestamp, saved at most every 5 seconds.
+// What counts as a valid or better score (higher or lower, even, a maximum…) is up to each game's own page.
 const scores = {
   $game: {
     ".read": "$game.matches(/^[a-z0-9-]{1,24}$/)",
     ".indexOn": ["score"],
     $uid: {
       ".write": "auth != null && auth.uid === $uid && newData.exists() && (!data.exists() || now - data.child('at').val() >= 5000)",
-      ".validate": "newData.hasChildren(['name', 'score', 'at']) && (!data.exists() || newData.child('score').val() >= data.child('score').val())",
+      ".validate": "newData.hasChildren(['name', 'score', 'at'])",
       name: { ".validate": "newData.isString() && newData.val().matches(/^[A-Za-z0-9][A-Za-z0-9 ]{0,11}$/)" },
-      score: { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 3932156 && newData.val() % 2 === 0" },
+      score: { ".validate": "newData.isNumber() && newData.val() >= -1000000000000 && newData.val() <= 1000000000000" },
       at: { ".validate": "newData.val() === now" },
       $other: { ".validate": false },
     },

@@ -217,7 +217,7 @@ const server = http.createServer((req, res) => {
 
   const P = await page(G);
   await P.waitForTimeout(1500);
-  ok(await P.evaluate(async () => (await window.__2048.leaderboard()).top === null) && await P.evaluate(async () => (await import('../shared/rooms.js')).__test.isOnline()) === null,
+  ok(await P.evaluate(async () => (await window.__2048.leaderboard()).top === null) && await P.evaluate(() => window.__2048.rooms()) === null,
     'nothing connects to Firebase until the 🏆 is tapped');
   ok(!(await shown(P, '#save-form')), 'no save form during play');
   await openTop(P);
@@ -254,7 +254,7 @@ const server = http.createServer((req, res) => {
   await P.click('button[data-action="new"]');
   await lose(P, 500);
   const low = await saveAs(P, 'Jun');
-  ok(low.includes('already higher'), `saving a lower score is refused by the rules with a clear message (${low.slice(0, 50)}…)`);
+  ok(low.includes('already higher'), `saving a lower score is refused with a clear message (${low.slice(0, 50)}…)`);
   await P.waitForTimeout(5200);
   await P.click('button[data-action="new"]');
   await lose(P, 2500);
@@ -263,12 +263,16 @@ const server = http.createServer((req, res) => {
   await lose(P, 2600);
   const quick = await saveAs(P, 'Jun');
   ok(quick.includes('a few seconds ago'), 'saving again within 5 seconds is refused, with a clear message');
-  const forged = await P.evaluate(async () => {
-    const b = await (await import('../shared/rooms.js')).__test.backend();
-    try { await b.saveScore('2048', 'Hax', 99999998); return 'saved'; } catch (e) { return 'denied'; }
-  });
-  ok(forged === 'denied', 'a forged impossible score is rejected by the rules');
-  await openTop(P);
+  ok(await P.evaluate(() => [99999998, 1001, -2, 0].every((n) => !window.__2048.validScore(n)) && window.__2048.validScore(2600)), '2048 itself refuses impossible scores (over the maximum, odd, negative, zero)');
+  await lose(P, 1001);
+  ok((await saveAs(P, 'Jun')).includes("isn't a possible 2048 score"), "an impossible score on the board isn't saved, with a clear message");
+  // A Reload tapped just after a fetch must not be cut off by that fetch's delayed disconnect (1.5 s later):
+  // slow the next fetch down so it is still running when the disconnect would fire.
+  await openTop(P); await P.waitForTimeout(1200);
+  await P.evaluate(async () => { const b = await (await window.__2048.rooms()).__test.backend(); const real = b.topScores.bind(b); b.topScores = async (...a) => { await new Promise((r) => setTimeout(r, 600)); return real(...a); }; });
+  await P.click('#leaders-reload');
+  ok(await P.waitForFunction(() => !document.getElementById('leaders-reload').disabled, null, { timeout: 6000 }).then(() => true).catch(() => false)
+    && (await names(P)).length === 2, 'a Reload right after a fetch still loads (not cut off by the earlier disconnect)');
   await P.screenshot({ path: `${out}/e2e-2048-sheet.png` });
   await P.mouse.click(195, 30);
   ok(!(await P.evaluate(() => document.getElementById('leaders').open)), 'tapping outside closes the sheet');
