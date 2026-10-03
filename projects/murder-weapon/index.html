@@ -1,0 +1,893 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f5f1ea" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#141316" media="(prefers-color-scheme: dark)">
+  <title>Murder Weapon</title>
+  <meta name="description" content="A hidden-killer house game for 4–8 friends online: collect your alibi, find the killer before they stash the weapon.">
+  <style>
+    :root {
+      --bg: #f5f1ea;
+      --text: #1d1b1f;
+      --muted: #6d6870;
+      --panel: #ffffff;
+      --line: #ddd5c8;
+      --soft: #ece6dc;
+      --accent: #a3262a;
+      --accent-soft: rgba(163, 38, 42, 0.12);
+      --ok: #2a8a55;
+      --danger: #b3261e;
+      --ghost: #7a6fb0;
+      color-scheme: light;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #141316;
+        --text: #ecebef;
+        --muted: #9b97a2;
+        --panel: #1e1c21;
+        --line: #36333b;
+        --soft: #29262d;
+        --accent: #ff6b6b;
+        --accent-soft: rgba(255, 107, 107, 0.14);
+        --ok: #4fd083;
+        --danger: #ff8a80;
+        --ghost: #b3a8f0;
+        color-scheme: dark;
+      }
+    }
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    html, body { min-height: 100%; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font: 17px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex; justify-content: center; -webkit-tap-highlight-color: transparent;
+    }
+    main {
+      width: 100%; max-width: 480px;
+      padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    h1 { font-size: 1.6rem; margin: 0; }
+    h1 small { font-size: 0.8rem; color: var(--muted); font-weight: 600; margin-left: 6px; }
+    h2 { font-size: 1.05rem; margin: 0; }
+    p { margin: 0; }
+    .muted { color: var(--muted); }
+    button {
+      font: inherit; font-weight: 650; border: 0; border-radius: 12px; padding: 12px 16px;
+      background: var(--accent); color: #fff; cursor: pointer; touch-action: manipulation;
+    }
+    button:disabled { opacity: 0.5; cursor: default; }
+    button.secondary { background: var(--soft); color: var(--text); }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+    .row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+    .row > button { flex: 1 1 auto; }
+    .join { display: flex; gap: 10px; }
+    .join input {
+      flex: 1; min-width: 0; font: inherit; font-size: 1.3rem; letter-spacing: 0.3em; text-transform: uppercase; text-align: center;
+      padding: 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--text);
+    }
+    .error { color: var(--danger); min-height: 1.4em; font-size: 0.95rem; }
+    .name-row { display: flex; align-items: center; gap: 10px; font-weight: 650; }
+    .name-row span { white-space: nowrap; }
+    .name-row input {
+      flex: 1; min-width: 0; font: inherit; font-weight: 500; padding: 10px 12px; border-radius: 12px;
+      border: 1px solid var(--line); background: var(--bg); color: var(--text);
+    }
+    .bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .code { font-size: 0.85rem; color: var(--muted); }
+    .code b { font-size: 1.05rem; letter-spacing: 0.15em; color: var(--text); }
+    .bigcode { font-size: 2.6rem; font-weight: 800; letter-spacing: 0.25em; text-align: center; margin: 0; }
+    .seated { display: flex; flex-direction: column; gap: 6px; }
+    .players { display: flex; gap: 6px; flex-wrap: wrap; }
+    .chip {
+      display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 999px;
+      background: var(--soft); font-size: 0.82rem; font-weight: 600; border: 2px solid transparent; color: var(--text);
+    }
+    .chip.turn { border-color: var(--accent); }
+    .chip.dead { color: var(--ghost); }
+    button.chip { padding: 6px 11px; font-size: 0.9rem; }
+    button.chip[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); opacity: 0.4; flex: none; }
+    .dot.on { background: #2e9d5b; opacity: 1; }
+    .status { text-align: center; font-size: 1.1rem; font-weight: 700; min-height: 1.5em; }
+    .hint { text-align: center; font-size: 0.9rem; color: var(--muted); min-height: 1.3em; }
+
+    .role { border-left: 4px solid var(--accent); }
+    .role .title { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+    .role .title b { font-size: 1.1rem; }
+    .killer { color: var(--accent); font-weight: 700; }
+    .items { display: flex; gap: 6px; flex-wrap: wrap; }
+    .item {
+      display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 8px; background: var(--soft);
+      font-size: 0.85rem; font-weight: 600; white-space: nowrap;
+    }
+    .item.real { box-shadow: inset 0 0 0 2px var(--accent); }
+    .sub { font-size: 0.8rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+
+    .house { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .rm {
+      text-align: left; background: var(--panel); color: var(--text); border: 2px solid var(--line); border-radius: 12px;
+      padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; font-weight: 500; min-height: 74px;
+    }
+    .rm:disabled { opacity: 1; }
+    .rm .nm { font-weight: 700; font-size: 0.92rem; display: flex; justify-content: space-between; gap: 4px; }
+    .rm .pile { font-size: 0.8rem; color: var(--muted); }
+    .rm .who { font-size: 0.78rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .rm.here { border-color: var(--muted); }
+    .rm.pick { border-color: var(--accent); background: var(--accent-soft); }
+    .rm.can { border-style: dashed; border-color: var(--accent); cursor: pointer; }
+    .rm.closed { opacity: 0.45; border-style: dotted; }
+    .rm.locked .nm::after { content: "🔒"; }
+
+    .cards { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+    .c {
+      width: 84px; min-height: 92px; border-radius: 10px; border: 2px solid var(--line); background: var(--panel); color: var(--text);
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 6px 4px;
+      font-size: 0.75rem; font-weight: 650; text-align: center; line-height: 1.15;
+    }
+    .c .e { font-size: 1.7rem; line-height: 1; }
+    .c.mine { box-shadow: inset 0 -4px 0 var(--ok); }
+    .c.real { box-shadow: inset 0 -4px 0 var(--accent); }
+    .c.empty { border-style: dashed; color: var(--muted); }
+    button.c[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); transform: translateY(-3px); }
+    button.c:disabled { opacity: 1; cursor: default; }
+    .panel { gap: 12px; }
+    .panel h2 { text-align: center; }
+    .log { font-size: 0.85rem; color: var(--muted); display: flex; flex-direction: column; gap: 3px; }
+    .log p:first-child { color: var(--text); }
+    .rules { font-size: 0.9rem; color: var(--muted); }
+    .rules li { margin: 3px 0; }
+    .rules summary { cursor: pointer; font-weight: 600; color: var(--text); }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>🔪 Murder Weapon<small>draft</small></h1>
+
+    <section id="home">
+      <div class="card">
+        <label class="name-row"><span>Your name</span>
+          <input id="my-name" maxlength="16" autocomplete="nickname" spellcheck="false" placeholder="So friends know it's you">
+        </label>
+      </div>
+      <div class="card">
+        <h2>Play friends online</h2>
+        <p class="muted">4 to 8 players. Create a room, send the code or link, then start once everyone is in.</p>
+        <button id="create">Create room</button>
+      </div>
+      <div class="card">
+        <h2>Join a room</h2>
+        <form class="join" id="join-form" autocomplete="off">
+          <input id="join-code" maxlength="4" autocapitalize="characters" spellcheck="false" placeholder="CODE" aria-label="Room code">
+          <button id="join" type="submit">Join</button>
+        </form>
+        <p class="error" id="home-error" role="alert"></p>
+      </div>
+      <details class="card rules">
+        <summary>How to play</summary>
+        <ul>
+          <li>A murder just happened in the house. Everyone is a resident with <b>2 secret items</b> as their alibi. One of you is secretly also <b>the killer</b>.</li>
+          <li>3 <b>suspect weapons</b> are shown to all; only the killer knows which one is real. There's also one <b>🎟️ Theatre ticket</b> (the alibi item).</li>
+          <li>On your turn, move to any room, then either <b>search</b> it (look through its pile in secret: take a card, drop one, trade one for one, or just look) or <b>call a vote</b> (from round 3).</li>
+          <li>You hold at most 2 cards. Hand and pile sizes are public.</li>
+          <li>After each round an <b>event</b> hits: Search (everyone in a room draws blind), Blackout (draw blind from any room), Lock, Unlock (a closed room opens) or Police sweep. Anyone pushed to 3 cards shows a random one and drops one.</li>
+          <li><b>Votes:</b> if at least half agree, the accused shows their hand. The ticket saves them; exactly their 2 secret items clears them; anything else convicts. If they survive, the accuser misses a turn. A convicted innocent becomes a 👻 ghost who can move one card blind between rooms each round.</li>
+          <li><b>The killer wins</b> by starting a turn in an unlocked room holding the real weapon plus one of their 2 secret items or the ticket, with the other two in that room's pile.</li>
+          <li><b>Everyone else wins</b> by convicting the killer, or in the final vote after round 10.</li>
+        </ul>
+      </details>
+    </section>
+
+    <section id="game" hidden>
+      <div class="bar">
+        <div class="code" id="room-label"></div>
+        <div class="code" id="round-label"></div>
+      </div>
+      <div class="players" id="players"></div>
+
+      <div class="card" id="waiting" hidden>
+        <p class="muted" style="text-align: center">Send this code to your friends</p>
+        <p class="bigcode" id="waiting-code"></p>
+        <div class="row">
+          <button id="share">Share link</button>
+          <button class="secondary" id="copy">Copy code</button>
+        </div>
+        <div class="seated" id="seated"></div>
+        <button id="start-btn" hidden>Start game</button>
+        <p class="muted" id="waiting-note" style="text-align: center; font-size: 0.9rem"></p>
+      </div>
+
+      <div id="table" hidden>
+        <div style="display: flex; flex-direction: column; gap: 12px">
+          <div class="card role" id="role"></div>
+          <p class="status" id="status" aria-live="polite"></p>
+          <div class="card panel" id="panel" hidden></div>
+          <div>
+            <p class="sub" style="margin-bottom: 6px">Your hand</p>
+            <div class="cards" id="hand"></div>
+          </div>
+          <div class="house" id="house"></div>
+          <div class="card log" id="log"></div>
+        </div>
+      </div>
+      <p class="hint" id="hint"></p>
+
+      <div class="row">
+        <button id="rematch" hidden>Play again</button>
+        <button class="secondary" id="leave">Leave</button>
+      </div>
+    </section>
+  </main>
+
+  <script type="module">
+    import * as rooms from "../shared/rooms.js";
+
+    const GAME = "murder-weapon";
+    const MAX_ROUNDS = 10;
+    const VOTE_FROM = 3;
+
+    // ---------- the house and its cards ----------
+    const ROOMS = [["🛋️", "Living room"], ["🎹", "Salon"], ["🛏️", "Master bedroom"], ["🍳", "Kitchen"], ["🍷", "Cellar"],
+      ["📚", "Library"], ["🖋️", "Study"], ["🌿", "Conservatory"]];
+    const openFor = (n) => (n <= 4 ? 5 : n === 5 ? 6 : n === 6 ? 7 : 8);
+    // Roles: resident and their 2 secret items (cards 2r and 2r+1). Secret items are never weapons.
+    const ROLES = [
+      ["Butler", ["🍽️", "Silver tray"], ["🧤", "White gloves"]],
+      ["Cook", ["📖", "Recipe book"], ["🥣", "Mixing bowl"]],
+      ["Gardener", ["✂️", "Pruning shears"], ["🌱", "Seed packet"]],
+      ["Maid", ["🪶", "Feather duster"], ["🗝️", "Key ring"]],
+      ["Doctor", ["🩺", "Stethoscope"], ["💊", "Pill bottle"]],
+      ["Heiress", ["📿", "Pearl necklace"], ["📔", "Diary"]],
+      ["Colonel", ["🎖️", "Medal"], ["🗺️", "Old map"]],
+      ["Artist", ["🖌️", "Paintbrush"], ["🎨", "Palette"]],
+    ];
+    const ALIBI = 16;
+    const GENERAL = [["🕯️", "Candlestick"], ["🪢", "Rope"], ["🔧", "Wrench"], ["🗡️", "Letter opener"], ["🧪", "Poison vial"],
+      ["🔨", "Hammer"], ["🧣", "Scarf"], ["☂️", "Umbrella"], ["🫖", "Teapot"], ["🍾", "Wine bottle"], ["⏰", "Alarm clock"],
+      ["🏺", "Vase"], ["📕", "Heavy book"], ["💡", "Lamp"], ["🪞", "Mirror"], ["🛌", "Pillow"], ["🎩", "Top hat"],
+      ["🦯", "Walking cane"], ["🔔", "Bell"], ["🫙", "Jar"], ["♟️", "Chess set"], ["✒️", "Fountain pen"], ["🌐", "Globe"],
+      ["🔭", "Telescope"], ["🍪", "Biscuit tin"], ["🖼️", "Picture frame"], ["⌨️", "Typewriter"], ["🏋️", "Dumbbell"],
+      ["🧶", "Yarn"], ["🪓", "Hatchet"], ["🥾", "Boot"], ["🍳", "Frying pan"]];
+    const FIRST_GENERAL = 17;
+    const ITEMS = [...ROLES.flatMap(([, a, b]) => [a, b]), ["🎟️", "Theatre ticket"], ...GENERAL];
+    const secretOf = (role) => [role * 2, role * 2 + 1];
+    // Event weights; Unlock only while a room is still closed.
+    const EVENTS = [["search", 4], ["blackout", 2], ["lock", 2], ["unlock", 2], ["sweep", 1]];
+
+    function rand(n) { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0] % n; }
+    function shuffled(list) { const a = [...list]; for (let i = a.length - 1; i > 0; i--) { const j = rand(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+    const take = (arr, i) => arr.splice(i, 1)[0];
+
+    // ---------- room shape ----------
+    // Everything lives in room.state as strings and numbers (Firebase drops empty arrays):
+    //   piles "1.2.3|4.5||…" (8 rooms), hands "a.b|c|…" (per seat), role "3,0,-1,…" (per seat), killer, weapons "a.b.c",
+    //   real (card), pos "0,0,…" (room per seat), dead / skip "0100…" (per seat), open "11111000", r (round 1–10),
+    //   ph "act" | "vote" | "final", q "2:drop;3:blackout" pending tasks ("-" none), nx (next normal turn),
+    //   mv (0 = turn not started, 1 = moved, 2 = searching), lock (room or -1), acc / caller / after (vote),
+    //   votes "-y-n…" (per seat; in the final vote, the chosen seat as a letter a–j), ev (last event), log, out ("-",
+    //   "killer" or "town").
+    // The page only shows each player what they may see; the data itself is readable by everyone in the room.
+    const nums = (s) => (s ? s.split(".").map(Number) : []);
+    function parse(room) {
+      const s = room.state;
+      return {
+        piles: s.piles.split("|").map(nums), hands: s.hands.split("|").map(nums), role: s.role.split(",").map(Number),
+        killer: s.killer, weapons: nums(s.weapons), real: s.real, pos: s.pos.split(",").map(Number),
+        dead: [...s.dead].map((c) => c === "1"), skip: [...s.skip].map((c) => c === "1"), open: [...s.open].map((c) => c === "1"),
+        r: s.r, ph: s.ph, q: s.q === "-" ? [] : s.q.split(";").map((t) => { const [a, k] = t.split(":"); return { s: Number(a), k }; }),
+        nx: s.nx, mv: s.mv, lock: s.lock, acc: s.acc, caller: s.caller, after: s.after, votes: [...s.votes],
+        ev: s.ev, log: s.log.split("\n"), out: s.out,
+      };
+    }
+    function pack(st) {
+      const bits = (a) => a.map((b) => (b ? "1" : "0")).join("");
+      return {
+        piles: st.piles.map((p) => p.join(".")).join("|"), hands: st.hands.map((h) => h.join(".")).join("|"), role: st.role.join(","),
+        killer: st.killer, weapons: st.weapons.join("."), real: st.real, pos: st.pos.join(","), dead: bits(st.dead), skip: bits(st.skip),
+        open: bits(st.open), r: st.r, ph: st.ph, q: st.q.length ? st.q.map((t) => `${t.s}:${t.k}`).join(";") : "-", nx: st.nx, mv: st.mv,
+        lock: st.lock, acc: st.acc, caller: st.caller, after: st.after, votes: st.votes.join(""), ev: st.ev, log: st.log.slice(0, 14).join("\n"), out: st.out,
+      };
+    }
+    // Log lines use {s3} for a seat, {i17} for an item and {r2} for a room; the page fills in names.
+    const say = (st, line) => st.log.unshift(line);
+    const seatsOf = (room) => rooms.seatList(room).flatMap((u, i) => (u ? [i] : []));
+    const living = (room, st) => seatsOf(room).filter((s) => !st.dead[s]);
+
+    function dealRoom(room, round) {
+      const seats = seatsOf(room), n = room.seats;
+      const openN = openFor(seats.length);
+      const roles = shuffled(ROLES.map((_, i) => i));
+      const general = shuffled(GENERAL.map((_, i) => FIRST_GENERAL + i));
+      const weapons = general.splice(0, 3);
+      const total = Math.ceil(openN * 5.5);
+      const deck = shuffled([...Array.from({ length: 16 }, (_, i) => i), ALIBI, ...weapons, ...general.splice(0, total - 20)]);
+      const piles = ROOMS.map(() => []);
+      deck.forEach((c, i) => piles[i % openN].push(c));
+      // Closed rooms get 5 filler cards set aside for when they unlock.
+      for (let k = openN; k < ROOMS.length; k++) piles[k] = general.splice(0, 5);
+      const role = Array.from({ length: n }, () => -1);
+      seats.forEach((s, i) => { role[s] = roles[i]; });
+      const st = {
+        piles, hands: Array.from({ length: n }, () => []), role, killer: seats[rand(seats.length)], weapons, real: weapons[rand(3)],
+        pos: Array.from({ length: n }, () => 0), dead: Array.from({ length: n }, () => false), skip: Array.from({ length: n }, () => false),
+        open: ROOMS.map((_, k) => k < openN), r: 1, ph: "act", q: [], nx: seats[0], mv: 0, lock: -1, acc: -1, caller: -1, after: -1,
+        votes: Array.from({ length: n }, () => "-"), ev: "-", log: ["Everyone gathers in the {r0}. Round 1."], out: "-",
+      };
+      room.round = round;
+      room.turn = seats[0];
+      room.status = "playing";
+      room.winner = null;
+      room.left = null;
+      room.state = pack(st);
+      return room;
+    }
+    const initialRoom = () => ({ round: 0, turn: 0, state: { waiting: true } });
+
+    // ---------- turn flow (runs inside the acting player's transaction) ----------
+    function draw(st, s, room) {
+      const p = st.piles[room];
+      if (!p.length) return null;
+      const c = take(p, rand(p.length));
+      st.hands[s].push(c);
+      return c;
+    }
+    // Pushed to 3 cards: everyone points at one of 3 shuffled face-down cards, so a random one is shown;
+    // then the player drops one (their own choice, as a task).
+    function inspect(st, s, front = false) {
+      const h = st.hands[s];
+      say(st, `{s${s}} has 3 cards and is inspected: they show {i${h[rand(h.length)]}}.`);
+      const t = { s, k: "drop" };
+      if (front) st.q.unshift(t); else st.q.push(t);
+    }
+
+    function endRound(cur, st) {
+      if (st.r >= MAX_ROUNDS) {
+        st.ph = "final";
+        st.votes = st.votes.map(() => "-");
+        st.q = living(cur, st).map((s) => ({ s, k: "final" }));
+        say(st, `Round ${MAX_ROUNDS} is over. Final vote: everyone names a suspect.`);
+        return true;
+      }
+      st.lock = -1;
+      const closed = st.open.flatMap((o, k) => (o ? [] : [k]));
+      const pool = EVENTS.filter(([k]) => k !== "unlock" || closed.length);
+      let roll = rand(pool.reduce((a, [, w]) => a + w, 0));
+      const kind = pool.find(([, w]) => (roll -= w) < 0)[0];
+      const openRooms = st.open.flatMap((o, k) => (o ? [k] : []));
+      const alive = living(cur, st);
+      st.r += 1;
+      if (kind === "search") {
+        const rm = openRooms[rand(openRooms.length)];
+        st.ev = `Search in the {r${rm}}`;
+        say(st, `Event: Search in the {r${rm}}. Everyone there draws a card blind.`);
+        for (const s of alive) {
+          if (st.pos[s] !== rm) continue;
+          if (draw(st, s, rm) === null) continue;
+          if (st.hands[s].length > 2) inspect(st, s);
+        }
+      } else if (kind === "blackout") {
+        st.ev = "Blackout";
+        say(st, "Event: Blackout! Each player may draw one card blind from any room.");
+        st.q.push(...alive.map((s) => ({ s, k: "blackout" })));
+      } else if (kind === "lock") {
+        const rm = openRooms[rand(openRooms.length)];
+        st.lock = rm;
+        st.ev = `The {r${rm}} is locked`;
+        say(st, `Event: the {r${rm}} is locked for round ${st.r}. Nobody may enter or leave it.`);
+      } else if (kind === "unlock") {
+        const rm = closed[rand(closed.length)];
+        st.open[rm] = true;
+        st.ev = `The {r${rm}} opens`;
+        say(st, `Event: the {r${rm}} is unlocked, with ${st.piles[rm].length} cards inside.`);
+      } else {
+        st.ev = "Police sweep";
+        say(st, "Event: Police sweep! Everyone puts a card into their room's pile and draws one blind.");
+        for (const s of alive) {
+          if (st.hands[s].length) st.q.push({ s, k: "sweep" });
+          else draw(st, s, st.pos[s]);
+        }
+      }
+      say(st, `Round ${st.r} of ${MAX_ROUNDS}.`);
+      return false;
+    }
+
+    // Finds the next normal turn after `from` (seat order; ghosts take turns too). Passing the last seat ends the round.
+    function nextNormal(cur, st, from) {
+      const order = seatsOf(cur);
+      let prev = from;
+      for (let guard = 0; guard < 40; guard++) {
+        const after = order.filter((s) => s > prev);
+        let s = after[0];
+        if (s === undefined) { s = order[0]; if (endRound(cur, st)) return; }
+        if (st.skip[s]) { st.skip[s] = false; say(st, `{s${s}} misses this turn.`); prev = s; continue; }
+        st.nx = s;
+        return;
+      }
+    }
+    // Hands the turn to the first pending task, or the next normal turn, or ends the game.
+    function settle(cur, st) {
+      if (!st.q.length && st.ph === "vote") resolveVote(cur, st);
+      if (!st.q.length && st.ph === "final") resolveFinal(cur, st);
+      if (st.out !== "-") {
+        cur.status = "done";
+        cur.winner = st.out === "killer" ? st.killer : living(cur, st).find((s) => s !== st.killer) ?? seatsOf(cur).find((s) => s !== st.killer);
+        return;
+      }
+      if (st.q.length) cur.turn = st.q[0].s;
+      else { cur.turn = st.nx; st.mv = 0; }
+    }
+    function endTurn(cur, st, s) { nextNormal(cur, st, s); settle(cur, st); }
+    function finishTask(cur, st) { st.q.shift(); settle(cur, st); }
+
+    function resolveVote(cur, st) {
+      const voters = living(cur, st).filter((s) => s !== st.acc);
+      const yes = voters.filter((s) => st.votes[s] === "y").length;
+      const { acc, caller } = st;
+      st.ph = "act";
+      st.acc = st.caller = -1;
+      if (yes * 2 < voters.length) {
+        say(st, `The vote fails (${yes} of ${voters.length}). {s${acc}} keeps their cards hidden.`);
+      } else {
+        const h = st.hands[acc];
+        const shown = h.length ? h.map((c) => `{i${c}}`).join(" and ") : "nothing";
+        if (h.includes(ALIBI)) {
+          st.hands[acc] = h.filter((c) => c !== ALIBI);
+          st.piles[st.pos[caller]].push(ALIBI);
+          st.skip[caller] = true;
+          say(st, `Vote passes (${yes} of ${voters.length}). {s${acc}} shows ${shown}: the ticket saves them! It goes to the {r${st.pos[caller]}}. {s${caller}} misses their next turn.`);
+        } else if (h.length === 2 && secretOf(st.role[acc]).every((c) => h.includes(c))) {
+          st.skip[caller] = true;
+          say(st, `Vote passes (${yes} of ${voters.length}). {s${acc}} shows ${shown}: a clean alibi, they're cleared. {s${caller}} misses their next turn.`);
+        } else if (acc === st.killer) {
+          say(st, `Vote passes (${yes} of ${voters.length}). {s${acc}} shows ${shown} and is convicted… they're the ${ROLES[st.role[acc]][0]} and the killer!`);
+          st.out = "town";
+          return;
+        } else {
+          say(st, `Vote passes (${yes} of ${voters.length}). {s${acc}} shows ${shown} and is convicted… but they're the ${ROLES[st.role[acc]][0]}, innocent. Now a ghost.`);
+          st.dead[acc] = true;
+          st.piles[st.pos[acc]].push(...h);
+          st.hands[acc] = [];
+          if (!living(cur, st).some((s) => s !== st.killer)) { st.out = "killer"; return; }
+        }
+      }
+      nextNormal(cur, st, st.after);
+    }
+    function resolveFinal(cur, st) {
+      const tally = {};
+      st.votes.forEach((v) => { if (v !== "-" && v !== "y" && v !== "n") { const t = v.charCodeAt(0) - 97; tally[t] = (tally[t] || 0) + 1; } });
+      const top = Math.max(0, ...Object.values(tally));
+      const flipped = Object.keys(tally).map(Number).filter((s) => tally[s] === top);
+      say(st, `Final vote: ${flipped.map((s) => `{s${s}} (${ROLES[st.role[s]][0]})`).join(", ")} flip${flipped.length === 1 ? "s" : ""} their card.`);
+      st.out = flipped.includes(st.killer) ? "town" : "killer";
+      st.ph = "act";
+    }
+
+    function killerCanWin(st, s) {
+      if (s !== st.killer || st.dead[s] || st.lock === st.pos[s]) return false;
+      const h = st.hands[s], pile = st.piles[st.pos[s]];
+      if (!h.includes(st.real)) return false;
+      const need = [...secretOf(st.role[s]), ALIBI];
+      const other = h.find((c) => c !== st.real);
+      return need.includes(other) && need.filter((c) => c !== other).every((c) => pile.includes(c));
+    }
+
+    // ---------- page state ----------
+    let seat = null, leave = null, room = null, st = null, busy = false, oops = "";
+    let sel = {};          // this turn's picks: dest, pileCard, handCard, from, to, who
+    let selKey = "";
+    const $ = (id) => document.getElementById(id);
+    const me = () => seat.seat;
+    const esc = (t) => String(t).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+    const label = (s) => (s === me() ? "You" : esc(rooms.nameOf(room, s)));
+    const itemHtml = (c, cls = "item") => `<span class="${cls}${st && c === st.real && me() === st.killer ? " real" : ""}">${ITEMS[c][0]} ${esc(ITEMS[c][1])}</span>`;
+    const roomName = (k) => `${ROOMS[k][0]} ${ROOMS[k][1]}`;
+    const fill = (line) => esc(line).replace(/\{([sir])(\d+)\}/g, (_, t, n) => {
+      const v = Number(n);
+      return t === "s" ? `<b>${label(v)}</b>` : t === "i" ? `${ITEMS[v][0]} ${esc(ITEMS[v][1])}` : roomName(v);
+    });
+
+    function setBusy(b) { for (const id of ["create", "join"]) $(id).disabled = b; }
+    function showHome(error = "") {
+      if (leave) leave();
+      leave = null;
+      seat = room = st = null;
+      $("game").hidden = true;
+      $("home").hidden = false;
+      $("home-error").textContent = error;
+      setBusy(false);
+    }
+    function start(s) {
+      seat = s;
+      sel = {};
+      $("home").hidden = true;
+      $("game").hidden = false;
+      setBusy(false);
+      leave = rooms.enter(s, (value) => { room = value; render(); }, showHome);
+    }
+
+    // ---------- moves ----------
+    async function act(fn) {
+      if (busy || !room) return;
+      const mySeat = me(), round = room.round;
+      busy = true;
+      oops = "";
+      try {
+        const r = await seat.backend.transact(seat.code, (cur) => {
+          if (!cur || cur.status !== "playing" || cur.turn !== mySeat || cur.round !== round || cur.state?.waiting) return undefined;
+          const s = parse(cur);
+          if (fn(cur, s) === false) return undefined;
+          cur.state = pack(s);
+          return cur;
+        });
+        if (!r.committed) oops = "That didn't go through.";
+        else sel = {};
+      } catch (err) {
+        console.error(err);
+        oops = "That didn't go through. Try again.";
+      } finally { busy = false; render(); }
+    }
+    const myTask = (s) => (s.q.length && s.q[0].s === me() ? s.q[0].k : null);
+    const normalTurn = (s, s0) => !s.q.length && s.ph === "act" && s.nx === s0;
+
+    const canMove = (s, who, k) => s.open[k] && (k === s.pos[who] || (s.lock !== s.pos[who] && s.lock !== k));
+    const move = (k) => act((cur, s) => {
+      const i = me();
+      if (!normalTurn(s, i) || s.dead[i] || s.mv !== 0 || !canMove(s, i, k)) return false;
+      const was = s.pos[i];
+      s.pos[i] = k;
+      s.mv = 1;
+      say(s, k === was ? `{s${i}} stays in the {r${k}}.` : `{s${i}} goes to the {r${k}}.`);
+    });
+    const openPile = () => act((cur, s) => {
+      const i = me();
+      if (!normalTurn(s, i) || s.mv !== 1) return false;
+      s.mv = 2;
+    });
+    // Swap: take a pile card, drop a hand card, or both (a trade), or nothing (just look).
+    const swap = (pileCard, handCard) => act((cur, s) => {
+      const i = me(), pile = s.piles[s.pos[i]], h = s.hands[i];
+      if (!normalTurn(s, i) || s.mv !== 2) return false;
+      if (pileCard != null && !pile.includes(pileCard)) return false;
+      if (handCard != null && !h.includes(handCard)) return false;
+      if (pileCard != null && handCard == null && h.length >= 2) return false;
+      if (pileCard != null) { pile.splice(pile.indexOf(pileCard), 1); h.push(pileCard); }
+      if (handCard != null) { h.splice(h.indexOf(handCard), 1); pile.push(handCard); }
+      const what = pileCard != null && handCard != null ? "traded a card" : pileCard != null ? "took a card" : handCard != null ? "dropped a card" : "just looked";
+      say(s, `{s${i}} searched the {r${s.pos[i]}} and ${what}.`);
+      endTurn(cur, s, i);
+    });
+    const callVote = (acc) => act((cur, s) => {
+      const i = me();
+      if (!normalTurn(s, i) || s.mv !== 1 || s.r < VOTE_FROM || acc === i || s.dead[acc] || !living(cur, s).includes(acc)) return false;
+      s.ph = "vote";
+      s.acc = acc;
+      s.caller = i;
+      s.after = i;
+      s.votes = s.votes.map(() => "-");
+      s.votes[i] = "y";
+      const order = living(cur, s).filter((x) => x !== acc && x !== i);
+      s.q = [...order.filter((x) => x > i), ...order.filter((x) => x < i)].map((x) => ({ s: x, k: "vote" }));
+      say(s, `{s${i}} accuses {s${acc}}! Everyone else votes.`);
+      settle(cur, s);
+    });
+    const killerWin = () => act((cur, s) => {
+      const i = me();
+      if (!normalTurn(s, i) || s.mv !== 0 || !killerCanWin(s, i)) return false;
+      say(s, `{s${i}} reveals: the killer, with {i${s.real}} and everything they need in the {r${s.pos[i]}}!`);
+      s.out = "killer";
+      settle(cur, s);
+    });
+    const ghostMove = (from, to) => act((cur, s) => {
+      const i = me();
+      if (!normalTurn(s, i) || !s.dead[i]) return false;
+      if (from != null) {
+        if (from === to || !s.open[from] || !s.open[to] || !s.piles[from].length) return false;
+        s.piles[to].push(take(s.piles[from], rand(s.piles[from].length)));
+        say(s, `👻 A card moves from the {r${from}} to the {r${to}}…`);
+      }
+      endTurn(cur, s, i);
+    });
+    const task = (kind, fn) => act((cur, s) => {
+      if (myTask(s) !== kind) return false;
+      if (fn(s, cur) === false) return false;
+      finishTask(cur, s);
+    });
+    const dropCard = (c) => task("drop", (s) => {
+      const i = me(), h = s.hands[i];
+      if (!h.includes(c)) return false;
+      h.splice(h.indexOf(c), 1);
+      s.piles[s.pos[i]].push(c);
+      say(s, `{s${i}} drops a card in the {r${s.pos[i]}}.`);
+    });
+    const blackout = (k) => act((cur, s) => {
+      const i = me();
+      if (myTask(s) !== "blackout") return false;
+      s.q.shift();
+      if (k == null) say(s, `{s${i}} stays still in the dark.`);
+      else {
+        if (!s.open[k] || !s.piles[k].length) return false;
+        draw(s, i, k);
+        say(s, `{s${i}} grabs something in the dark from the {r${k}}.`);
+        if (s.hands[i].length > 2) inspect(s, i, true);
+      }
+      settle(cur, s);
+    });
+    const sweep = (c) => task("sweep", (s) => {
+      const i = me(), h = s.hands[i], pile = s.piles[s.pos[i]];
+      if (!h.includes(c)) return false;
+      h.splice(h.indexOf(c), 1);
+      const n = pile.length;
+      if (n) h.push(take(pile, rand(n)));
+      pile.push(c);
+      say(s, `{s${i}} hands over a card${n ? " and draws one" : ""}.`);
+    });
+    const vote = (yes) => task("vote", (s) => { s.votes[me()] = yes ? "y" : "n"; });
+    const finalVote = (t) => task("final", (s, cur) => {
+      if (t === me() || !living(cur, s).includes(t)) return false;
+      s.votes[me()] = String.fromCharCode(97 + t);
+    });
+
+    async function rematch() {
+      if (!room || room.status !== "done") return;
+      try { await rooms.playAgain(seat, (cur, round) => dealRoom(cur, round)); }
+      catch (err) { console.error(err); oops = "Couldn't start a new game. Try again."; render(); }
+    }
+    async function startGame() {
+      $("start-btn").disabled = true;
+      try { await rooms.startGame(seat, (cur) => dealRoom(cur, cur.round)); }
+      catch (err) { $("waiting-note").textContent = err instanceof rooms.RoomError ? err.message : "Couldn't start. Try again."; }
+      finally { $("start-btn").disabled = false; }
+    }
+
+    // ---------- rendering ----------
+    function render() {
+      if (!room || !seat) return;
+      const r = room, mine = me(), seats = rooms.seatList(r);
+      const waiting = r.status === "waiting" || !r.state || r.state.waiting;
+      st = waiting ? null : parse(r);
+      $("room-label").innerHTML = `Room <b>${seat.code}</b>`;
+      $("waiting").hidden = !waiting;
+      $("table").hidden = waiting;
+
+      if (waiting) {
+        $("round-label").textContent = "";
+        $("players").innerHTML = "";
+        $("waiting-code").textContent = seat.code;
+        const count = rooms.playerCount(r), isHost = r.host === seat.backend.uid;
+        $("seated").innerHTML = seats.map((uid, s) => (uid ? `<div><span class="chip">${label(s)}${s === mine && rooms.nameOf(r, s) !== `P${s + 1}` ? ` (${esc(rooms.nameOf(r, s))})` : ""}${s === 0 ? " (host)" : ""}<span class="dot${rooms.isOnline(r, s) ? " on" : ""}"></span></span></div>` : "")).join("");
+        $("start-btn").hidden = !isHost;
+        $("start-btn").disabled = count < r.min;
+        $("waiting-note").textContent = count < r.min
+          ? `${count} here. Needs at least ${r.min}.${isHost ? "" : " The host starts the game."}`
+          : isHost ? `${count} here. Start now or wait for more (up to ${r.seats}).` : `${count} here. Waiting for the host to start…`;
+        $("status").textContent = $("hint").textContent = "";
+        $("rematch").hidden = true;
+        return;
+      }
+
+      const playing = r.status === "playing";
+      const key = `${r.round}|${r.turn}|${st.ph}|${st.q.length}|${st.mv}|${st.r}`;
+      if (key !== selKey) { sel = {}; selKey = key; }
+      const task = playing ? myTask(st) : null;
+      const myNormal = playing && r.turn === mine && normalTurn(st, mine);
+      const dead = st.dead[mine];
+      $("round-label").textContent = `Round ${Math.min(st.r, MAX_ROUNDS)} of ${MAX_ROUNDS}`;
+
+      // Players
+      $("players").innerHTML = seats.map((uid, s) => {
+        if (!uid) return "";
+        const n = st.hands[s].length;
+        return `<span class="chip${playing && r.turn === s ? " turn" : ""}${st.dead[s] ? " dead" : ""}">${st.dead[s] ? "👻 " : ""}${label(s)}` +
+          `<span class="muted">${st.dead[s] ? "" : `🂠${n} · `}${ROOMS[st.pos[s]][0]}${st.skip[s] ? " · ⏭" : ""}</span><span class="dot${rooms.isOnline(r, s) ? " on" : ""}"></span></span>`;
+      }).join("");
+
+      // Role card
+      const role = ROLES[st.role[mine]];
+      const killer = st.killer === mine;
+      const reveal = !playing;
+      $("role").innerHTML = `<div class="title"><b>${dead ? "👻 " : ""}You are the ${role[0]}</b>${killer ? '<span class="killer">🔪 the killer</span>' : '<span class="muted">innocent</span>'}</div>` +
+        `<div class="items"><span class="sub" style="align-self:center">Alibi</span>${secretOf(st.role[mine]).map((c) => itemHtml(c)).join("")}</div>` +
+        `<div class="items"><span class="sub" style="align-self:center">Suspect weapons</span>${st.weapons.map((c) => itemHtml(c)).join("")}</div>` +
+        (killer ? `<p style="font-size:0.88rem">The real weapon is <b>${esc(ITEMS[st.real][1])}</b>. Win by starting a turn in an unlocked room holding it plus one of your alibi items or the 🎟️ ticket, with the other two in that room's pile.</p>` : "") +
+        (reveal ? `<p style="font-size:0.88rem">The killer was <b>${label(st.killer)}</b> (${ROLES[st.role[st.killer]][0]}) with the <b>${esc(ITEMS[st.real][1])}</b>.</p>` : "");
+
+      // House
+      const pickRoom = (k) => {
+        if (!playing) return false;
+        if (myNormal && !dead && st.mv === 0) return canMove(st, mine, k);
+        if (myNormal && dead) return st.open[k];
+        if (task === "blackout") return st.open[k] && st.piles[k].length > 0;
+        return false;
+      };
+      $("house").innerHTML = ROOMS.map(([e, name], k) => {
+        const who = seats.flatMap((u, s) => (u && st.pos[s] === k && !st.dead[s] ? [label(s)] : []));
+        const picked = sel.dest === k || sel.from === k || sel.to === k || sel.room === k;
+        const cls = ["rm", st.open[k] ? "" : "closed", st.lock === k ? "locked" : "", st.pos[mine] === k && !dead ? "here" : "", picked ? "pick" : pickRoom(k) ? "can" : ""].join(" ");
+        return `<button class="${cls}" data-room="${k}"${pickRoom(k) ? "" : " disabled"}><span class="nm"><span>${e} ${name}</span></span>` +
+          `<span class="pile">${st.open[k] ? `🂠 ${st.piles[k].length} cards` : "closed"}${sel.from === k ? " · from" : sel.to === k ? " · to" : ""}</span>` +
+          `<span class="who">${who.join(", ")}</span></button>`;
+      }).join("");
+
+      // Hand
+      const handPick = myNormal && st.mv === 2 || task === "drop" || task === "sweep";
+      const myHand = st.hands[mine];
+      const secret = secretOf(st.role[mine]);
+      const cardHtml = (c, attr) => `<button class="c${secret.includes(c) || c === ALIBI ? " mine" : ""}${killer && c === st.real ? " real" : ""}" ${attr}><span class="e">${ITEMS[c][0]}</span>${esc(ITEMS[c][1])}</button>`;
+      $("hand").innerHTML = myHand.map((c) => cardHtml(c, `data-hand="${c}" aria-pressed="${sel.hand === c}"${handPick ? "" : " disabled"}`)).join("") +
+        Array.from({ length: Math.max(0, 2 - myHand.length) }, () => '<div class="c empty"><span class="e">·</span>empty</div>').join("");
+
+      // Status and action panel
+      let status = "", panel = "";
+      const pos = st.pos[mine];
+      if (!playing) {
+        if (typeof r.left === "number") status = r.left === mine ? "You left this game." : `${label(r.left)} left. Game over.`;
+        else if (st.out === "killer") status = killer ? "You got away with it! 🔪" : "The killer escapes 🔪";
+        else status = killer ? "Caught! The innocents win" : "The killer is caught! 🎉";
+      } else if (myNormal && dead) {
+        status = "Your ghost turn 👻";
+        panel = `<p class="muted" style="text-align:center">Move one card blind from a room to another: tap two rooms below, or pass.</p>` +
+          `<div class="row"><button data-act="ghost"${sel.from != null && sel.to != null ? "" : " disabled"}>Move a card${sel.from != null ? ` from ${ROOMS[sel.from][1]}` : ""}${sel.to != null ? ` to ${ROOMS[sel.to][1]}` : ""}</button><button class="secondary" data-act="ghost-pass">Pass</button></div>`;
+      } else if (myNormal && st.mv === 0) {
+        status = "Your turn: move";
+        const dest = sel.dest ?? pos;
+        panel = (killerCanWin(st, mine) ? `<button data-act="win">🔪 Reveal and win</button>` : "") +
+          `<p class="muted" style="text-align:center">Tap a room to go there${st.lock === pos ? " (you're locked in)" : ""}.</p>` +
+          `<button data-act="move" data-room="${dest}">${dest === pos ? `Stay in the ${ROOMS[dest][1]}` : `Go to the ${ROOMS[dest][1]}`}</button>`;
+      } else if (myNormal && st.mv === 1) {
+        status = `Your turn: in the ${ROOMS[pos][1]}`;
+        const canVote = st.r >= VOTE_FROM;
+        const targets = living(r, st).filter((s) => s !== mine);
+        panel = `<button data-act="search">Search the ${ROOMS[pos][1]} (${st.piles[pos].length} cards)</button>` +
+          (canVote ? `<p class="sub" style="text-align:center">or accuse someone</p><div class="row">${targets.map((s) => `<button class="chip" data-who="${s}" aria-pressed="${sel.who === s}">${label(s)}</button>`).join("")}</div>` +
+            `<button class="secondary" data-act="accuse"${sel.who != null ? "" : " disabled"}>${sel.who != null ? `Accuse ${label(sel.who)}` : "Call a vote"}</button>`
+            : `<p class="muted" style="text-align:center;font-size:0.88rem">Votes open in round ${VOTE_FROM}.</p>`);
+      } else if (myNormal && st.mv === 2) {
+        status = `Searching the ${ROOMS[pos][1]}`;
+        const pile = st.piles[pos];
+        const p = sel.pile, h = sel.hand;
+        const full = myHand.length >= 2;
+        const what = p != null && h != null ? `Trade ${esc(ITEMS[h][1])} for ${esc(ITEMS[p][1])}` : p != null ? (full ? "Pick a hand card to trade" : `Take ${esc(ITEMS[p][1])}`) : h != null ? `Drop ${esc(ITEMS[h][1])}` : "Just look, change nothing";
+        panel = `<h2>Pile in the ${ROOMS[pos][1]} <span class="muted">(only you see this)</span></h2>` +
+          `<div class="cards">${pile.length ? pile.map((c) => cardHtml(c, `data-pile="${c}" aria-pressed="${p === c}"`)).join("") : '<p class="muted">Empty.</p>'}</div>` +
+          `<p class="muted" style="text-align:center;font-size:0.88rem">Tap a pile card to take it, a hand card to drop it, or one of each to trade.</p>` +
+          `<button data-act="swap"${p != null && h == null && full ? " disabled" : ""}>${what}</button>`;
+      } else if (task === "drop") {
+        status = "You have 3 cards";
+        panel = `<p style="text-align:center">Drop one into the ${ROOMS[pos][1]}.</p><button data-act="drop"${sel.hand != null ? "" : " disabled"}>${sel.hand != null ? `Drop ${esc(ITEMS[sel.hand][1])}` : "Tap a card in your hand"}</button>`;
+      } else if (task === "blackout") {
+        status = "Blackout! 🌑";
+        panel = `<p style="text-align:center">Draw one card blind from any room, or stay still.</p><div class="row"><button data-act="blackout"${sel.room != null ? "" : " disabled"}>${sel.room != null ? `Grab from the ${ROOMS[sel.room][1]}` : "Tap a room below"}</button><button class="secondary" data-act="blackout-pass">Stay still</button></div>`;
+      } else if (task === "sweep") {
+        status = "Police sweep 🚨";
+        panel = `<p style="text-align:center">Hand one card into the ${ROOMS[pos][1]}'s pile; you then draw one blind from the rest.</p><button data-act="sweep"${sel.hand != null ? "" : " disabled"}>${sel.hand != null ? `Hand over ${esc(ITEMS[sel.hand][1])}` : "Tap a card in your hand"}</button>`;
+      } else if (task === "vote") {
+        status = `${label(st.caller)} accuses ${label(st.acc)}`;
+        panel = `<p style="text-align:center">Should ${label(st.acc)} show their hand?</p><div class="row"><button data-act="yes">Yes, show it</button><button class="secondary" data-act="no">No</button></div>`;
+      } else if (task === "final") {
+        status = "Final vote";
+        const targets = living(r, st).filter((s) => s !== mine);
+        panel = `<p style="text-align:center">Who is the killer?</p><div class="row">${targets.map((s) => `<button class="chip" data-who="${s}" aria-pressed="${sel.who === s}">${label(s)}</button>`).join("")}</div>` +
+          `<button data-act="final"${sel.who != null ? "" : " disabled"}>${sel.who != null ? `Vote for ${label(sel.who)}` : "Pick a player"}</button>`;
+      } else {
+        const t = r.turn, away = rooms.isOnline(r, t) ? "…" : " (away)";
+        const k = st.q.length ? st.q[0].k : st.ph;
+        status = k === "vote" ? `${label(st.caller)} accuses ${label(st.acc)}: ${label(t)} is voting${away}`
+          : k === "final" ? `Final vote: waiting for ${label(t)}${away}`
+          : k === "drop" ? `${label(t)} is dropping a card${away}`
+          : k === "blackout" ? `Blackout: ${label(t)} is in the dark${away}`
+          : k === "sweep" ? `Police sweep: ${label(t)}${away}`
+          : `${label(t)}'s turn${away}`;
+        if (st.ph === "vote" && st.acc === mine) panel = `<p style="text-align:center">You're accused! If the vote passes you'll show your hand.</p>`;
+      }
+      $("status").innerHTML = status;
+      $("panel").hidden = !panel;
+      $("panel").innerHTML = panel;
+      $("log").innerHTML = st.log.slice(0, 8).map((l) => `<p>${fill(l)}</p>`).join("");
+      $("hint").innerHTML = oops ? esc(oops) : st.ev !== "-" && playing ? `Last event: ${fill(st.ev)}${st.lock >= 0 ? " · 🔒 locked this round" : ""}` : "";
+
+      $("rematch").hidden = r.status !== "done";
+      if (r.status === "done") {
+        const ready = seats.flatMap((u, s) => (u && rooms.wantsAgain(r, s) ? [s] : []));
+        const waitingOn = seats.flatMap((u, s) => (u && s !== mine && rooms.isOnline(r, s) && !rooms.wantsAgain(r, s) ? [label(s)] : []));
+        $("rematch").disabled = ready.includes(mine);
+        $("rematch").textContent = ready.includes(mine) ? `Waiting for ${waitingOn.join(", ") || "others"}…` : ready.length ? `Play again (${ready.length} ready)` : "Play again";
+      }
+      $("leave").disabled = false;
+    }
+
+    // ---------- actions ----------
+    async function createRoom() {
+      setBusy(true);
+      $("home-error").textContent = "";
+      await rooms.setMyName($("my-name").value);
+      try { start(await rooms.createRoom(GAME, { seats: 8, min: 4, auto: false, makeRoom: initialRoom })); }
+      catch (err) { console.error(err); showHome(err instanceof rooms.RoomError ? err.message : "Couldn't create a room. Check your connection and try again."); }
+    }
+    async function joinRoom(code) {
+      setBusy(true);
+      $("home-error").textContent = "";
+      await rooms.setMyName($("my-name").value);
+      try { start(await rooms.joinRoom(GAME, code)); }
+      catch (err) { console.error(err); showHome(err instanceof rooms.RoomError ? err.message : "Couldn't join. Check your connection and try again."); }
+    }
+
+    // ---------- wiring ----------
+    $("my-name").value = rooms.myName();
+    $("my-name").addEventListener("change", () => { $("my-name").value = rooms.cleanRoomName($("my-name").value); });
+    $("create").addEventListener("click", createRoom);
+    $("join-form").addEventListener("submit", (e) => { e.preventDefault(); joinRoom($("join-code").value); });
+    $("join-code").addEventListener("input", () => {
+      $("join-code").value = $("join-code").value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+      $("home-error").textContent = "";
+    });
+    $("start-btn").addEventListener("click", startGame);
+    $("rematch").addEventListener("click", rematch);
+    $("house").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-room]");
+      if (!b || b.disabled || !st) return;
+      const k = Number(b.dataset.room);
+      if (st.dead[me()]) {
+        // Ghost: first tap picks where from, second where to; tapping again starts over.
+        if (sel.from == null || sel.to != null) { if (st.piles[k].length) sel = { from: k }; }
+        else if (k !== sel.from) sel.to = k;
+      } else if (myTask(st) === "blackout") sel.room = k;
+      else sel.dest = k;
+      render();
+    });
+    $("hand").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-hand]");
+      if (!b || b.disabled) return;
+      const c = Number(b.dataset.hand);
+      sel.hand = sel.hand === c ? null : c;
+      render();
+    });
+    $("panel").addEventListener("click", (e) => {
+      const p = e.target.closest("[data-pile]");
+      if (p) { const c = Number(p.dataset.pile); sel.pile = sel.pile === c ? null : c; return render(); }
+      const w = e.target.closest("[data-who]");
+      if (w) { sel.who = Number(w.dataset.who); return render(); }
+      const b = e.target.closest("[data-act]");
+      if (!b || b.disabled) return;
+      const a = b.dataset.act;
+      if (a === "move") move(Number(b.dataset.room));
+      else if (a === "win") killerWin();
+      else if (a === "search") openPile();
+      else if (a === "accuse") callVote(sel.who);
+      else if (a === "swap") swap(sel.pile ?? null, sel.hand ?? null);
+      else if (a === "ghost") ghostMove(sel.from, sel.to);
+      else if (a === "ghost-pass") ghostMove(null, null);
+      else if (a === "drop") dropCard(sel.hand);
+      else if (a === "blackout") blackout(sel.room);
+      else if (a === "blackout-pass") blackout(null);
+      else if (a === "sweep") sweep(sel.hand);
+      else if (a === "yes" || a === "no") vote(a === "yes");
+      else if (a === "final") finalVote(sel.who);
+    });
+    $("leave").addEventListener("click", async () => {
+      if (!seat || !room) return showHome();
+      const s = seat;
+      const others = rooms.seatList(room).filter((u, i) => u && i !== me() && rooms.isOnline(room, i)).length;
+      if (room.status === "playing" && others && !confirm("Leave the game? It ends for everyone.")) return;
+      $("leave").disabled = true;
+      await rooms.quit(s);
+      showHome();
+    });
+    $("share").addEventListener("click", async () => {
+      if ((await rooms.share(seat.code, "Murder Weapon")) === "copied") $("share").textContent = "Link copied";
+    });
+    $("copy").addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(seat.code); $("copy").textContent = "Copied"; } catch { prompt("Room code:", seat.code); }
+      setTimeout(() => ($("copy").textContent = "Copy code"), 1500);
+    });
+
+    const linked = rooms.roomFromUrl();
+    if (linked) { $("join-code").value = linked; joinRoom(linked); }
+
+    window.__mw = { rooms, ITEMS, ROLES, parse, get room() { return room; }, get seat() { return seat; }, killerCanWin, move, openPile, swap, callVote, vote, finalVote, dropCard, blackout, sweep, ghostMove };
+  </script>
+</body>
+</html>
