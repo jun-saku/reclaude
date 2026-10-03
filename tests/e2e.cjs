@@ -206,6 +206,49 @@ const server = http.createServer((req, res) => {
   ok(own === 'QH,2S,7D', 'a player can read their own private hand');
   ok(peek === 'denied', `another player can't read it (${peek})`);
 
+  // ---- Murder Weapon on real Firebase: 4-player lobby, a whole game to round 10 with a vote on the way ----
+  const MW = BASE + 'murder-weapon/?backend=emulator';
+  const M1 = await page(MW); await M1.click('#create'); await M1.waitForSelector('#waiting:not([hidden])', { timeout: 15000 });
+  const mcode = (await M1.textContent('#waiting-code')).trim();
+  const MP = [M1];
+  for (let i = 0; i < 3; i++) { const p = await page(MW + '&room=' + mcode); await p.waitForSelector('#waiting:not([hidden])', { timeout: 15000 }); MP.push(p); }
+  await M1.waitForFunction(() => !document.getElementById('start-btn').disabled, null, { timeout: 8000 });
+  await M1.click('#start-btn');
+  for (const p of MP) await p.waitForSelector('#table:not([hidden])', { timeout: 15000 });
+  ok(true, `murder weapon: room ${mcode}, host starts with 4 players`);
+  // One step for whoever's turn it is: move, search and take or drop, vote once in round 3, answer every task.
+  const mwBot = async () => {
+    const w = window.__mw, r = w.room, me = w.seat.seat;
+    if (!r || r.status !== 'playing' || r.turn !== me) return 'skip';
+    const st = w.parse(r), t = st.q.length ? st.q[0].k : null, h = st.hands[me];
+    if (t === 'drop') return w.dropCard(h[0]), t;
+    if (t === 'sweep') return w.sweep(h[0]), t;
+    if (t === 'blackout') return w.blackout(st.piles[1].length ? 1 : null), t;
+    if (t === 'vote') return w.vote(true), t;
+    if (t === 'final') return w.finalVote(st.dead.findIndex((d, s) => !d && s !== me && w.rooms.seatList(r)[s])), t;
+    if (st.dead[me]) return w.ghostMove(null, null), 'ghost';
+    if (st.mv === 0) return w.move(st.lock === st.pos[me] ? st.pos[me] : [0, 1, 2].find((k) => k !== st.lock && k !== st.pos[me])), 'move';
+    if (st.mv === 1 && st.r === 3 && !window.__voted) { window.__voted = true; return w.callVote(st.dead.findIndex((d, s) => !d && s !== me && s !== st.killer)), 'accuse'; }
+    if (st.mv === 1) return w.openPile(), 'open';
+    const pile = st.piles[st.pos[me]];
+    return w.swap(h.length < 2 && pile.length ? pile[0] : null, h.length === 2 ? h[0] : null), 'swap';
+  };
+  let msteps = 0; const mseen = new Set();
+  for (; msteps < 400; msteps++) {
+    const r = await M1.evaluate(() => window.__mw.room);
+    if (r.status !== 'playing') break;
+    const res = await MP[r.turn].evaluate(mwBot);
+    mseen.add(res);
+    await M1.waitForFunction((t) => { const r = window.__mw.room; return r.status !== 'playing' || JSON.stringify(r.state) !== t; }, JSON.stringify(r.state), { timeout: 8000 }).catch(() => {});
+  }
+  const mr = await M1.evaluate(() => ({ room: window.__mw.room, st: window.__mw.parse(window.__mw.room) }));
+  const mcards = [...mr.st.piles.flat(), ...mr.st.hands.flat()];
+  ok(mr.room.status === 'done' && mr.st.out !== '-' && mseen.has('accuse') && mseen.has('vote'),
+    `the rules accept every write: a vote and a full game (${msteps} steps, ${mr.st.out} wins, saw ${[...mseen].join(' ')})`);
+  ok(mcards.length === 43 && new Set(mcards).size === 43, 'no card is lost or doubled');
+  await M1.screenshot({ path: `${out}/e2e-mw.png` });
+  for (const p of MP) await p.close();
+
   // ---- 2048 leaderboard on real Firebase ----
   const G = BASE + '2048/?backend=emulator';
   const names = (p) => p.$$eval('#leader-list li', (lis) => lis.map((li) => [...li.children].map((c) => c.textContent).join(' ')));
