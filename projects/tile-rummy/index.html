@@ -1,0 +1,800 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#eef3ee" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#141816" media="(prefers-color-scheme: dark)">
+  <title>Tile Rummy</title>
+  <meta name="description" content="Make runs and groups of numbered tiles and be first to empty your rack. 2–4 players online with a room code.">
+  <style>
+    :root {
+      --bg: #eef3ee;
+      --text: #1d1d1f;
+      --muted: #62686a;
+      --panel: #ffffff;
+      --line: #cfd8d0;
+      --soft: #e1e9e2;
+      --felt: #2f7a52;
+      --felt-line: #25643f;
+      --accent: #c2571a;
+      --danger: #b3261e;
+      --face: #fffaf0;
+      --face-edge: #d8ccb4;
+      --t0: #d1343a; --t1: #1f63d1; --t2: #d97a00; --t3: #1d1d1f;
+      --ring: rgba(0, 0, 0, 0.12);
+      color-scheme: light;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #141816;
+        --text: #ececef;
+        --muted: #9aa29d;
+        --panel: #1e2320;
+        --line: #36403a;
+        --soft: #29302c;
+        --felt: #1d4a33;
+        --felt-line: #163a28;
+        --accent: #f08a4b;
+        --danger: #ff8a80;
+        --face: #2b2b30;
+        --face-edge: #45454c;
+        --t0: #ff6b6b; --t1: #74a6ff; --t2: #ffb340; --t3: #f2f2f5;
+        --ring: rgba(255, 255, 255, 0.14);
+        color-scheme: dark;
+      }
+    }
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    html, body { min-height: 100%; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font: 17px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex; justify-content: center; -webkit-tap-highlight-color: transparent;
+    }
+    main {
+      width: 100%; max-width: 560px;
+      padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    h1 { font-size: 1.6rem; margin: 0; display: flex; align-items: center; gap: 10px; }
+    h1 .mini { display: inline-flex; gap: 2px; }
+    h1 .mini i { font-style: normal; font-size: 0.6em; font-weight: 800; width: 1.3em; height: 1.75em; display: inline-flex; align-items: center; justify-content: center; border-radius: 4px; background: var(--face); border: 1px solid var(--face-edge); }
+    h2 { font-size: 1.05rem; margin: 0; }
+    p { margin: 0; }
+    .muted { color: var(--muted); }
+    button {
+      font: inherit; font-weight: 650; border: 0; border-radius: 12px; padding: 12px 16px;
+      background: var(--accent); color: #fff; cursor: pointer; touch-action: manipulation;
+    }
+    button:disabled { opacity: 0.5; cursor: default; }
+    button.secondary { background: var(--soft); color: var(--text); }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+    .row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+    .join { display: flex; gap: 10px; }
+    .join input {
+      flex: 1; min-width: 0; font: inherit; font-size: 1.3rem; letter-spacing: 0.3em; text-transform: uppercase; text-align: center;
+      padding: 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--text);
+    }
+    .error { color: var(--danger); min-height: 1.4em; font-size: 0.95rem; }
+    .seg { display: flex; background: var(--soft); border-radius: 12px; padding: 4px; gap: 4px; }
+    .seg button { flex: 1; background: transparent; color: var(--text); padding: 9px 6px; font-size: 0.95rem; }
+    .seg button[aria-pressed="true"] { background: var(--panel); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+    .name-row { display: flex; align-items: center; gap: 10px; font-weight: 650; }
+    .name-row span { white-space: nowrap; }
+    .name-row input {
+      flex: 1; min-width: 0; font: inherit; font-weight: 500; padding: 10px 12px; border-radius: 12px;
+      border: 1px solid var(--line); background: var(--bg); color: var(--text);
+    }
+    .clock { font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 600; }
+    .clock.low { color: var(--danger); }
+
+    .bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .players { display: flex; gap: 6px; flex-wrap: wrap; }
+    .chip {
+      display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px;
+      background: var(--soft); font-size: 0.85rem; font-weight: 600; border: 2px solid transparent;
+    }
+    .chip.turn { border-color: var(--accent); }
+    .chip .n { font-variant-numeric: tabular-nums; color: var(--muted); }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); opacity: 0.4; }
+    .dot.on { background: #2e9d5b; opacity: 1; }
+    .code { font-size: 0.85rem; color: var(--muted); }
+    .code b { font-size: 1.05rem; letter-spacing: 0.15em; color: var(--text); }
+    .bigcode { font-size: 2.6rem; font-weight: 800; letter-spacing: 0.25em; text-align: center; margin: 0; }
+    .status { text-align: center; font-size: 1.15rem; font-weight: 700; min-height: 1.5em; }
+    .seated { display: flex; flex-direction: column; gap: 6px; }
+    .seated div { display: flex; align-items: center; gap: 8px; }
+
+    /* Tiles */
+    .tile {
+      --w: 28px; position: relative; width: var(--w); height: calc(var(--w) * 1.36); flex: none;
+      border-radius: 5px; border: 1px solid var(--face-edge); background: var(--face); color: var(--k);
+      font-weight: 800; font-size: calc(var(--w) * 0.56); line-height: 1; padding: 0;
+      display: inline-flex; align-items: center; justify-content: center;
+      box-shadow: 0 1px 0 var(--face-edge), 0 2px 3px rgba(0, 0, 0, 0.18); touch-action: manipulation; cursor: pointer;
+      font-variant-numeric: tabular-nums;
+    }
+    .tile.joker { font-size: calc(var(--w) * 0.66); }
+    .tile:disabled { cursor: default; opacity: 1; }
+    .tile.sel { transform: translateY(-5px); box-shadow: 0 0 0 3px var(--accent), 0 4px 6px rgba(0, 0, 0, 0.25); }
+    .tile.mine::after { content: ""; position: absolute; bottom: 3px; left: 50%; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: var(--accent); }
+    .tile.fresh { box-shadow: 0 0 0 2px #ffd54a, 0 2px 3px rgba(0, 0, 0, 0.18); }
+    .tile.locked { cursor: default; }
+    @media (prefers-reduced-motion: no-preference) { .tile { transition: transform 120ms ease-out; } }
+
+    .table {
+      background: var(--felt); border: 2px solid var(--felt-line); border-radius: 14px; padding: 10px;
+      min-height: 120px; display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start;
+    }
+    .table .empty { color: rgba(255, 255, 255, 0.75); font-size: 0.9rem; margin: auto; text-align: center; }
+    .set {
+      display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 4px; border-radius: 8px;
+      background: rgba(0, 0, 0, 0.14); border: 2px solid transparent; align-items: center; max-width: 100%;
+    }
+    .set.bad { border-color: #ff8a80; border-style: dashed; }
+    .set .add {
+      width: 28px; height: 38px; padding: 0; border-radius: 5px; font-size: 1.2rem; line-height: 1;
+      background: rgba(255, 255, 255, 0.22); color: #fff; border: 2px dashed rgba(255, 255, 255, 0.8);
+    }
+    .newset {
+      border-radius: 8px; padding: 8px 12px; font-size: 0.9rem; background: rgba(255, 255, 255, 0.22); color: #fff;
+      border: 2px dashed rgba(255, 255, 255, 0.8);
+    }
+
+    .rack {
+      background: #8a6a43; border-radius: 12px; padding: 10px 8px; min-height: 76px;
+      display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; align-content: flex-start;
+      box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.18);
+    }
+    @media (prefers-color-scheme: dark) { .rack { background: #5a4630; } }
+    .rack .tile { --w: 34px; }
+    .rack .back {
+      border-radius: 8px; padding: 8px 12px; font-size: 0.9rem; background: rgba(255, 255, 255, 0.2); color: #fff;
+      border: 2px dashed rgba(255, 255, 255, 0.8);
+    }
+    .rack .none { color: rgba(255, 255, 255, 0.8); font-size: 0.9rem; margin: auto; }
+    .tools { display: flex; gap: 8px; justify-content: space-between; align-items: center; flex-wrap: wrap; }
+    .tools .seg { flex: none; }
+    .tools .seg button { padding: 6px 10px; font-size: 0.85rem; white-space: nowrap; }
+    .hint { text-align: center; font-size: 0.9rem; color: var(--muted); min-height: 1.3em; }
+    .hint.warn { color: var(--danger); }
+    .actions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+    .actions button { padding: 12px 8px; }
+    #home { display: flex; flex-direction: column; gap: 12px; }
+    .rules { font-size: 0.9rem; color: var(--muted); }
+    .rules li { margin: 2px 0; }
+    .rules summary { cursor: pointer; font-weight: 600; color: var(--text); }
+  </style>
+</head>
+<body>
+  <main>
+    <h1><span class="mini" aria-hidden="true"><i style="color: var(--t0)">7</i><i style="color: var(--t1)">7</i><i style="color: var(--t2)">7</i></span>Tile Rummy</h1>
+
+    <section id="home">
+      <div class="card">
+        <label class="name-row"><span>Your name</span>
+          <input id="my-name" maxlength="16" autocomplete="nickname" spellcheck="false" placeholder="So friends know it's you">
+        </label>
+      </div>
+      <div class="card">
+        <h2>Play friends online</h2>
+        <p class="muted">Create a room, send the code or link, then start once everyone is in.</p>
+        <div class="seg" id="mode" role="group" aria-label="Players">
+          <button type="button" data-mode="2" aria-pressed="true">2 players</button>
+          <button type="button" data-mode="3" aria-pressed="false">Up to 3</button>
+          <button type="button" data-mode="4" aria-pressed="false">Up to 4</button>
+        </div>
+        <div class="seg" id="timer" role="group" aria-label="Turn timer">
+          <button type="button" data-secs="0" aria-pressed="true">No timer</button>
+          <button type="button" data-secs="60" aria-pressed="false">1 min</button>
+          <button type="button" data-secs="120" aria-pressed="false">2 min</button>
+          <button type="button" data-secs="180" aria-pressed="false">3 min</button>
+        </div>
+        <button id="create">Create room</button>
+      </div>
+      <div class="card">
+        <h2>Join a room</h2>
+        <form class="join" id="join-form" autocomplete="off">
+          <input id="join-code" maxlength="4" autocapitalize="characters" spellcheck="false" placeholder="CODE" aria-label="Room code">
+          <button id="join" type="submit">Join</button>
+        </form>
+        <p class="error" id="home-error" role="alert"></p>
+      </div>
+      <details class="card rules">
+        <summary>How to play</summary>
+        <ul>
+          <li>106 tiles: 1–13 in four colours, twice each, plus two jokers (☺). Everyone starts with 14.</li>
+          <li>A <b>run</b> is 3 or more of one colour in a row (4-5-6). A <b>group</b> is 3 or 4 of one number in different colours.</li>
+          <li>Jokers stand in for any tile.</li>
+          <li>Your first play must be new sets from your own rack worth at least <b>30</b> points.</li>
+          <li>After that, rearrange the table any way you like, as long as every set is valid when you tap <b>Done</b>.</li>
+          <li>Tap tiles to pick them up, then tap <b>＋</b> on a set or <b>New set</b> to put them down.</li>
+          <li>Can't or don't want to play? <b>Draw</b> a tile and your turn ends. First to empty their rack wins.</li>
+          <li>When the pool runs out and everyone passes, the fewest tiles wins.</li>
+        </ul>
+      </details>
+    </section>
+
+    <section id="game" hidden>
+      <div class="bar">
+        <div class="players" id="players"></div>
+        <div class="code" id="room-label"></div>
+      </div>
+
+      <div class="card" id="waiting" hidden>
+        <p class="muted" style="text-align: center">Send this code to your friends</p>
+        <p class="bigcode" id="waiting-code"></p>
+        <div class="row">
+          <button id="share">Share link</button>
+          <button class="secondary" id="copy">Copy code</button>
+        </div>
+        <div class="seated" id="seated"></div>
+        <button id="start-btn" hidden>Start game</button>
+        <p class="muted" id="waiting-note" style="text-align: center; font-size: 0.9rem"></p>
+      </div>
+
+      <p class="status" id="status" aria-live="polite"></p>
+      <div id="play" hidden>
+        <div style="display: flex; flex-direction: column; gap: 10px">
+          <div class="table" id="table" aria-label="Table"></div>
+          <p class="hint" id="hint"></p>
+          <div class="tools">
+            <span class="muted" id="pool" style="font-size: 0.85rem"></span>
+            <div class="seg" id="sort" role="group" aria-label="Sort rack">
+              <button type="button" data-sort="colour" aria-pressed="true">Colour</button>
+              <button type="button" data-sort="number" aria-pressed="false">Number</button>
+            </div>
+          </div>
+          <div class="rack" id="rack" aria-label="Your rack"></div>
+          <div class="actions" id="actions">
+            <button class="secondary" id="reset">Undo</button>
+            <button class="secondary" id="draw">Draw</button>
+            <button id="done">Done</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <button id="rematch" hidden>Play again</button>
+        <button id="skip" hidden>Skip</button>
+        <button class="secondary" id="leave">Leave</button>
+      </div>
+    </section>
+  </main>
+
+  <script type="module">
+    import * as rooms from "../shared/rooms.js";
+
+    const GAME = "tile-rummy";
+    const HAND = 14;
+    const FIRST_MELD = 30;
+    const COLOURS = ["Red", "Blue", "Orange", "Black"];
+
+    // ---------- tiles ----------
+    // 106 tiles, ids 0–105: 0–103 are 1–13 in four colours, twice each; 104 and 105 are jokers.
+    // In the room and in private data each tile is two base-36 characters ("00".."2x").
+    const ALL = Array.from({ length: 106 }, (_, i) => i);
+    const isJoker = (t) => t >= 104;
+    const colourOf = (t) => Math.floor(t / 26);
+    const numOf = (t) => (t % 13) + 1;
+    const tileName = (t) => (isJoker(t) ? "Joker" : `${COLOURS[colourOf(t)]} ${numOf(t)}`);
+    const enc = (list) => list.map((t) => t.toString(36).padStart(2, "0")).join("");
+    const dec = (s) => { const out = []; for (let i = 0; i + 1 < (s || "").length; i += 2) out.push(parseInt(s.slice(i, i + 2), 36)); return out; };
+    const encTable = (sets) => sets.map(enc).join(".");
+    const decTable = (s) => (s ? s.split(".").filter(Boolean).map(dec) : []);
+    function shuffled(list) {
+      const a = [...list];
+      const r = new Uint32Array(a.length);
+      crypto.getRandomValues(r);
+      for (let i = a.length - 1; i > 0; i--) { const j = r[i] % (i + 1); [a[i], a[j]] = [a[j], a[i]]; }
+      return a;
+    }
+
+    // ---------- sets ----------
+    // Is this a valid run or group? Returns { ok, order (tiles in display order), value (points, jokers counted
+    // as the tile they stand for) }. A set that could be either is read as a run.
+    function analyze(set) {
+      const real = set.filter((t) => !isJoker(t)), jokers = set.filter(isJoker);
+      const bad = { ok: false, order: set, value: 0 };
+      if (set.length < 3 || !real.length) return bad;
+      if (real.every((t) => colourOf(t) === colourOf(real[0]))) {
+        const nums = real.map(numOf).sort((a, b) => a - b);
+        const lo = nums[0], hi = nums[nums.length - 1];
+        const gaps = hi - lo + 1 - nums.length;
+        if (new Set(nums).size === nums.length && jokers.length >= gaps && set.length <= 13) {
+          let start = lo, end = hi;
+          for (let extra = jokers.length - gaps; extra > 0; extra--) { if (end < 13) end++; else start--; }
+          const order = [], js = [...jokers];
+          let value = 0;
+          for (let v = start; v <= end; v++) { order.push(real.find((t) => numOf(t) === v) ?? js.pop()); value += v; }
+          return { ok: true, kind: "run", order, value };
+        }
+      }
+      if (set.length <= 4 && real.every((t) => numOf(t) === numOf(real[0])) && new Set(real.map(colourOf)).size === real.length) {
+        return { ok: true, kind: "group", order: [...real.sort((a, b) => colourOf(a) - colourOf(b)), ...jokers], value: numOf(real[0]) * set.length };
+      }
+      return bad;
+    }
+    const setKey = (set) => [...set].sort((a, b) => a - b).join(",");
+
+    // ---------- room shape ----------
+    // state: { pool: every tile, shuffled (2 chars each); next: tiles dealt or drawn so far; table: sets joined by
+    //          "."; counts: "14,14" tiles per seat (0 for an empty seat); melded: "1,0" first meld done per seat;
+    //          played: tiles the last move put down (highlighted for the others); drawn: "id,…" the tile each seat
+    //          last drew (so a hand whose save failed can be repaired); passes: draws from an empty pool in a row }
+    // Private per seat: "<round>:<tiles>".
+    const parseState = (room) => {
+      const s = room.state || {};
+      return {
+        pool: dec(s.pool), next: s.next || 0, table: decTable(s.table), counts: String(s.counts || "").split(",").map(Number),
+        melded: String(s.melded || "").split(",").map(Number), played: dec(s.played),
+        drawn: String(s.drawn || "").split(",").map((x) => (x === "" ? null : Number(x))), passes: s.passes || 0,
+      };
+    };
+    const packState = (room, st) => ({
+      pool: room.state.pool, next: st.next, table: encTable(st.table) || "-", counts: st.counts.join(","),
+      melded: st.melded.join(","), played: enc(st.played) || "-", drawn: st.drawn.map((d) => (d == null ? "" : d)).join(","), passes: st.passes,
+    });
+    function dealRoom(room, round) {
+      const seated = rooms.seatList(room).map(Boolean);
+      const n = seated.filter(Boolean).length;
+      room.round = round;
+      room.turn = rooms.nextSeat(room, (round - 1 + room.seats) % room.seats);
+      room.status = "playing";
+      room.winner = null;
+      room.left = null;
+      room.last = null;
+      // Seated players deal themselves consecutive slices of the pool (seat 0 first); empty seats get nothing.
+      room.state = { pool: enc(shuffled(ALL)), next: n * HAND, table: "-", counts: seated.map((on) => (on ? HAND : 0)).join(","),
+        melded: seated.map(() => 0).join(","), played: "-", drawn: seated.map(() => "").join(","), passes: 0 };
+      return room;
+    }
+    const initialRoom = () => ({ round: 0, turn: 0, state: { pool: "-", next: 0, table: "-", counts: "0", melded: "0", played: "-", drawn: "", passes: 0 } });
+    const dealSlice = (room, s) => { const before = rooms.seatList(room).slice(0, s).filter(Boolean).length; return parseState(room).pool.slice(before * HAND, before * HAND + HAND); };
+    const tableOf = (room) => (room.state?.table === "-" ? "" : room.state?.table || "");
+
+    // ---------- state ----------
+    let seat = null;      // { backend, code, seat }
+    let leave = null;
+    let unwatchHand = null;
+    let room = null;
+    let hand = null;      // tile ids, or null while there is none
+    let handRound = -1;
+    let handLoaded = false;
+    let mode = 2;
+    let busy = false;
+    let sortBy = (() => { try { return localStorage.getItem("tile-rummy-sort") || "colour"; } catch { return "colour"; } })();
+    // This turn's arrangement, only on my turn: { key, sets, hand, fromHand: Set, startSets: keys }.
+    let work = null;
+    let picked = new Set();
+    let warn = "";
+
+    const $ = (id) => document.getElementById(id);
+    const me = () => seat.seat;
+    const esc = (t) => String(t).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+    const label = (s) => (s === me() ? "You" : esc(rooms.nameOf(room, s)));
+
+    function setBusy(b) { for (const id of ["create", "join"]) $(id).disabled = b; }
+
+    function showHome(error = "") {
+      if (leave) leave();
+      if (unwatchHand) unwatchHand();
+      leave = unwatchHand = null;
+      seat = room = hand = work = null;
+      picked = new Set();
+      handRound = -1;
+      handLoaded = false;
+      $("game").hidden = true;
+      $("home").hidden = false;
+      $("home-error").textContent = error;
+      setBusy(false);
+    }
+
+    function start(s) {
+      seat = s;
+      $("home").hidden = true;
+      $("game").hidden = false;
+      setBusy(false);
+      leave = rooms.enter(s, (value) => { room = value; onRoom(); render(); }, showHome);
+      unwatchHand = s.backend.watchPrivate(s.code, s.seat, (value) => { onHand(value); render(); });
+    }
+
+    // ---------- hands ----------
+    function onHand(value) {
+      handLoaded = true;
+      if (typeof value !== "string") { hand = null; handRound = -1; }
+      else {
+        const [r, tiles] = value.split(":");
+        handRound = Number(r);
+        hand = dec(tiles);
+      }
+      onRoom();
+    }
+    const saveHand = (tiles) => seat.backend.setPrivate(seat.code, me(), `${room.round}:${enc(tiles)}`);
+
+    // Deals or repairs this player's hand once the room and the hand are both known.
+    let dealing = false;
+    function onRoom() {
+      if (!room || !seat || !handLoaded || room.status === "waiting" || dealing) return;
+      if (!room.state?.pool || room.state.pool === "-") return;
+      if (handRound !== room.round) {
+        dealing = true;
+        saveHand(dealSlice(room, me())).catch(console.error).finally(() => { dealing = false; });
+        return;
+      }
+      if (!hand) return;
+      const repaired = repairHand(hand, parseState(room), me());
+      if (repaired) {
+        dealing = true;
+        saveHand(repaired).catch(console.error).finally(() => { dealing = false; });
+      }
+    }
+    // My last move reached the room but not my hand (connection dropped in between): tiles on the table can't be
+    // in my hand, and the tile I last drew must be, unless it's on the table.
+    function repairHand(tiles, st, s) {
+      const onTable = new Set(st.table.flat());
+      let out = tiles.filter((t) => !onTable.has(t));
+      const d = st.drawn[s];
+      if (d != null && !out.includes(d) && !onTable.has(d) && out.length < st.counts[s]) out = [...out, d];
+      return out.length === tiles.length && out.every((t, i) => t === tiles[i]) ? null : out;
+    }
+
+    // ---------- this turn's arrangement ----------
+    const myTurn = () => !!room && room.status === "playing" && room.turn === me() && !!hand && handRound === room.round;
+    function syncWork() {
+      if (!myTurn()) { work = null; picked = new Set(); return; }
+      const key = `${room.round}|${tableOf(room)}|${enc(hand)}`;
+      if (work?.key === key) return;
+      const sets = decTable(tableOf(room));
+      work = { key, sets: sets.map((s) => [...s]), hand: [...hand], fromHand: new Set(hand), startSets: sets.map(setKey) };
+      picked = new Set();
+      warn = "";
+    }
+    const melded = () => !!parseState(room).melded[me()];
+    const changed = () => !!work && work.hand.length < hand.length;
+    // A table tile may be picked up after the first meld, or if it came from my rack this turn.
+    const canPick = (t) => !!work && (work.fromHand.has(t) || melded());
+
+    function moveTo(target) { // target: set index, "new" or "rack"
+      if (!work || !picked.size) return;
+      const tiles = [...picked];
+      if (target === "rack" && !tiles.every((t) => work.fromHand.has(t))) return;
+      work.hand = work.hand.filter((t) => !picked.has(t));
+      let sets = work.sets.map((s) => s.filter((t) => !picked.has(t)));
+      if (target === "rack") work.hand.push(...tiles);
+      else if (target === "new") sets.push(tiles);
+      else sets[target].push(...tiles);
+      sets = sets.filter((s) => s.length);
+      work.sets = sets.map((s) => { const a = analyze(s); return a.ok ? a.order : s; });
+      picked = new Set();
+      warn = "";
+      render();
+    }
+
+    // What's wrong with the arrangement, or "" if Done may be tapped.
+    function problem() {
+      if (!work) return "Not your turn.";
+      if (!changed()) return "Put down at least one tile from your rack, or draw.";
+      const bad = work.sets.filter((s) => !analyze(s).ok).length;
+      if (bad) return `${bad === 1 ? "A set" : `${bad} sets`} on the table ${bad === 1 ? "isn't" : "aren't"} valid yet (dashed red).`;
+      if (!melded()) {
+        const keys = work.sets.map(setKey);
+        if (!work.startSets.every((k) => keys.includes(k))) return "Before your first meld, leave the table's sets as they are.";
+        const fresh = work.sets.filter((s) => !work.startSets.includes(setKey(s)));
+        if (fresh.some((s) => s.some((t) => !work.fromHand.has(t)))) return "Your first meld must use only tiles from your rack.";
+        const pts = fresh.reduce((n, s) => n + analyze(s).value, 0);
+        if (pts < FIRST_MELD) return `Your first meld needs ${FIRST_MELD} points: you have ${pts}.`;
+      }
+      return "";
+    }
+
+    // ---------- moves ----------
+    async function done() {
+      if (busy || !work) return;
+      const why = problem();
+      if (why) { warn = why; render(); return; }
+      const mySeat = me(), round = room.round, base = tableOf(room);
+      const sets = work.sets.map((s) => [...s]), left = [...work.hand], placed = hand.filter((t) => !left.includes(t));
+      busy = true;
+      try {
+        const r = await seat.backend.transact(seat.code, (cur) => {
+          if (!cur || cur.status !== "playing" || cur.turn !== mySeat || cur.round !== round || tableOf(cur) !== base) return undefined;
+          const st = parseState(cur);
+          st.table = sets;
+          st.counts[mySeat] = left.length;
+          st.melded[mySeat] = 1;
+          st.played = placed;
+          st.passes = 0;
+          cur.state = packState(cur, st);
+          if (!left.length) { cur.status = "done"; cur.winner = mySeat; return cur; }
+          cur.turn = rooms.nextSeat(cur, mySeat);
+          return cur;
+        });
+        if (!r.committed) { warn = "That move didn't go through."; return; }
+        await saveHand(left);
+      } catch (err) {
+        console.error(err);
+        warn = "Move didn't go through. Try again.";
+      } finally { busy = false; render(); }
+    }
+
+    // Draw a tile and end the turn. With the pool empty this is a pass; once everyone passes in a row the
+    // fewest tiles wins.
+    async function draw() {
+      if (busy || !myTurn()) return;
+      const mySeat = me(), round = room.round;
+      busy = true;
+      try {
+        const r = await seat.backend.transact(seat.code, (cur) => {
+          if (!cur || cur.status !== "playing" || cur.turn !== mySeat || cur.round !== round) return undefined;
+          const st = parseState(cur);
+          st.played = [];
+          if (st.next < st.pool.length) {
+            st.drawn[mySeat] = st.pool[st.next];
+            st.next += 1;
+            st.counts[mySeat] += 1;
+            st.passes = 0;
+          } else {
+            st.passes += 1;
+            if (st.passes >= rooms.playerCount(cur)) {
+              const seated = rooms.seatList(cur).flatMap((u, s) => (u ? [s] : []));
+              const low = Math.min(...seated.map((s) => st.counts[s]));
+              const best = seated.filter((s) => st.counts[s] === low);
+              cur.state = packState(cur, st);
+              cur.status = "done";
+              cur.winner = best.length === 1 ? best[0] : "draw";
+              return cur;
+            }
+          }
+          cur.state = packState(cur, st);
+          cur.turn = rooms.nextSeat(cur, mySeat);
+          return cur;
+        });
+        if (!r.committed) { warn = "Couldn't draw. Try again."; return; }
+        const st = parseState(r.value);
+        const d = st.drawn[mySeat];
+        if (d != null && !hand.includes(d)) await saveHand([...hand, d]);
+      } catch (err) {
+        console.error(err);
+        warn = "Couldn't draw. Try again.";
+      } finally { busy = false; render(); }
+    }
+
+    async function rematch() {
+      if (!room || room.status !== "done") return;
+      try {
+        await rooms.playAgain(seat, (cur, round) => dealRoom(cur, round));
+      } catch (err) { console.error(err); warn = "Couldn't start a new game. Try again."; render(); }
+    }
+
+    async function startGame() {
+      $("start-btn").disabled = true;
+      try {
+        await rooms.startGame(seat, (cur) => dealRoom(cur, cur.round));
+      } catch (err) {
+        $("waiting-note").textContent = err instanceof rooms.RoomError ? err.message : "Couldn't start. Try again.";
+      } finally { $("start-btn").disabled = false; }
+    }
+
+    // ---------- rendering ----------
+    const tileHtml = (t, cls = "", disabled = false, where = "") =>
+      `<button class="tile${isJoker(t) ? " joker" : ""}${cls}" data-t="${t}"${where ? ` data-where="${where}"` : ""} style="--k: ${isJoker(t) ? "var(--accent)" : `var(--t${colourOf(t)})`}" aria-label="${tileName(t)}"${disabled ? " disabled" : ""}>${isJoker(t) ? "☺" : numOf(t)}</button>`;
+    function sortedRack(tiles) {
+      const key = sortBy === "number" ? (t) => (isJoker(t) ? 999 : numOf(t) * 4 + colourOf(t)) : (t) => (isJoker(t) ? 999 : colourOf(t) * 13 + numOf(t));
+      return [...tiles].sort((a, b) => key(a) - key(b) || a - b);
+    }
+
+    function render() {
+      if (!room || !seat) return;
+      syncWork();
+      const r = room;
+      const mine = me();
+      const playing = r.status === "playing";
+      const seats = rooms.seatList(r);
+      const st = r.state?.pool && r.state.pool !== "-" ? parseState(r) : null;
+
+      $("room-label").innerHTML = `Room <b>${seat.code}</b>${r.turnSecs ? ` · ⏱ ${r.turnSecs < 60 ? `${r.turnSecs} s` : `${r.turnSecs / 60} min`}` : ""}`;
+      $("players").innerHTML = seats.map((uid, s) => !uid ? "" :
+        `<span class="chip${playing && r.turn === s ? " turn" : ""}">${label(s)}${st && r.status !== "waiting" ? ` <span class="n">${s === mine && work ? work.hand.length : st.counts[s]}</span>` : ""}` +
+        `<span class="dot${rooms.isOnline(r, s) ? " on" : ""}"></span></span>`).join("");
+
+      const waiting = r.status === "waiting";
+      $("waiting").hidden = !waiting;
+      $("play").hidden = waiting;
+      if (waiting) {
+        $("waiting-code").textContent = seat.code;
+        const count = rooms.playerCount(r);
+        $("seated").innerHTML = seats.map((uid, s) => uid ? `<div><span class="chip">${label(s)}${s === mine && rooms.nameOf(r, s) !== `P${s + 1}` ? ` (${esc(rooms.nameOf(r, s))})` : ""}${s === 0 ? " (host)" : ""}</span></div>` : "").join("");
+        const isHost = r.host === seat.backend.uid;
+        $("start-btn").hidden = !isHost;
+        $("start-btn").disabled = count < (r.min || r.seats);
+        $("waiting-note").textContent = count < r.seats
+          ? `${count} of ${r.seats} here.${isHost && count >= (r.min || 2) ? " Start now or wait for more." : isHost ? " Waiting for friends…" : " Waiting for the host to start…"}`
+          : isHost ? "Everyone's here." : "Waiting for the host to start…";
+        $("status").textContent = "";
+        $("rematch").hidden = true;
+        $("skip").hidden = true;
+        return;
+      }
+
+      const mt = !!work;
+      // Table
+      const sets = mt ? work.sets : st ? st.table : [];
+      const fresh = new Set(st && !mt ? st.played : []);
+      let html = sets.map((set, i) => {
+        const a = analyze(set);
+        const order = a.ok ? a.order : set;
+        return `<div class="set${mt && !a.ok ? " bad" : ""}">` + order.map((t) => {
+          const pickable = mt && canPick(t);
+          return tileHtml(t, (picked.has(t) ? " sel" : "") + (mt && work.fromHand.has(t) ? " mine" : "") + (fresh.has(t) ? " fresh" : "") + (pickable ? "" : " locked"), !pickable, "table");
+        }).join("") + (mt && picked.size ? `<button class="add" data-set="${i}" aria-label="Add to this set">＋</button>` : "") + "</div>";
+      }).join("");
+      if (mt && picked.size) html += `<button class="newset" data-set="new">＋ New set</button>`;
+      if (!sets.length && !(mt && picked.size)) html = `<p class="empty">${mt ? "Tap tiles in your rack, then New set" : "No sets on the table yet"}</p>`;
+      $("table").innerHTML = html;
+
+      // Rack
+      const rackTiles = mt ? work.hand : hand || [];
+      let rack = sortedRack(rackTiles).map((t) => tileHtml(t, picked.has(t) ? " sel" : "", !mt, "rack")).join("");
+      if (mt && picked.size && [...picked].every((t) => work.fromHand.has(t)) && [...picked].some((t) => !work.hand.includes(t))) rack += `<button class="back" data-set="rack">↩ Back to rack</button>`;
+      if (!rackTiles.length && !rack) rack = `<span class="none">${handRound === r.round || r.status !== "playing" ? "No tiles" : "Dealing…"}</span>`;
+      $("rack").innerHTML = rack;
+
+      $("pool").textContent = st ? `${st.pool.length - st.next} tiles in the pool` : "";
+      for (const b of document.querySelectorAll("#sort button")) b.setAttribute("aria-pressed", String(b.dataset.sort === sortBy));
+
+      // Actions
+      $("actions").hidden = !mt;
+      if (mt) {
+        $("reset").disabled = busy || (!changed() && !picked.size && work.sets.every((s, i) => setKey(s) === work.startSets[i]) && work.sets.length === work.startSets.length);
+        $("draw").disabled = busy || changed();
+        $("draw").textContent = st && st.next >= st.pool.length ? "Pass" : "Draw";
+        $("done").disabled = busy || !changed();
+      }
+
+      // Status
+      const online = (s) => rooms.isOnline(r, s);
+      let status = "", hint = "", warnHint = false;
+      if (playing) {
+        if (mt) {
+          status = "Your turn";
+          const why = changed() ? problem() : "";
+          if (warn) { hint = warn; warnHint = true; }
+          else if (picked.size) hint = `Tap ＋ on a set, or New set, to put ${picked.size === 1 ? "it" : "them"} down.`;
+          else if (why) { hint = why; warnHint = true; }
+          else if (changed()) hint = "Looks good: tap Done.";
+          else hint = melded() ? "Tap tiles to pick them up, or Draw." : `First meld: ${FIRST_MELD}+ points of new sets from your rack, or Draw.`;
+        } else {
+          status = `${label(r.turn)}'s turn${online(r.turn) ? "…" : " (away)"}`;
+          const by = lastMover(r);
+          if (st && st.played.length && by !== mine) hint = `${label(by)} put down ${st.played.length} tile${st.played.length === 1 ? "" : "s"} (yellow).`;
+        }
+        const left = rooms.turnLeft(r);
+        if (left !== null) status += ` <span class="clock${left <= 10 ? " low" : ""}">${left ? `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}` : "time's up"}</span>`;
+      } else if (typeof r.left === "number") status = r.left === mine ? "You left this game" : `${label(r.left)} left. ${r.winner === "draw" ? "Game over" : r.winner === mine ? "You win 🎉" : `${label(r.winner)} wins`}`;
+      else if (r.winner === "draw") status = "Pool's empty: it's a tie";
+      else if (r.winner === mine) status = "You win! 🎉";
+      else status = `${label(r.winner)} wins`;
+      if (r.status === "done" && st && st.passes && typeof r.left !== "number") hint = "The pool ran out: fewest tiles wins.";
+      $("status").innerHTML = playing ? status : esc(status).replace(/&#39;/g, "'");
+      $("hint").textContent = hint.replace(/&#(\d+);/g, (_, c) => String.fromCharCode(c));
+      $("hint").classList.toggle("warn", warnHint);
+
+      $("rematch").hidden = r.status !== "done" || (typeof r.left === "number" && r.left !== mine && !online(r.left));
+      if (r.status === "done") {
+        const ready = seats.flatMap((u, s) => (u && rooms.wantsAgain(r, s) ? [s] : []));
+        const waitingOn = seats.flatMap((u, s) => (u && s !== mine && online(s) && !rooms.wantsAgain(r, s) ? [label(s)] : []));
+        $("rematch").disabled = ready.includes(mine);
+        $("rematch").innerHTML = ready.includes(mine) ? `Waiting for ${waitingOn.join(", ") || "others"}…` : ready.length ? `Play again (${ready.map(label).join(", ")} ready)` : "Play again";
+        if (ready.length && !ready.includes(mine)) $("hint").innerHTML = `${ready.map(label).join(" and ")} want${ready.length === 1 ? "s" : ""} to play again.`;
+      }
+      $("skip").hidden = !(playing && !mt && r.turn !== mine && rooms.turnLeft(r) === 0);
+      $("skip").innerHTML = `Skip ${label(r.turn)}`;
+      $("leave").disabled = false;
+    }
+    const lastMover = (r) => { const l = rooms.seatList(r); for (let k = 1; k <= l.length; k++) { const s = (r.turn - k + l.length) % l.length; if (l[s]) return s; } return r.turn; };
+
+    // ---------- actions ----------
+    async function createRoom() {
+      setBusy(true);
+      $("home-error").textContent = "";
+      await rooms.setMyName($("my-name").value);
+      try {
+        start(await rooms.createRoom(GAME, { seats: mode, min: 2, auto: false, turnSecs, makeRoom: initialRoom }));
+      } catch (err) {
+        console.error(err);
+        showHome(err instanceof rooms.RoomError ? err.message : "Couldn't create a room. Check your connection and try again.");
+      }
+    }
+    async function joinRoom(code) {
+      setBusy(true);
+      $("home-error").textContent = "";
+      await rooms.setMyName($("my-name").value);
+      try {
+        start(await rooms.joinRoom(GAME, code));
+      } catch (err) {
+        console.error(err);
+        showHome(err instanceof rooms.RoomError ? err.message : "Couldn't join. Check your connection and try again.");
+      }
+    }
+
+    // ---------- wiring ----------
+    for (const b of document.querySelectorAll("#mode button")) {
+      b.addEventListener("click", () => {
+        mode = Number(b.dataset.mode);
+        for (const o of document.querySelectorAll("#mode button")) o.setAttribute("aria-pressed", String(o === b));
+      });
+    }
+    let turnSecs = 0;
+    for (const b of document.querySelectorAll("#timer button")) {
+      b.addEventListener("click", () => {
+        turnSecs = Number(b.dataset.secs);
+        for (const o of document.querySelectorAll("#timer button")) o.setAttribute("aria-pressed", String(o === b));
+      });
+    }
+    for (const b of document.querySelectorAll("#sort button")) {
+      b.addEventListener("click", () => {
+        sortBy = b.dataset.sort;
+        try { localStorage.setItem("tile-rummy-sort", sortBy); } catch {}
+        render();
+      });
+    }
+    $("my-name").value = rooms.myName();
+    $("my-name").addEventListener("change", () => { $("my-name").value = rooms.cleanRoomName($("my-name").value); });
+    $("skip").addEventListener("click", async () => {
+      $("skip").disabled = true;
+      if (!(await rooms.skipTurn(seat, room))) $("hint").textContent = "Couldn't skip yet.";
+      $("skip").disabled = false;
+    });
+    setInterval(() => { if (room?.turnSecs && room.status === "playing") render(); }, 1000);
+    $("create").addEventListener("click", createRoom);
+    $("join-form").addEventListener("submit", (e) => { e.preventDefault(); joinRoom($("join-code").value); });
+    $("join-code").addEventListener("input", () => {
+      $("join-code").value = $("join-code").value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+      $("home-error").textContent = "";
+    });
+    $("start-btn").addEventListener("click", startGame);
+    $("rematch").addEventListener("click", rematch);
+    $("draw").addEventListener("click", draw);
+    $("done").addEventListener("click", done);
+    $("reset").addEventListener("click", () => { if (work) { work.key = null; syncWork(); render(); } });
+    const onTap = (e) => {
+      const target = e.target.closest("[data-set]");
+      if (target) return moveTo(target.dataset.set === "new" || target.dataset.set === "rack" ? target.dataset.set : Number(target.dataset.set));
+      const b = e.target.closest(".tile");
+      if (!b || b.disabled || !work) return;
+      const t = Number(b.dataset.t);
+      if (b.dataset.where === "table" && !canPick(t)) return;
+      if (picked.has(t)) picked.delete(t); else picked.add(t);
+      warn = "";
+      render();
+    };
+    $("table").addEventListener("click", onTap);
+    $("rack").addEventListener("click", onTap);
+    $("leave").addEventListener("click", async () => {
+      if (!seat || !room) return showHome();
+      const s = seat;
+      const others = rooms.seatList(room).filter((u, i) => u && i !== me() && rooms.isOnline(room, i)).length;
+      if (room.status === "playing" && others && !confirm(rooms.playerCount(room) === 2 ? "Leave the game? Your friend wins this round." : "Leave the game? It ends in a draw for everyone.")) return;
+      $("leave").disabled = true;
+      await rooms.quit(s);
+      showHome();
+    });
+    $("share").addEventListener("click", async () => {
+      if ((await rooms.share(seat.code, "Tile Rummy")) === "copied") $("share").textContent = "Link copied";
+    });
+    $("copy").addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(seat.code); $("copy").textContent = "Copied"; } catch { prompt("Room code:", seat.code); }
+      setTimeout(() => ($("copy").textContent = "Copy code"), 1500);
+    });
+
+    const linked = rooms.roomFromUrl();
+    if (linked) { $("join-code").value = linked; joinRoom(linked); }
+
+    // For tests: pick tiles and put them down the way taps do.
+    const put = (tiles, target) => { syncWork(); if (!work) return false; picked = new Set(tiles); moveTo(target); return true; };
+    window.__tr = { rooms, analyze, numOf, colourOf, isJoker, get room() { return room; }, get hand() { return hand; }, get seat() { return seat; }, get work() { return work; }, put, done, draw, problem };
+  </script>
+</body>
+</html>
