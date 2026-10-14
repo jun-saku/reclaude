@@ -8,6 +8,7 @@ toys) built by Claude from a phone, each published at its own link.
 
 ## Projects
 
+- [Bridge](https://reclaude.junsaku.dev/bridge/): contract bridge on your phone, bid and play with a computer partner against two computer opponents
 - [Four in a Row](https://reclaude.junsaku.dev/four-in-a-row/): drop discs and line up four, online with a room code or on one phone
 - [Tile Rummy](https://reclaude.junsaku.dev/tile-rummy/): make runs and groups of numbered tiles, rearrange the table, and empty your rack first, 2–4 players online with a room code
 - [Five Line](https://reclaude.junsaku.dev/five-line/): place chips on a 10×10 board of coloured numbers and line up five, 2–4 players online with a room code

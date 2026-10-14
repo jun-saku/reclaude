@@ -1,0 +1,869 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#1f5a3d">
+  <title>Bridge</title>
+  <meta name="description" content="Contract bridge on your phone: bid and play with a computer partner against two computer opponents">
+  <style>
+    :root {
+      --bg: #f7f6f3;
+      --text: #1d1d1f;
+      --muted: #6b6b70;
+      --panel: #ffffff;
+      --border: #e3e1dc;
+      --felt: #2f7a52;
+      --felt-dark: #256443;
+      --felt-text: #f1f7f3;
+      --accent: #c2571a;
+      --card: #ffffff;
+      --card-edge: #cfcac0;
+      --black: #1d1d1f;
+      --red: #c8202f;
+      --back: #2c4f8a;
+      --overlay: rgba(0, 0, 0, 0.45);
+      color-scheme: light;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #161618;
+        --text: #ececef;
+        --muted: #9a9aa2;
+        --panel: #1f1f22;
+        --border: #2e2e33;
+        --felt: #1d4a33;
+        --felt-dark: #163a28;
+        --felt-text: #e3efe7;
+        --accent: #f08a4b;
+        --card: #f2efe8;
+        --card-edge: #8d887d;
+        --back: #3a5f9e;
+        --overlay: rgba(0, 0, 0, 0.6);
+        color-scheme: dark;
+      }
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      justify-content: center;
+      overscroll-behavior: none;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .game {
+      width: 100%;
+      max-width: 480px;
+      padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    button {
+      font: inherit;
+      font-weight: 600;
+      font-size: 0.95rem;
+      padding: 9px 14px;
+      border-radius: 10px;
+      border: 0;
+      background: var(--accent);
+      color: #fff;
+      cursor: pointer;
+      touch-action: manipulation;
+      white-space: nowrap;
+    }
+    button.secondary { background: var(--border); color: var(--text); }
+    button:disabled { opacity: 0.35; cursor: default; }
+
+    header { display: flex; align-items: center; gap: 8px; }
+    h1 { margin: 0 auto 0 0; font-size: 1.8rem; line-height: 1; font-weight: 800; letter-spacing: -0.02em; }
+    .score { min-width: 58px; padding: 5px 8px; border-radius: 10px; background: var(--border); text-align: center; line-height: 1.15; }
+    .score span { display: block; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+    .score b { font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+    .menu { padding: 0 12px; align-self: stretch; font-size: 1.2rem; }
+
+    .info { display: flex; justify-content: space-between; gap: 8px; font-size: 0.85rem; color: var(--muted); min-height: 1.3em; }
+    .info b { color: var(--text); }
+
+    .table {
+      background: var(--felt);
+      color: var(--felt-text);
+      border-radius: 16px;
+      padding: 8px;
+      display: grid;
+      grid-template-columns: minmax(64px, auto) 1fr minmax(64px, auto);
+      grid-template-rows: auto 1fr;
+      gap: 6px;
+    }
+    .seat-label { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; opacity: 0.85; display: flex; gap: 6px; align-items: center; }
+    .seat-label.turn { opacity: 1; color: #ffd66b; }
+    .seat-label.turn::after { content: "●"; font-size: 0.6rem; }
+    .north { grid-column: 1 / 4; display: flex; flex-direction: column; gap: 4px; align-items: center; }
+    .side { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; }
+    .side.east { align-items: flex-end; text-align: right; }
+    .backs { display: flex; height: 26px; }
+    .backs i { width: 16px; height: 24px; margin-right: -10px; border-radius: 3px; background: var(--back); border: 1px solid rgba(255,255,255,0.6); }
+    .count { font-size: 0.75rem; opacity: 0.75; }
+    .compact { font-size: 0.74rem; letter-spacing: -0.02em; line-height: 1.35; background: var(--card); color: var(--black); border-radius: 6px; padding: 3px 5px; font-weight: 600; white-space: nowrap; }
+    .compact .r { color: var(--red); }
+
+    .center { position: relative; min-height: 196px; }
+    .trick .card { position: absolute; }
+    .trick .p0 { left: calc(50% - 23px); top: 0; }
+    .trick .p2 { left: calc(50% - 23px); bottom: 0; }
+    .trick .p3 { left: calc(50% - 62px); top: calc(50% - 32px); }
+    .trick .p1 { left: calc(50% + 16px); top: calc(50% - 32px); }
+    .trick .card.win { box-shadow: 0 0 0 3px #ffd66b; }
+    .center .note { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; font-size: 0.85rem; opacity: 0.85; padding: 0 4px; }
+
+    .auction { width: 100%; border-collapse: collapse; font-size: 0.9rem; table-layout: fixed; }
+    .auction th { font-size: 0.7rem; font-weight: 700; opacity: 0.8; padding: 2px 0; }
+    .auction th.vul { color: #ff9a9a; }
+    .auction td { text-align: center; padding: 2px 0; font-weight: 600; }
+    .auction .r { color: #ff9a9a; }
+    .auction .now { color: #ffd66b; }
+
+    .card {
+      width: 46px;
+      height: 64px;
+      border-radius: 6px;
+      background: var(--card);
+      border: 1px solid var(--card-edge);
+      color: var(--black);
+      padding: 2px 4px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      font-weight: 700;
+      line-height: 1.05;
+      font-size: 1.05rem;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.25);
+    }
+    .card.red { color: var(--red); }
+    .card i { font-style: normal; font-size: 1.05rem; }
+    .hand { position: relative; height: 72px; width: 100%; }
+    .hand .card { position: absolute; top: 6px; transition: top 120ms ease-out, opacity 120ms; }
+    .hand button.card { cursor: pointer; padding: 2px 4px; font: inherit; font-weight: 700; font-size: 1.05rem; text-align: left; }
+    .hand.active .card.ok { top: 0; }
+    .hand.active .card.no { opacity: 0.45; }
+    .hand .card.hint { box-shadow: 0 0 0 3px var(--accent); top: 0; }
+    .south { display: flex; flex-direction: column; gap: 4px; }
+    .south .seat-label { color: var(--text); opacity: 0.75; }
+    .south .seat-label.turn { color: var(--accent); opacity: 1; }
+    .row { display: flex; gap: 8px; align-items: center; }
+    .row p { margin: 0 auto 0 0; color: var(--muted); font-size: 0.85rem; }
+    .hintbtn { padding: 6px 12px; font-size: 0.85rem; }
+
+    .bidbox { display: flex; flex-direction: column; gap: 6px; }
+    .bidbox[hidden] { display: none; }
+    .bidrow { display: grid; gap: 6px; }
+    .levels { grid-template-columns: repeat(7, 1fr); }
+    .strains { grid-template-columns: repeat(5, 1fr); }
+    .calls { grid-template-columns: 2fr 1fr 1fr; }
+    .bidbox button { padding: 9px 0; background: var(--panel); color: var(--text); border: 1px solid var(--border); font-size: 1rem; }
+    .bidbox button.red { color: var(--red); }
+    .bidbox button.sel { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .bidbox button.pass { background: var(--felt); color: #fff; border-color: var(--felt); }
+    .bidbox button.dbl { color: var(--red); }
+    .bidbox button.hint { box-shadow: 0 0 0 3px var(--accent); }
+    @media (prefers-color-scheme: dark) { .bidbox button.red, .bidbox button.dbl { color: #ff7b86; } }
+
+    .sheet { position: fixed; inset: 0; z-index: 10; background: var(--overlay); display: none; align-items: flex-end; justify-content: center; }
+    .sheet.show { display: flex; }
+    .sheet .box {
+      width: 100%;
+      max-width: 480px;
+      max-height: 90vh;
+      overflow-y: auto;
+      background: var(--panel);
+      border-radius: 18px 18px 0 0;
+      padding: 18px 16px max(18px, env(safe-area-inset-bottom));
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .sheet h2 { margin: 0; font-size: 1.4rem; }
+    .sheet p { margin: 0; line-height: 1.45; }
+    .sheet .muted { color: var(--muted); font-size: 0.9rem; }
+    .sheet .buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+    .sheet .buttons button { flex: 1; }
+    .sheet ul { margin: 0; padding-left: 20px; line-height: 1.45; }
+    .deal { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .deal div { background: var(--bg); border-radius: 8px; padding: 6px 8px; font-size: 0.85rem; line-height: 1.4; }
+    .deal b { display: block; font-size: 0.75rem; text-transform: uppercase; color: var(--muted); }
+    .deal .r { color: var(--red); }
+    @media (prefers-color-scheme: dark) { .deal .r { color: #ff7b86; } }
+    .toast { position: fixed; left: 50%; top: 40%; transform: translateX(-50%); background: var(--panel); color: var(--text); padding: 12px 18px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); font-weight: 600; z-index: 20; display: none; }
+    .toast.show { display: block; }
+  </style>
+</head>
+<body>
+  <main class="game">
+    <header>
+      <h1>Bridge</h1>
+      <div class="score"><span>Us</span><b id="us">0</b></div>
+      <div class="score"><span>Them</span><b id="them">0</b></div>
+      <button class="secondary menu" id="menu" aria-label="Menu">☰</button>
+    </header>
+    <div class="info" id="info"></div>
+    <section class="table">
+      <div class="north" id="north"></div>
+      <div class="side west" id="west"></div>
+      <div class="center" id="center"></div>
+      <div class="side east" id="east"></div>
+    </section>
+    <div class="bidbox" id="bidbox" hidden>
+      <div class="bidrow levels" id="levels"></div>
+      <div class="bidrow strains" id="strains"></div>
+      <div class="bidrow calls">
+        <button class="pass" data-call="P">Pass</button>
+        <button class="dbl" data-call="X">Double</button>
+        <button class="dbl" data-call="XX">Redbl</button>
+      </div>
+    </div>
+    <section class="south">
+      <div class="row"><div class="seat-label" id="southLabel">South · You</div><p id="hcp"></p><button class="secondary hintbtn" id="hint">Hint</button></div>
+      <div class="hand" id="south"></div>
+    </section>
+  </main>
+
+  <div class="sheet" id="sheet"><div class="box" id="sheetBox"></div></div>
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // Seats: 0 North (partner), 1 East, 2 South (you), 3 West. Sides: 0 = North/South (us), 1 = East/West.
+    // Cards are 0..51: suit * 13 + (rank - 2). Suits/strains: 0 ♣, 1 ♦, 2 ♥, 3 ♠, 4 NT.
+    // Calls: "P", "X", "XX", or a bid number 0..34 = (level - 1) * 5 + strain.
+    const SYM = ["♣", "♦", "♥", "♠", "NT"];
+    const NAMES = ["North", "East", "South", "West"];
+    const SHORT = ["N", "E", "S", "W"];
+    const RANK = { 10: "10", 11: "J", 12: "Q", 13: "K", 14: "A" };
+    const VUL = ["-", "NS", "EW", "B", "NS", "EW", "B", "-", "EW", "B", "-", "NS", "B", "-", "NS", "EW"];
+    const KEY = "bridge.v1";
+    const ME = 2;
+
+    const suitOf = (c) => Math.floor(c / 13);
+    const rankOf = (c) => (c % 13) + 2;
+    const rankText = (c) => RANK[rankOf(c)] || String(rankOf(c));
+    const partner = (s) => (s + 2) % 4;
+    const side = (s) => s % 2;
+    const isRed = (suit) => suit === 1 || suit === 2;
+    const level = (v) => Math.floor(v / 5) + 1;
+    const strain = (v) => v % 5;
+    const bidNum = (l, s) => (l - 1) * 5 + s;
+    const callText = (c) => (c === "P" ? "Pass" : c === "X" ? "X" : c === "XX" ? "XX" : level(c) + SYM[strain(c)]);
+    const low = (cs) => cs.reduce((a, b) => (rankOf(b) < rankOf(a) ? b : a));
+    const high = (cs) => cs.reduce((a, b) => (rankOf(b) > rankOf(a) ? b : a));
+    const esc = (s) => String(s).replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]);
+
+    // ---------- Hand evaluation ----------
+    const hcp = (h) => h.reduce((n, c) => n + Math.max(0, rankOf(c) - 10), 0);
+    const lens = (h) => [0, 1, 2, 3].map((s) => h.filter((c) => suitOf(c) === s).length);
+    function balanced(L) {
+      const k = [...L].sort((a, b) => b - a).join("");
+      return k === "4333" || k === "4432" || k === "5332";
+    }
+
+    // ---------- State ----------
+    let S = null;
+    let timer = 0;
+    let pickedLevel = 0;
+    let hintOn = null;
+
+    function newState(board, totals) {
+      const deck = [...Array(52).keys()];
+      for (let i = deck.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [deck[i], deck[j]] = [deck[j], deck[i]];
+      }
+      const hands = [0, 1, 2, 3].map((i) => deck.slice(i * 13, i * 13 + 13));
+      const dealer = (board - 1) % 4;
+      const v = VUL[(board - 1) % 16];
+      return {
+        board, dealer,
+        vul: [v === "NS" || v === "B", v === "EW" || v === "B"],
+        hands, orig: hands.map((h) => h.slice()),
+        auction: [], phase: "bidding", turn: dealer,
+        contract: null, trick: [], last: null, played: [], won: [0, 0], ntricks: 0,
+        totals: totals || [0, 0], result: null,
+      };
+    }
+
+    function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+    function load() {
+      try {
+        const s = JSON.parse(localStorage.getItem(KEY));
+        if (s && Array.isArray(s.hands) && s.hands.length === 4 && s.phase) return s;
+      } catch (e) {}
+      return null;
+    }
+
+    // ---------- Auction ----------
+    function lastBidIdx(a) {
+      for (let i = a.length - 1; i >= 0; i--) if (typeof a[i].c === "number") return i;
+      return -1;
+    }
+    function legal(st, seat) {
+      const a = st.auction;
+      const i = lastBidIdx(a);
+      let lastNP = null;
+      for (let j = a.length - 1; j >= 0; j--) if (a[j].c !== "P") { lastNP = a[j]; break; }
+      return {
+        min: i < 0 ? 0 : a[i].c + 1,
+        canX: !!lastNP && typeof lastNP.c === "number" && side(lastNP.seat) !== side(seat),
+        canXX: !!lastNP && lastNP.c === "X" && side(lastNP.seat) !== side(seat),
+      };
+    }
+    function auctionOver(a) {
+      const n = a.length;
+      return n >= 4 && a[n - 1].c === "P" && a[n - 2].c === "P" && a[n - 3].c === "P";
+    }
+    function contractOf(a) {
+      const i = lastBidIdx(a);
+      if (i < 0) return null;
+      const v = a[i].c, st = strain(v), sd = side(a[i].seat);
+      let dbl = 0;
+      for (let j = i + 1; j < a.length; j++) if (a[j].c === "X") dbl = 1; else if (a[j].c === "XX") dbl = 2;
+      const first = a.find((x) => typeof x.c === "number" && side(x.seat) === sd && strain(x.c) === st);
+      return { level: level(v), strain: st, dbl, declarer: first.seat };
+    }
+
+    // What each seat has shown so far: rough minimum points and suit lengths.
+    function shownInfo(a) {
+      const info = [0, 1, 2, 3].map(() => ({ pts: 0, len: [0, 0, 0, 0], bid: false }));
+      let anyBid = false, last = -1;
+      for (const { seat, c } of a) {
+        if (typeof c !== "number") continue;
+        const I = info[seat], P = info[partner(seat)];
+        const l = level(c), s = strain(c);
+        let minL = 1;
+        while (bidNum(minL, s) <= last) minL++;
+        const jump = l > minL;
+        if (!I.bid) {
+          if (!anyBid) I.pts = s === 4 ? (l === 1 ? 15 : l === 2 ? 20 : 22) : 12;
+          else if (P.bid) I.pts = s === 4 ? [6, 11, 13][Math.min(l, 3) - 1] : 6;
+          else I.pts = s === 4 ? 15 : 9;
+          if (jump && s !== 4) I.pts += 4;
+        } else I.pts += jump ? 5 : 2;
+        if (s === 4) for (let k = 0; k < 4; k++) I.len[k] = Math.max(I.len[k], !anyBid ? 3 : 2);
+        else if (P.len[s] >= 4 && I.len[s] < 3) I.len[s] = 3;
+        else I.len[s] = I.len[s] >= 4 ? I.len[s] + 1 : (!anyBid && s >= 2 ? 5 : 4);
+        I.bid = true; anyBid = true; last = c;
+      }
+      return info;
+    }
+
+    function openingSuit(L) {
+      if (L[3] >= 5 || L[2] >= 5) return L[3] >= L[2] ? 3 : 2;
+      return L[1] > L[0] || (L[1] === 4 && L[0] === 4) ? 1 : 0;
+    }
+
+    function botCall(st, seat) {
+      const h = st.hands[seat], hc = hcp(h), L = lens(h), bal = balanced(L);
+      const a = st.auction, info = shownInfo(a), me = info[seat], P = info[partner(seat)];
+      const { min, canX } = legal(st, seat);
+      const anyBid = lastBidIdx(a) >= 0;
+      const cheapest = (s) => { let l = 1; while (bidNum(l, s) < min) l++; return l; };
+      const ok = (c) => (typeof c === "number" ? (c >= min && c <= 34 ? c : "P") : c === "X" && !canX ? "P" : c);
+
+      if (!anyBid) {
+        if (bal && hc >= 15 && hc <= 17) return bidNum(1, 4);
+        if (bal && hc >= 20 && hc <= 21) return bidNum(2, 4);
+        const top2 = [...L].sort((x, y) => y - x);
+        if (hc >= 13 || (hc >= 10 && hc + top2[0] + top2[1] >= 20)) return bidNum(1, openingSuit(L));
+        return "P";
+      }
+
+      if (!P.bid) {
+        if (me.bid) return "P";
+        // Overcall a good five-card suit, or 1NT with a strong balanced hand.
+        let best = -1;
+        for (const s of [3, 2, 1, 0]) if (L[s] >= 5 && (best < 0 || L[s] > L[best])) best = s;
+        if (best >= 0) {
+          const l = cheapest(best);
+          if ((l === 1 && hc >= 8) || (l === 2 && hc >= 11)) return ok(bidNum(l, best));
+        }
+        if (bal && hc >= 15 && hc <= 18 && cheapest(4) === 1) return ok(bidNum(1, 4));
+        return "P";
+      }
+
+      // Partner has bid: estimate our combined points and find a fit.
+      let pts = hc + P.pts;
+      let fit = -1, fitScore = 0;
+      for (const s of [3, 2, 1, 0]) {
+        const t = L[s] + P.len[s];
+        const sc = t + (s >= 2 ? 1.5 : 0);
+        if (t >= 8 && sc > fitScore) { fit = s; fitScore = sc; }
+      }
+      let st4;
+      if (fit >= 0) {
+        if (L[fit] >= 3) pts += L.reduce((n, x, s) => n + (s === fit ? 0 : x === 0 ? 3 : x === 1 ? 2 : x === 2 ? 1 : 0), 0);
+        st4 = fit >= 2 || pts >= 29 || !L.every((x) => x >= 2) ? fit : 4;
+      } else {
+        if (!me.bid) {
+          let mine = -1;
+          for (const s of [3, 2, 1, 0]) if (L[s] >= 4 && P.len[s] === 0 && (mine < 0 || L[s] > L[mine])) mine = s;
+          if (mine >= 0) {
+            const l = cheapest(mine);
+            if ((l === 1 && hc >= 6) || (l === 2 && hc >= 10 && L[mine] >= 5)) return ok(bidNum(l, mine));
+          }
+        }
+        st4 = 4;
+      }
+      const game = st4 === 4 ? 3 : st4 >= 2 ? 4 : 5;
+      let target = 0;
+      if (pts >= 37) target = 7;
+      else if (pts >= 33) target = 6;
+      else if (pts >= 25) target = game;
+      else if (pts >= 23) target = Math.min(game - 1, 3);
+      else if (pts >= 18) target = st4 === 4 ? 1 : 2;
+      const l = cheapest(st4);
+      if (l <= target) return ok(bidNum(pts >= 25 ? target : l, st4));
+      // Too high for us: double opponents who have climbed too far.
+      const lb = a[lastBidIdx(a)];
+      if (canX && side(lb.seat) !== side(seat) && pts >= 23 && level(lb.c) >= 2) return "X";
+      return "P";
+    }
+
+    // ---------- Play ----------
+    const trumpOf = (st) => (st.contract.strain < 4 ? st.contract.strain : -1);
+    function legalCards(st, seat) {
+      const h = st.hands[seat];
+      if (!st.trick.length) return h.slice();
+      const ls = suitOf(st.trick[0].card);
+      const f = h.filter((c) => suitOf(c) === ls);
+      return f.length ? f : h.slice();
+    }
+    function trickWinner(trick, trump) {
+      let w = trick[0];
+      for (const t of trick.slice(1)) {
+        const a = suitOf(t.card), b = suitOf(w.card);
+        if (a === b ? t.card > w.card : a === trump) w = t;
+      }
+      return w;
+    }
+    const dummyOf = (st) => partner(st.contract.declarer);
+    const dummyShown = (st) => st.phase !== "bidding" && st.played.length > 0;
+    const humanPlays = (st, seat) => seat === ME || (side(st.contract.declarer) === 0 && seat === 0);
+
+    function botPlay(st, seat) {
+      const trump = trumpOf(st);
+      const h = st.hands[seat];
+      const cards = legalCards(st, seat);
+      const decl = st.contract.declarer;
+      // Cards this seat can see: its own hand, plus dummy (and declarer's hand if this is dummy).
+      const known = new Set(h);
+      if (dummyShown(st)) for (const c of st.hands[dummyOf(st)]) known.add(c);
+      if (seat === dummyOf(st)) for (const c of st.hands[decl]) known.add(c);
+      const played = new Set(st.played);
+      const master = (c) => {
+        for (let x = c + 1; x < suitOf(c) * 13 + 13; x++) if (!played.has(x) && !known.has(x)) return false;
+        return true;
+      };
+      const bySuit = (s) => h.filter((c) => suitOf(c) === s);
+
+      if (!st.trick.length) {
+        const ourSide = side(seat) === side(decl);
+        const nonT = h.filter((c) => suitOf(c) !== trump);
+        if (ourSide && trump >= 0) {
+          const partnerH = seat === decl ? st.hands[dummyOf(st)] : st.hands[decl];
+          const ours = h.concat(partnerH).filter((c) => suitOf(c) === trump).length;
+          const gone = st.played.filter((c) => suitOf(c) === trump).length;
+          const mt = bySuit(trump).filter(master);
+          if (13 - ours - gone > 0 && mt.length) return high(mt);
+        }
+        const pool = nonT.length ? nonT : h;
+        const winners = pool.filter(master);
+        if (winners.length) return high(winners);
+        // Pick a suit: partner's bid suit on defence, else our longest.
+        let suit = -1;
+        if (!ourSide) {
+          const P = shownInfo(st.auction)[partner(seat)];
+          let best = 0;
+          for (const s of [0, 1, 2, 3]) if (s !== trump && P.len[s] > best && bySuit(s).length) { best = P.len[s]; suit = s; }
+        }
+        if (suit < 0) {
+          let best = -1;
+          for (const s of [3, 2, 1, 0]) {
+            const n = bySuit(s).length;
+            if (n && (s !== trump || !nonT.length) && n > best) { best = n; suit = s; }
+          }
+        }
+        const cs = bySuit(suit).sort((x, y) => y - x);
+        if (cs.length <= 2) return cs[0];
+        if (rankOf(cs[0]) >= 11 && cs[0] - cs[1] === 1) return cs[0];
+        return low(cs);
+      }
+
+      const w = trickWinner(st.trick, trump);
+      const partnerWins = side(w.seat) === side(seat);
+      const pos = st.trick.length;
+      const beats = (c) => trickWinner([...st.trick, { seat, card: c }], trump).seat === seat;
+      const ls = suitOf(st.trick[0].card);
+      const safe = partnerWins && (pos === 3 || (suitOf(w.card) === ls && master(w.card)) || suitOf(w.card) === trump);
+      if (suitOf(cards[0]) === ls && cards.every((c) => suitOf(c) === ls)) {
+        if (partnerWins) return low(cards);
+        const win = cards.filter(beats);
+        if (!win.length || pos === 1) return low(cards);
+        return low(win);
+      }
+      if (!safe && trump >= 0) {
+        const ruffs = cards.filter((c) => suitOf(c) === trump && beats(c));
+        if (ruffs.length && !(partnerWins && pos === 1)) return low(ruffs);
+      }
+      const discards = cards.filter((c) => suitOf(c) !== trump);
+      const pool = discards.length ? discards : cards;
+      const junk = pool.filter((c) => !master(c));
+      return low(junk.length ? junk : pool);
+    }
+
+    // ---------- Scoring ----------
+    function scoreHand(con, made, vul) {
+      const need = con.level + 6;
+      const d = con.dbl;
+      if (made >= need) {
+        const per = con.strain >= 2 ? 30 : 20;
+        let tv = con.strain === 4 ? 40 + 30 * (con.level - 1) : per * con.level;
+        tv *= d === 2 ? 4 : d === 1 ? 2 : 1;
+        let sc = tv + (tv >= 100 ? (vul ? 500 : 300) : 50);
+        if (con.level === 6) sc += vul ? 750 : 500;
+        if (con.level === 7) sc += vul ? 1500 : 1000;
+        sc += d * 50;
+        const over = made - need;
+        sc += d ? over * (vul ? 200 : 100) * d : over * (con.strain === 4 ? 30 : per);
+        return sc;
+      }
+      const down = need - made;
+      if (!d) return -down * (vul ? 100 : 50);
+      let p = 0;
+      for (let i = 1; i <= down; i++) p += vul ? (i === 1 ? 200 : 300) : i === 1 ? 100 : i <= 3 ? 200 : 300;
+      return -p * d;
+    }
+
+    // ---------- Actions ----------
+    function doCall(c) {
+      const st = S;
+      hintOn = null;
+      pickedLevel = 0;
+      st.auction.push({ seat: st.turn, c });
+      if (auctionOver(st.auction)) {
+        const con = contractOf(st.auction);
+        if (!con) {
+          toast("All passed. New deal.");
+          S = newState(st.board + 1, st.totals);
+        } else {
+          st.contract = con;
+          st.phase = "play";
+          st.turn = (con.declarer + 1) % 4;
+        }
+      } else st.turn = (st.turn + 1) % 4;
+      save(); render(); schedule();
+    }
+
+    function doPlay(seat, card) {
+      const st = S;
+      if (st.phase !== "play" || st.turn !== seat || st.trick.length >= 4) return;
+      if (!legalCards(st, seat).includes(card)) return;
+      hintOn = null;
+      st.hands[seat] = st.hands[seat].filter((c) => c !== card);
+      st.trick.push({ seat, card });
+      st.played.push(card);
+      st.turn = (seat + 1) % 4;
+      save(); render(); schedule();
+    }
+
+    function collect() {
+      const st = S;
+      const w = trickWinner(st.trick, trumpOf(st));
+      st.won[side(w.seat)]++;
+      st.last = st.trick;
+      st.trick = [];
+      st.ntricks++;
+      st.turn = w.seat;
+      if (st.ntricks === 13) {
+        const con = st.contract, ds = side(con.declarer);
+        const made = st.won[ds];
+        const sc = scoreHand(con, made, st.vul[ds]);
+        const pts = [0, 0];
+        if (sc > 0) pts[ds] = sc; else pts[1 - ds] = -sc;
+        st.totals = [st.totals[0] + pts[0], st.totals[1] + pts[1]];
+        st.result = { made, need: con.level + 6, sc, ds, pts };
+        st.phase = "done";
+      }
+      save(); render(); schedule();
+    }
+
+    function schedule() {
+      clearTimeout(timer);
+      const st = S;
+      if (st.phase === "bidding" && st.turn !== ME) {
+        timer = setTimeout(() => doCall(botCall(S, S.turn)), 650);
+      } else if (st.phase === "play") {
+        if (st.trick.length === 4) timer = setTimeout(collect, 1200);
+        else if (!humanPlays(st, st.turn)) timer = setTimeout(() => doPlay(S.turn, botPlay(S, S.turn)), 650);
+      } else if (st.phase === "done") {
+        timer = setTimeout(showResult, 900);
+      }
+    }
+
+    // ---------- Rendering ----------
+    const $ = (id) => document.getElementById(id);
+    const sortHand = (h) => {
+      const order = [3, 2, 0, 1];
+      return h.slice().sort((a, b) => order.indexOf(suitOf(a)) - order.indexOf(suitOf(b)) || b - a);
+    };
+    function cardHtml(c, cls = "", tag = "div", extra = "") {
+      return `<${tag} class="card ${isRed(suitOf(c)) ? "red" : ""} ${cls}" ${extra}>${rankText(c)}<i>${SYM[suitOf(c)]}</i></${tag}>`;
+    }
+    function compactHtml(h, cls = "r") {
+      return [3, 2, 1, 0].map((s) => {
+        const cs = h.filter((c) => suitOf(c) === s).sort((a, b) => b - a).map(rankText).join(" ") || "–";
+        return `<div${isRed(s) ? ` class="${cls}"` : ""}>${SYM[s]} ${cs}</div>`;
+      }).join("");
+    }
+
+    function handHtml(el, seat, interactive) {
+      const st = S;
+      const h = sortHand(st.hands[seat]);
+      const width = el.clientWidth || 340;
+      const step = h.length > 1 ? Math.min(50, (width - 46) / (h.length - 1)) : 0;
+      const off = (width - (46 + step * Math.max(0, h.length - 1))) / 2;
+      const ok = interactive ? new Set(legalCards(st, seat)) : null;
+      el.classList.toggle("active", !!interactive);
+      el.innerHTML = h.map((c, i) => {
+        const cls = (ok ? (ok.has(c) ? "ok" : "no") : "") + (hintOn === c ? " hint" : "");
+        return interactive
+          ? cardHtml(c, cls, "button", `data-seat="${seat}" data-card="${c}" style="left:${off + i * step}px"`)
+          : cardHtml(c, cls, "div", `style="left:${off + i * step}px"`);
+      }).join("");
+    }
+
+    function seatLabel(seat) {
+      const st = S;
+      const tags = [];
+      if (st.contract) {
+        if (seat === st.contract.declarer) tags.push("declarer");
+        else if (seat === dummyOf(st) && st.phase !== "bidding") tags.push("dummy");
+      }
+      const who = seat === 0 ? "North · partner" : seat === ME ? "South · You" : NAMES[seat];
+      const turn = (st.phase === "bidding" || st.phase === "play") && st.turn === seat && st.trick.length < 4;
+      return `<div class="seat-label${turn ? " turn" : ""}">${who}${tags.length ? " · " + tags.join(" ") : ""}</div>`;
+    }
+
+    function render() {
+      const st = S;
+      $("us").textContent = st.totals[0];
+      $("them").textContent = st.totals[1];
+      const vulTxt = st.vul[0] && st.vul[1] ? "Both" : st.vul[0] ? "Us" : st.vul[1] ? "Them" : "None";
+
+      // Info line
+      if (st.phase === "bidding") {
+        $("info").innerHTML = `<span>Deal <b>${st.board}</b> · Dealer <b>${NAMES[st.dealer]}</b></span><span>Vulnerable: <b>${vulTxt}</b></span>`;
+      } else {
+        const c = st.contract;
+        const con = `${c.level}${SYM[c.strain]}${c.dbl === 2 ? " XX" : c.dbl ? " X" : ""}`;
+        $("info").innerHTML = `<span>Contract <b>${con}</b> by <b>${NAMES[c.declarer]}</b></span><span>Tricks · Us <b>${st.won[0]}</b> · Them <b>${st.won[1]}</b></span>`;
+      }
+
+      // North
+      const humanN = st.phase !== "bidding" && humanPlays(st, 0);
+      const showN = (st.phase === "play" && (humanN || (dummyShown(st) && dummyOf(st) === 0)));
+      let n = seatLabel(0);
+      if (showN) n += `<div class="hand" id="northHand"></div>`;
+      else n += `<div class="backs">${"<i></i>".repeat(Math.min(st.hands[0].length, 13))}</div>`;
+      $("north").innerHTML = n;
+      if (showN) handHtml($("northHand"), 0, st.phase === "play" && humanN && st.turn === 0 && st.trick.length < 4);
+
+      // East / West
+      for (const seat of [1, 3]) {
+        const el = $(seat === 1 ? "east" : "west");
+        let html = seatLabel(seat);
+        const showD = st.phase === "play" && dummyShown(st) && dummyOf(st) === seat;
+        if (showD) html += `<div class="compact">${compactHtml(st.hands[seat])}</div>`;
+        else html += `<div class="backs">${"<i></i>".repeat(Math.min(st.hands[seat].length, 6))}</div><div class="count">${st.hands[seat].length} cards</div>`;
+        el.innerHTML = html;
+      }
+
+      // Center
+      const center = $("center");
+      if (st.phase === "bidding") {
+        const order = [3, 0, 1, 2];
+        const heads = order.map((s) => `<th class="${st.vul[side(s)] ? "vul" : ""}">${SHORT[s]}</th>`).join("");
+        const cells = [];
+        for (let i = 0; i < order.indexOf(st.dealer); i++) cells.push("<td></td>");
+        for (const { c } of st.auction) {
+          const red = typeof c === "number" && isRed(strain(c));
+          cells.push(`<td class="${red ? "r" : ""}">${callText(c)}</td>`);
+        }
+        cells.push(`<td class="now">${st.turn === ME ? "?" : "…"}</td>`);
+        let rows = "";
+        for (let i = 0; i < cells.length; i += 4) rows += `<tr>${cells.slice(i, i + 4).join("")}</tr>`;
+        center.innerHTML = `<table class="auction"><tr>${heads}</tr>${rows}</table>`;
+      } else {
+        const trick = st.trick.length ? st.trick : st.phase === "done" && st.last ? st.last : [];
+        const win = trick.length === 4 ? trickWinner(trick, trumpOf(st)).seat : -1;
+        let html = `<div class="trick">` + trick.map((t) => cardHtml(t.card, `p${t.seat}${t.seat === win ? " win" : ""}`)).join("") + `</div>`;
+        if (!trick.length && st.phase === "play") {
+          const t = st.turn;
+          const msg = humanPlays(st, t) ? (t === ME ? "Your lead" : "Lead from North") : `${NAMES[t]} to lead`;
+          html += `<div class="note">${msg}</div>`;
+        }
+        center.innerHTML = html;
+      }
+
+      // Bidding box
+      const myBid = st.phase === "bidding" && st.turn === ME;
+      $("bidbox").hidden = st.phase !== "bidding";
+      if (st.phase === "bidding") renderBidBox(myBid);
+
+      // South
+      $("southLabel").outerHTML = `<div class="seat-label${(st.phase === "bidding" || st.phase === "play") && st.turn === ME && st.trick.length < 4 ? " turn" : ""}" id="southLabel">South · You${st.contract && st.phase !== "bidding" ? (st.contract.declarer === ME ? " · declarer" : dummyOf(st) === ME ? " · dummy" : "") : ""}</div>`;
+      handHtml($("south"), ME, st.phase === "play" && humanPlays(st, ME) && st.turn === ME && st.trick.length < 4);
+      const L = lens(st.orig[ME]);
+      $("hcp").textContent = `${hcp(st.orig[ME])} points · ${L[3]}-${L[2]}-${L[1]}-${L[0]}`;
+      const canHint = (st.phase === "bidding" && st.turn === ME) || (st.phase === "play" && humanPlays(st, st.turn) && st.trick.length < 4);
+      $("hint").disabled = !canHint;
+      $("hint").textContent = st.phase === "done" ? "Next deal" : "Hint";
+      if (st.phase === "done") $("hint").disabled = false;
+    }
+
+    function renderBidBox(active) {
+      const st = S;
+      const { min, canX, canXX } = legal(st, ME);
+      const maxLevelOk = (l) => bidNum(l, 4) >= min;
+      if (pickedLevel && !maxLevelOk(pickedLevel)) pickedLevel = 0;
+      const hl = typeof hintOn === "number" && st.phase === "bidding" ? hintOn : null;
+      $("levels").innerHTML = [1, 2, 3, 4, 5, 6, 7].map((l) =>
+        `<button data-level="${l}" class="${pickedLevel === l ? "sel" : ""}${hl !== null && level(hl) === l && !pickedLevel ? " hint" : ""}" ${!active || !maxLevelOk(l) ? "disabled" : ""}>${l}</button>`).join("");
+      $("strains").innerHTML = [0, 1, 2, 3, 4].map((s) => {
+        const v = pickedLevel ? bidNum(pickedLevel, s) : -1;
+        const en = active && pickedLevel && v >= min;
+        const lbl = pickedLevel ? pickedLevel + SYM[s] : SYM[s];
+        return `<button data-strain="${s}" class="${isRed(s) ? "red" : ""}${hl !== null && pickedLevel && v === hl ? " hint" : ""}" ${en ? "" : "disabled"}>${lbl}</button>`;
+      }).join("");
+      for (const b of document.querySelectorAll("[data-call]")) {
+        const c = b.dataset.call;
+        b.disabled = !active || (c === "X" && !canX) || (c === "XX" && !canXX);
+        b.classList.toggle("hint", hintOn === c);
+      }
+    }
+
+    // ---------- Sheets ----------
+    function openSheet(html) { $("sheetBox").innerHTML = html; $("sheet").classList.add("show"); }
+    function closeSheet() { $("sheet").classList.remove("show"); }
+    function toast(msg) {
+      const t = $("toast");
+      t.textContent = msg;
+      t.classList.add("show");
+      setTimeout(() => t.classList.remove("show"), 1600);
+    }
+
+    function dealHtml(st) {
+      return `<div class="deal">` + [0, 3, 1, 2].map((s) =>
+        `<div><b>${NAMES[s]}${s === ME ? " (you)" : ""} · ${hcp(st.orig[s])}</b>${compactHtml(st.orig[s])}</div>`).join("") + `</div>`;
+    }
+
+    function showResult() {
+      const st = S;
+      if (st.phase !== "done" || !st.result) return;
+      const r = st.result, c = st.contract;
+      const con = `${c.level}${SYM[c.strain]}${c.dbl === 2 ? " redoubled" : c.dbl ? " doubled" : ""}`;
+      const diff = r.made - r.need;
+      const outcome = diff >= 0 ? (diff ? `made with ${diff} overtrick${diff > 1 ? "s" : ""}` : "made exactly") : `went down ${-diff}`;
+      const ours = r.ds === 0;
+      const good = (r.sc > 0) === ours;
+      const pts = r.pts[0] ? `+${r.pts[0]} for us` : `+${r.pts[1]} for them`;
+      openSheet(`
+        <h2>${good ? "Nice!" : "Unlucky"}</h2>
+        <p><b>${con}</b> by ${NAMES[c.declarer]} ${outcome} (${r.made} tricks). <b>${pts}</b>.</p>
+        <p class="muted">Total: us ${st.totals[0]}, them ${st.totals[1]}</p>
+        ${dealHtml(st)}
+        <div class="buttons"><button class="secondary" data-act="close">See table</button><button data-act="next">Next deal</button></div>`);
+    }
+
+    function nextDeal() {
+      closeSheet();
+      S = newState(S.board + 1, S.totals);
+      save(); render(); schedule();
+    }
+
+    function showMenu() {
+      openSheet(`
+        <h2>Bridge</h2>
+        <p class="muted">You sit South. North is your computer partner; East and West are the computer opponents. Scores add up across deals.</p>
+        <div class="buttons"><button data-act="help">How to play</button></div>
+        <div class="buttons"><button class="secondary" data-act="redeal">Skip this deal</button><button class="secondary" data-act="reset">Reset scores</button></div>
+        <div class="buttons"><button class="secondary" data-act="close">Close</button></div>`);
+    }
+
+    function showHelp() {
+      openSheet(`
+        <h2>How to play</h2>
+        <p><b>The goal.</b> You and North are partners against East and West. Each deal, both sides bid for the right to name trumps, then you try to win the tricks you promised.</p>
+        <p><b>Bidding.</b> A bid like 3♥ means “we’ll win 6 + 3 = 9 of the 13 tricks with hearts as trumps” (NT = no trumps). Each bid must be higher than the last: a higher number, or the same number in a higher suit (♣ &lt; ♦ &lt; ♥ &lt; ♠ &lt; NT). Three passes in a row end the bidding. Tap a number, then a suit.</p>
+        <ul>
+          <li>Count points: A = 4, K = 3, Q = 2, J = 1. About 12+ is enough to open; partners with 25 together can usually make game (3NT, 4♥, 4♠).</li>
+          <li><b>Double</b> an opponent’s bid if you think they’ll fail: it raises the stakes. They may <b>redouble</b>.</li>
+        </ul>
+        <p><b>Play.</b> The player left of the declarer leads. Then the declarer’s partner, the dummy, lays their cards face up and the declarer plays both hands. Follow the suit that was led if you can; otherwise play anything, and a trump wins. The highest card of the led suit (or highest trump) wins the trick, and the winner leads next. When our side declares, you play North’s cards too.</p>
+        <p><b>Scoring.</b> Making your contract scores points (much more for games and slams, and when vulnerable); falling short gives the other side points for each trick missed.</p>
+        <p class="muted">Stuck? Tap Hint to see what the computer would do.</p>
+        <div class="buttons"><button data-act="close">Got it</button></div>`);
+    }
+
+    $("sheet").addEventListener("click", (e) => {
+      if (e.target === $("sheet")) return closeSheet();
+      const b = e.target.closest("[data-act]");
+      if (!b) return;
+      const act = b.dataset.act;
+      if (act === "close") closeSheet();
+      else if (act === "next") nextDeal();
+      else if (act === "help") showHelp();
+      else if (act === "redeal") nextDeal();
+      else if (act === "reset") { S.totals = [0, 0]; save(); render(); closeSheet(); }
+    });
+
+    // ---------- Input ----------
+    $("menu").addEventListener("click", showMenu);
+    document.addEventListener("click", (e) => {
+      const card = e.target.closest("button.card");
+      if (card) {
+        const seat = +card.dataset.seat;
+        if (S.phase === "play" && humanPlays(S, seat)) doPlay(seat, +card.dataset.card);
+        return;
+      }
+      if (S.phase !== "bidding" || S.turn !== ME) return;
+      const lv = e.target.closest("[data-level]");
+      if (lv) { pickedLevel = +lv.dataset.level; renderBidBox(true); return; }
+      const sb = e.target.closest("[data-strain]");
+      if (sb && pickedLevel) { doCall(bidNum(pickedLevel, +sb.dataset.strain)); return; }
+      const cb = e.target.closest("[data-call]");
+      if (cb) doCall(cb.dataset.call);
+    });
+    $("hint").addEventListener("click", () => {
+      const st = S;
+      if (st.phase === "done") return showResult();
+      if (st.phase === "bidding" && st.turn === ME) {
+        hintOn = botCall(st, ME);
+        pickedLevel = typeof hintOn === "number" ? level(hintOn) : 0;
+        renderBidBox(true);
+        if (typeof hintOn !== "number") toast(`Hint: ${callText(hintOn)}`);
+      } else if (st.phase === "play" && humanPlays(st, st.turn)) {
+        hintOn = botPlay(st, st.turn);
+        render();
+      }
+    });
+    window.addEventListener("resize", render);
+
+    S = load() || newState(1, [0, 0]);
+    render();
+    schedule();
+  </script>
+</body>
+</html>
