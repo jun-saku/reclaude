@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
   <meta name="theme-color" content="#1f5a3d">
   <title>Bridge</title>
-  <meta name="description" content="Contract bridge on your phone: bid and play with a computer partner against two computer opponents">
+  <meta name="description" content="Contract bridge on your phone: play 2 to 4 friends online, or a computer partner against two computer opponents">
   <style>
     :root {
       --bg: #f7f6f3;
@@ -108,6 +108,7 @@
     .side { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; }
     .side.east { align-items: flex-end; text-align: right; }
     .backs { display: flex; height: 26px; }
+    .backs i:last-child { margin-right: 0; }
     .backs i { width: 16px; height: 24px; margin-right: -10px; border-radius: 3px; background: var(--back); border: 1px solid rgba(255,255,255,0.6); }
     .count { font-size: 0.75rem; opacity: 0.75; }
     .compact { font-size: 0.74rem; letter-spacing: -0.02em; line-height: 1.35; background: var(--card); color: var(--black); border-radius: 6px; padding: 3px 5px; font-weight: 600; white-space: nowrap; }
@@ -201,52 +202,130 @@
     @media (prefers-color-scheme: dark) { .deal .r { color: #ff7b86; } }
     .toast { position: fixed; left: 50%; top: 40%; transform: translateX(-50%); background: var(--panel); color: var(--text); padding: 12px 18px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); font-weight: 600; z-index: 20; display: none; }
     .toast.show { display: block; }
+
+    [hidden] { display: none !important; }
+    #home, #play { display: flex; flex-direction: column; gap: 10px; }
+    .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+    .panel h2 { margin: 0; font-size: 1.1rem; }
+    .panel p { margin: 0; }
+    .muted { color: var(--muted); font-size: 0.9rem; }
+    .big { padding: 12px 16px; font-size: 1rem; }
+    .name-row { display: flex; align-items: center; gap: 10px; font-weight: 600; }
+    .name-row input, .join input {
+      flex: 1; min-width: 0; font: inherit; padding: 10px 12px; border-radius: 12px;
+      border: 1px solid var(--border); background: var(--bg); color: var(--text);
+    }
+    .join { display: flex; gap: 10px; }
+    .join input { font-size: 1.3rem; letter-spacing: 0.3em; text-transform: uppercase; text-align: center; }
+    .error { color: var(--red); min-height: 1.3em; font-size: 0.95rem; }
+    .bigcode { font-size: 2.6rem; font-weight: 800; letter-spacing: 0.25em; text-align: center; }
+    .btnrow { display: flex; gap: 8px; }
+    .btnrow button { flex: 1; }
+    .seg { display: flex; background: var(--border); border-radius: 12px; padding: 4px; gap: 4px; }
+    .seg button { flex: 1; background: transparent; color: var(--text); padding: 8px 6px; font-size: 0.9rem; white-space: normal; }
+    .seg button[aria-pressed="true"] { background: var(--panel); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15); }
+    .seated { display: flex; flex-direction: column; gap: 6px; }
+    .seated div { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); opacity: 0.4; flex: none; }
+    .dot.on { background: #2e9d5b; opacity: 1; }
+    .seating { font-size: 0.9rem; line-height: 1.5; background: var(--bg); border-radius: 10px; padding: 8px 10px; }
+    .away { font-weight: 500; text-transform: none; letter-spacing: 0; opacity: 0.8; }
   </style>
 </head>
 <body>
   <main class="game">
     <header>
       <h1>Bridge</h1>
-      <div class="score"><span>Us</span><b id="us">0</b></div>
-      <div class="score"><span>Them</span><b id="them">0</b></div>
+      <div class="score" id="usBox"><span>Us</span><b id="us">0</b></div>
+      <div class="score" id="themBox"><span>Them</span><b id="them">0</b></div>
       <button class="secondary menu" id="menu" aria-label="Menu">☰</button>
     </header>
-    <div class="info" id="info"></div>
-    <section class="table">
-      <div class="north" id="north"></div>
-      <div class="side west" id="west"></div>
-      <div class="center" id="center"></div>
-      <div class="side east" id="east"></div>
-    </section>
-    <div class="bidbox" id="bidbox" hidden>
-      <div class="bidrow levels" id="levels"></div>
-      <div class="bidrow strains" id="strains"></div>
-      <div class="bidrow calls">
-        <button class="pass" data-call="P">Pass</button>
-        <button class="dbl" data-call="X">Double</button>
-        <button class="dbl" data-call="XX">Redbl</button>
+
+    <section id="home" hidden>
+      <div class="panel">
+        <h2>Play the computer</h2>
+        <p class="muted">You and a computer partner against two computer opponents.</p>
+        <button class="big" id="solo">Play</button>
       </div>
-    </div>
-    <section class="south">
-      <div class="row"><div class="seat-label" id="southLabel">South · You</div><p id="hcp"></p><button class="secondary hintbtn" id="hint">Hint</button></div>
-      <div class="hand" id="south"></div>
+      <div class="panel">
+        <h2>Play friends online</h2>
+        <p class="muted">2 to 4 players. Create a room and send the code or link; computer players take any empty seats.</p>
+        <label class="name-row"><span>Your name</span>
+          <input id="my-name" maxlength="16" autocomplete="nickname" spellcheck="false" placeholder="So friends know it's you">
+        </label>
+        <button class="big" id="create">Create room</button>
+        <form class="join" id="join-form" autocomplete="off">
+          <input id="join-code" maxlength="4" autocapitalize="characters" spellcheck="false" placeholder="CODE" aria-label="Room code">
+          <button id="join" type="submit">Join</button>
+        </form>
+        <p class="error" id="home-error" role="alert"></p>
+      </div>
+      <button class="secondary" id="home-help">How to play</button>
+    </section>
+
+    <section id="lobby" class="panel" hidden>
+      <p class="muted" style="text-align: center">Send this code to your friends</p>
+      <p class="bigcode" id="lobby-code"></p>
+      <div class="btnrow">
+        <button id="share">Share link</button>
+        <button class="secondary" id="copy">Copy code</button>
+      </div>
+      <div class="seated" id="seated"></div>
+      <div class="seg" id="pairing" role="group" aria-label="Seating" hidden>
+        <button type="button" data-pair="partners" aria-pressed="true">Partners vs computers</button>
+        <button type="button" data-pair="rivals" aria-pressed="false">Against each other</button>
+      </div>
+      <div class="seating" id="seating"></div>
+      <button class="big" id="start" hidden>Start game</button>
+      <p class="muted" id="lobby-note" style="text-align: center"></p>
+      <button class="secondary" id="lobby-leave">Leave</button>
+    </section>
+
+    <section id="play" hidden>
+      <div class="info" id="info"></div>
+      <section class="table">
+        <div class="north" id="north"></div>
+        <div class="side west" id="west"></div>
+        <div class="center" id="center"></div>
+        <div class="side east" id="east"></div>
+      </section>
+      <div class="bidbox" id="bidbox" hidden>
+        <div class="bidrow levels" id="levels"></div>
+        <div class="bidrow strains" id="strains"></div>
+        <div class="bidrow calls">
+          <button class="pass" data-call="P">Pass</button>
+          <button class="dbl" data-call="X">Double</button>
+          <button class="dbl" data-call="XX">Redbl</button>
+        </div>
+      </div>
+      <section class="south">
+        <div class="row"><div class="seat-label" id="southLabel"></div><p id="hcp"></p><button class="secondary hintbtn" id="hint">Hint</button></div>
+        <div class="hand" id="south"></div>
+      </section>
     </section>
   </main>
 
   <div class="sheet" id="sheet"><div class="box" id="sheetBox"></div></div>
   <div class="toast" id="toast"></div>
 
-  <script>
-    // Seats: 0 North (partner), 1 East, 2 South (you), 3 West. Sides: 0 = North/South (us), 1 = East/West.
+  <script type="module">
+    import * as rooms from "../shared/rooms.js";
+
+    // Table seats: 0 North, 1 East, 2 South, 3 West. Sides: 0 = North/South, 1 = East/West.
     // Cards are 0..51: suit * 13 + (rank - 2). Suits/strains: 0 ♣, 1 ♦, 2 ♥, 3 ♠, 4 NT.
     // Calls: "P", "X", "XX", or a bid number 0..34 = (level - 1) * 5 + strain.
+    // A game (G) is one plain object: the deal, auction, play and running totals. owner[seat] is the room seat
+    // of the person at that table seat, or -1 for a computer player. Playing the computer, G lives in this
+    // device's storage (you are room seat 0 at South). Online, G is JSON in room.state.g, and room.turn is the
+    // room seat of whoever acts next: the player on turn, the declarer for dummy, or the host for computers.
+    const GAME = "bridge";
     const SYM = ["♣", "♦", "♥", "♠", "NT"];
     const NAMES = ["North", "East", "South", "West"];
     const SHORT = ["N", "E", "S", "W"];
     const RANK = { 10: "10", 11: "J", 12: "Q", 13: "K", 14: "A" };
     const VUL = ["-", "NS", "EW", "B", "NS", "EW", "B", "-", "EW", "B", "-", "NS", "B", "-", "NS", "EW"];
     const KEY = "bridge.v1";
-    const ME = 2;
+    const SOLO_OWNER = [-1, -1, 0, -1];
 
     const suitOf = (c) => Math.floor(c / 13);
     const rankOf = (c) => (c % 13) + 2;
@@ -260,7 +339,7 @@
     const callText = (c) => (c === "P" ? "Pass" : c === "X" ? "X" : c === "XX" ? "XX" : level(c) + SYM[strain(c)]);
     const low = (cs) => cs.reduce((a, b) => (rankOf(b) < rankOf(a) ? b : a));
     const high = (cs) => cs.reduce((a, b) => (rankOf(b) > rankOf(a) ? b : a));
-    const esc = (s) => String(s).replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]);
+    const esc = (s) => String(s).replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`);
 
     // ---------- Hand evaluation ----------
     const hcp = (h) => h.reduce((n, c) => n + Math.max(0, rankOf(c) - 10), 0);
@@ -270,23 +349,20 @@
       return k === "4333" || k === "4432" || k === "5332";
     }
 
-    // ---------- State ----------
-    let S = null;
-    let timer = 0;
-    let pickedLevel = 0;
-    let hintOn = null;
-
-    function newState(board, totals) {
+    // ---------- Deals ----------
+    function newDeal(board, totals, owner) {
       const deck = [...Array(52).keys()];
+      const rnd = new Uint32Array(52);
+      crypto.getRandomValues(rnd);
       for (let i = deck.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
+        const j = rnd[i] % (i + 1);
         [deck[i], deck[j]] = [deck[j], deck[i]];
       }
       const hands = [0, 1, 2, 3].map((i) => deck.slice(i * 13, i * 13 + 13));
       const dealer = (board - 1) % 4;
       const v = VUL[(board - 1) % 16];
       return {
-        board, dealer,
+        board, dealer, owner,
         vul: [v === "NS" || v === "B", v === "EW" || v === "B"],
         hands, orig: hands.map((h) => h.slice()),
         auction: [], phase: "bidding", turn: dealer,
@@ -295,22 +371,13 @@
       };
     }
 
-    function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
-    function load() {
-      try {
-        const s = JSON.parse(localStorage.getItem(KEY));
-        if (s && Array.isArray(s.hands) && s.hands.length === 4 && s.phase) return s;
-      } catch (e) {}
-      return null;
-    }
-
     // ---------- Auction ----------
     function lastBidIdx(a) {
       for (let i = a.length - 1; i >= 0; i--) if (typeof a[i].c === "number") return i;
       return -1;
     }
-    function legal(st, seat) {
-      const a = st.auction;
+    function legal(g, seat) {
+      const a = g.auction;
       const i = lastBidIdx(a);
       let lastNP = null;
       for (let j = a.length - 1; j >= 0; j--) if (a[j].c !== "P") { lastNP = a[j]; break; }
@@ -319,6 +386,10 @@
         canX: !!lastNP && typeof lastNP.c === "number" && side(lastNP.seat) !== side(seat),
         canXX: !!lastNP && lastNP.c === "X" && side(lastNP.seat) !== side(seat),
       };
+    }
+    function legalCall(g, c) {
+      const { min, canX, canXX } = legal(g, g.turn);
+      return c === "P" || (c === "X" && canX) || (c === "XX" && canXX) || (Number.isInteger(c) && c >= min && c <= 34);
     }
     function auctionOver(a) {
       const n = a.length;
@@ -364,10 +435,10 @@
       return L[1] > L[0] || (L[1] === 4 && L[0] === 4) ? 1 : 0;
     }
 
-    function botCall(st, seat) {
-      const h = st.hands[seat], hc = hcp(h), L = lens(h), bal = balanced(L);
-      const a = st.auction, info = shownInfo(a), me = info[seat], P = info[partner(seat)];
-      const { min, canX } = legal(st, seat);
+    function botCall(g, seat) {
+      const h = g.hands[seat], hc = hcp(h), L = lens(h), bal = balanced(L);
+      const a = g.auction, info = shownInfo(a), me = info[seat], P = info[partner(seat)];
+      const { min, canX } = legal(g, seat);
       const anyBid = lastBidIdx(a) >= 0;
       const cheapest = (s) => { let l = 1; while (bidNum(l, s) < min) l++; return l; };
       const ok = (c) => (typeof c === "number" ? (c >= min && c <= 34 ? c : "P") : c === "X" && !canX ? "P" : c);
@@ -432,11 +503,11 @@
     }
 
     // ---------- Play ----------
-    const trumpOf = (st) => (st.contract.strain < 4 ? st.contract.strain : -1);
-    function legalCards(st, seat) {
-      const h = st.hands[seat];
-      if (!st.trick.length) return h.slice();
-      const ls = suitOf(st.trick[0].card);
+    const trumpOf = (g) => (g.contract.strain < 4 ? g.contract.strain : -1);
+    function legalCards(g, seat) {
+      const h = g.hands[seat];
+      if (!g.trick.length) return h.slice();
+      const ls = suitOf(g.trick[0].card);
       const f = h.filter((c) => suitOf(c) === ls);
       return f.length ? f : h.slice();
     }
@@ -448,33 +519,32 @@
       }
       return w;
     }
-    const dummyOf = (st) => partner(st.contract.declarer);
-    const dummyShown = (st) => st.phase !== "bidding" && st.played.length > 0;
-    const humanPlays = (st, seat) => seat === ME || (side(st.contract.declarer) === 0 && seat === 0);
+    const dummyOf = (g) => partner(g.contract.declarer);
+    const dummyShown = (g) => g.phase !== "bidding" && g.played.length > 0;
 
-    function botPlay(st, seat) {
-      const trump = trumpOf(st);
-      const h = st.hands[seat];
-      const cards = legalCards(st, seat);
-      const decl = st.contract.declarer;
+    function botPlay(g, seat) {
+      const trump = trumpOf(g);
+      const h = g.hands[seat];
+      const cards = legalCards(g, seat);
+      const decl = g.contract.declarer;
       // Cards this seat can see: its own hand, plus dummy (and declarer's hand if this is dummy).
       const known = new Set(h);
-      if (dummyShown(st)) for (const c of st.hands[dummyOf(st)]) known.add(c);
-      if (seat === dummyOf(st)) for (const c of st.hands[decl]) known.add(c);
-      const played = new Set(st.played);
+      if (dummyShown(g)) for (const c of g.hands[dummyOf(g)]) known.add(c);
+      if (seat === dummyOf(g)) for (const c of g.hands[decl]) known.add(c);
+      const played = new Set(g.played);
       const master = (c) => {
         for (let x = c + 1; x < suitOf(c) * 13 + 13; x++) if (!played.has(x) && !known.has(x)) return false;
         return true;
       };
       const bySuit = (s) => h.filter((c) => suitOf(c) === s);
 
-      if (!st.trick.length) {
+      if (!g.trick.length) {
         const ourSide = side(seat) === side(decl);
         const nonT = h.filter((c) => suitOf(c) !== trump);
         if (ourSide && trump >= 0) {
-          const partnerH = seat === decl ? st.hands[dummyOf(st)] : st.hands[decl];
+          const partnerH = seat === decl ? g.hands[dummyOf(g)] : g.hands[decl];
           const ours = h.concat(partnerH).filter((c) => suitOf(c) === trump).length;
-          const gone = st.played.filter((c) => suitOf(c) === trump).length;
+          const gone = g.played.filter((c) => suitOf(c) === trump).length;
           const mt = bySuit(trump).filter(master);
           if (13 - ours - gone > 0 && mt.length) return high(mt);
         }
@@ -484,7 +554,7 @@
         // Pick a suit: partner's bid suit on defence, else our longest.
         let suit = -1;
         if (!ourSide) {
-          const P = shownInfo(st.auction)[partner(seat)];
+          const P = shownInfo(g.auction)[partner(seat)];
           let best = 0;
           for (const s of [0, 1, 2, 3]) if (s !== trump && P.len[s] > best && bySuit(s).length) { best = P.len[s]; suit = s; }
         }
@@ -501,13 +571,13 @@
         return low(cs);
       }
 
-      const w = trickWinner(st.trick, trump);
+      const w = trickWinner(g.trick, trump);
       const partnerWins = side(w.seat) === side(seat);
-      const pos = st.trick.length;
-      const beats = (c) => trickWinner([...st.trick, { seat, card: c }], trump).seat === seat;
-      const ls = suitOf(st.trick[0].card);
+      const pos = g.trick.length;
+      const beats = (c) => trickWinner([...g.trick, { seat, card: c }], trump).seat === seat;
+      const ls = suitOf(g.trick[0].card);
       const safe = partnerWins && (pos === 3 || (suitOf(w.card) === ls && master(w.card)) || suitOf(w.card) === trump);
-      if (suitOf(cards[0]) === ls && cards.every((c) => suitOf(c) === ls)) {
+      if (cards.every((c) => suitOf(c) === ls)) {
         if (partnerWins) return low(cards);
         const win = cards.filter(beats);
         if (!win.length || pos === 1) return low(cards);
@@ -546,70 +616,183 @@
       return -p * d;
     }
 
-    // ---------- Actions ----------
-    function doCall(c) {
-      const st = S;
+    // ---------- Moves (pure: change g and return it) ----------
+    function applyCall(g, c) {
+      g.auction.push({ seat: g.turn, c });
+      if (auctionOver(g.auction)) {
+        const con = contractOf(g.auction);
+        if (!con) {
+          const next = newDeal(g.board + 1, g.totals, g.owner);
+          next.passedOut = g.board;
+          return next;
+        }
+        g.contract = con;
+        g.phase = "play";
+        g.turn = (con.declarer + 1) % 4;
+      } else g.turn = (g.turn + 1) % 4;
+      return g;
+    }
+
+    function applyPlay(g, seat, card) {
+      g.hands[seat] = g.hands[seat].filter((c) => c !== card);
+      g.trick.push({ seat, card });
+      g.played.push(card);
+      g.turn = (seat + 1) % 4;
+      if (g.trick.length === 4) {
+        const w = trickWinner(g.trick, trumpOf(g));
+        g.won[side(w.seat)]++;
+        g.last = g.trick;
+        g.trick = [];
+        g.ntricks++;
+        g.turn = w.seat;
+        if (g.ntricks === 13) {
+          const con = g.contract, ds = side(con.declarer);
+          const made = g.won[ds];
+          const sc = scoreHand(con, made, g.vul[ds]);
+          const pts = [0, 0];
+          if (sc > 0) pts[ds] = sc; else pts[1 - ds] = -sc;
+          g.totals = [g.totals[0] + pts[0], g.totals[1] + pts[1]];
+          g.result = { made, need: con.level + 6, sc, ds, pts };
+          g.phase = "done";
+        }
+      }
+      return g;
+    }
+
+    // Who acts for a table seat: the room seat of a person, or -1 for the computer. In play, the declaring
+    // side is played by one person: the declarer, or the dummy when the declarer is a computer.
+    function actor(g, seat) {
+      if (g.phase === "play") {
+        const d = g.contract.declarer, dm = partner(d);
+        if (seat === d || seat === dm) return g.owner[d] >= 0 ? g.owner[d] : g.owner[dm];
+      }
+      return g.owner[seat];
+    }
+    const roomTurn = (g) => Math.max(0, actor(g, g.turn)); // computers are run by the host (room seat 0)
+    const stepKey = (g) => `${g.board}:${g.auction.length}:${g.played.length}`;
+
+    // ---------- Local state ----------
+    let mode = null;      // "solo" | "online" | null (home)
+    let G = null;         // the current game
+    let seat = null;      // online: { backend, code, seat }
+    let room = null;      // online: the room
+    let leaveRoom = null;
+    let pairing = "partners";
+    let busy = false;
+    let timer = 0;
+    let pickedLevel = 0;
+    let hintOn = null;
+    let seenTricks = "";
+    let showLastUntil = 0;
+    let resultShown = "";
+    let toastShown = 0;
+    let resultOpen = false;
+    let leftShown = false;
+
+    const myRS = () => (mode === "online" ? seat.seat : 0);
+    const meSeat = () => { const i = G ? G.owner.indexOf(myRS()) : -1; return i < 0 ? 2 : i; };
+    const mySide = () => side(meSeat());
+    const isHost = () => mode === "solo" || (room && room.host === seat.backend.uid);
+    const active = () => G && (G.phase === "bidding" || G.phase === "play") && (mode === "solo" || room?.status === "playing");
+    const myTurn = () => active() && actor(G, G.turn) === myRS();
+    const botTurn = () => active() && actor(G, G.turn) < 0 && isHost();
+    // Table seat shown at a screen slot (0 top, 1 right, 2 bottom, 3 left): you always sit at the bottom.
+    const atSlot = (slot) => (slot + meSeat() + 2) % 4;
+    const slotOf = (t) => (t - meSeat() + 6) % 4;
+
+    function who(t) {
+      const o = G.owner[t];
+      if (o === myRS()) return "You";
+      if (o < 0) return mode === "solo" && t === partner(meSeat()) ? "Partner" : "Computer";
+      return esc(rooms.nameOf(room, o)) + (room && !rooms.isOnline(room, o) ? ' <span class="away">(away)</span>' : "");
+    }
+
+    function saveSolo() { try { localStorage.setItem(KEY, JSON.stringify(G)); } catch (e) {} }
+    function loadSolo() {
+      try {
+        const s = JSON.parse(localStorage.getItem(KEY));
+        if (s && Array.isArray(s.hands) && s.hands.length === 4 && s.phase) {
+          s.owner = SOLO_OWNER;
+          // Saved by the first version, which collected a full trick a moment later.
+          if (s.trick.length === 4) { const x = s.trick.pop(); s.played.pop(); s.hands[x.seat].push(x.card); applyPlay(s, x.seat, x.card); }
+          return s;
+        }
+      } catch (e) {}
+      return null;
+    }
+
+    // ---------- Acting ----------
+    async function act(kind, value) {
+      if (busy || !active()) return;
+      const t = G.turn, key = stepKey(G);
+      const apply = (g) => (kind === "call" ? applyCall(g, value) : applyPlay(g, t, value));
+      if (kind === "call" ? !legalCall(G, value) : !legalCards(G, t).includes(value)) return;
       hintOn = null;
       pickedLevel = 0;
-      st.auction.push({ seat: st.turn, c });
-      if (auctionOver(st.auction)) {
-        const con = contractOf(st.auction);
-        if (!con) {
-          toast("All passed. New deal.");
-          S = newState(st.board + 1, st.totals);
-        } else {
-          st.contract = con;
-          st.phase = "play";
-          st.turn = (con.declarer + 1) % 4;
-        }
-      } else st.turn = (st.turn + 1) % 4;
-      save(); render(); schedule();
-    }
-
-    function doPlay(seat, card) {
-      const st = S;
-      if (st.phase !== "play" || st.turn !== seat || st.trick.length >= 4) return;
-      if (!legalCards(st, seat).includes(card)) return;
-      hintOn = null;
-      st.hands[seat] = st.hands[seat].filter((c) => c !== card);
-      st.trick.push({ seat, card });
-      st.played.push(card);
-      st.turn = (seat + 1) % 4;
-      save(); render(); schedule();
-    }
-
-    function collect() {
-      const st = S;
-      const w = trickWinner(st.trick, trumpOf(st));
-      st.won[side(w.seat)]++;
-      st.last = st.trick;
-      st.trick = [];
-      st.ntricks++;
-      st.turn = w.seat;
-      if (st.ntricks === 13) {
-        const con = st.contract, ds = side(con.declarer);
-        const made = st.won[ds];
-        const sc = scoreHand(con, made, st.vul[ds]);
-        const pts = [0, 0];
-        if (sc > 0) pts[ds] = sc; else pts[1 - ds] = -sc;
-        st.totals = [st.totals[0] + pts[0], st.totals[1] + pts[1]];
-        st.result = { made, need: con.level + 6, sc, ds, pts };
-        st.phase = "done";
+      if (mode === "solo") {
+        G = apply(G);
+        saveSolo();
+        update();
+        return;
       }
-      save(); render(); schedule();
+      busy = true;
+      const round = room.round;
+      try {
+        await seat.backend.transact(seat.code, (cur) => {
+          if (!cur || cur.status !== "playing" || cur.round !== round || !cur.state?.g) return undefined;
+          const g = JSON.parse(cur.state.g);
+          if (stepKey(g) !== key || g.turn !== t) return undefined;
+          const next = apply(g);
+          cur.state = { g: JSON.stringify(next) };
+          cur.turn = roomTurn(next);
+          if (next.phase === "done") {
+            cur.status = "done";
+            cur.winner = next.result.pts[0] > 0 ? 0 : 1;
+          }
+          return cur;
+        });
+      } catch (err) {
+        console.error(err);
+        toast("Couldn't send that. Try again.");
+      } finally {
+        busy = false;
+        update();
+      }
     }
 
     function schedule() {
       clearTimeout(timer);
-      const st = S;
-      if (st.phase === "bidding" && st.turn !== ME) {
-        timer = setTimeout(() => doCall(botCall(S, S.turn)), 650);
-      } else if (st.phase === "play") {
-        if (st.trick.length === 4) timer = setTimeout(collect, 1200);
-        else if (!humanPlays(st, st.turn)) timer = setTimeout(() => doPlay(S.turn, botPlay(S, S.turn)), 650);
-      } else if (st.phase === "done") {
-        timer = setTimeout(showResult, 900);
+      if (!G) return;
+      if (botTurn()) {
+        const wait = Math.max(650, showLastUntil - Date.now() + 250);
+        const key = stepKey(G);
+        timer = setTimeout(() => {
+          if (!G || stepKey(G) !== key || !botTurn()) return;
+          if (G.phase === "bidding") act("call", botCall(G, G.turn));
+          else act("play", botPlay(G, G.turn));
+        }, wait);
+      } else if (G.phase === "done" && resultShown !== `${G.board}` && !(room && typeof room.left === "number")) {
+        timer = setTimeout(() => { resultShown = `${G.board}`; showResult(); }, Math.max(900, showLastUntil - Date.now() + 200));
       }
+    }
+
+    function update() {
+      if (!G) return;
+      if (G.passedOut && toastShown !== G.passedOut) {
+        toastShown = G.passedOut;
+        toast("All passed. New deal.");
+      }
+      // A trick just finished: keep its four cards on the table for a moment.
+      const tk = `${G.board}:${G.ntricks}`;
+      if (tk !== seenTricks) {
+        if (seenTricks && G.ntricks > 0 && !G.trick.length) {
+          showLastUntil = Date.now() + 1300;
+          setTimeout(render, 1350);
+        }
+        seenTricks = tk;
+      }
+      render();
+      schedule();
     }
 
     // ---------- Rendering ----------
@@ -628,135 +811,176 @@
       }).join("");
     }
 
-    function handHtml(el, seat, interactive) {
-      const st = S;
-      const h = sortHand(st.hands[seat]);
+    function handHtml(el, t, interactive) {
+      const h = sortHand(G.hands[t]);
       const width = el.clientWidth || 340;
       const step = h.length > 1 ? Math.min(50, (width - 46) / (h.length - 1)) : 0;
       const off = (width - (46 + step * Math.max(0, h.length - 1))) / 2;
-      const ok = interactive ? new Set(legalCards(st, seat)) : null;
+      const ok = interactive ? new Set(legalCards(G, t)) : null;
       el.classList.toggle("active", !!interactive);
       el.innerHTML = h.map((c, i) => {
         const cls = (ok ? (ok.has(c) ? "ok" : "no") : "") + (hintOn === c ? " hint" : "");
         return interactive
-          ? cardHtml(c, cls, "button", `data-seat="${seat}" data-card="${c}" style="left:${off + i * step}px"`)
+          ? cardHtml(c, cls, "button", `data-seat="${t}" data-card="${c}" style="left:${off + i * step}px"`)
           : cardHtml(c, cls, "div", `style="left:${off + i * step}px"`);
       }).join("");
     }
 
-    function seatLabel(seat) {
-      const st = S;
+    function labelText(t) {
       const tags = [];
-      if (st.contract) {
-        if (seat === st.contract.declarer) tags.push("declarer");
-        else if (seat === dummyOf(st) && st.phase !== "bidding") tags.push("dummy");
+      if (G.contract && G.phase !== "bidding") {
+        if (t === G.contract.declarer) tags.push("declarer");
+        else if (t === dummyOf(G)) tags.push("dummy");
       }
-      const who = seat === 0 ? "North · partner" : seat === ME ? "South · You" : NAMES[seat];
-      const turn = (st.phase === "bidding" || st.phase === "play") && st.turn === seat && st.trick.length < 4;
-      return `<div class="seat-label${turn ? " turn" : ""}">${who}${tags.length ? " · " + tags.join(" ") : ""}</div>`;
+      return `${NAMES[t]} · ${who(t)}${tags.length ? " · " + tags.join(" · ") : ""}`;
+    }
+    const isTurn = (t) => active() && G.turn === t && !(showLastUntil > Date.now() && !G.trick.length);
+    const seatLabel = (t) => `<div class="seat-label${isTurn(t) ? " turn" : ""}">${labelText(t)}</div>`;
+    // Face-up hands besides your own: dummy once the first card is down, and any hand you play.
+    const faceUp = (t) => G.phase === "play" && ((dummyShown(G) && t === dummyOf(G)) || actor(G, t) === myRS());
+
+    function show(view) {
+      for (const id of ["home", "lobby", "play"]) $(id).hidden = id !== view;
+      $("usBox").hidden = $("themBox").hidden = view !== "play";
     }
 
     function render() {
-      const st = S;
-      $("us").textContent = st.totals[0];
-      $("them").textContent = st.totals[1];
-      const vulTxt = st.vul[0] && st.vul[1] ? "Both" : st.vul[0] ? "Us" : st.vul[1] ? "Them" : "None";
+      if (mode === "online" && room && room.status === "waiting") return renderLobby();
+      if (!G) return;
+      show("play");
+      const me = meSeat(), ms = mySide();
+      $("us").textContent = G.totals[ms];
+      $("them").textContent = G.totals[1 - ms];
+      const vulTxt = G.vul[0] && G.vul[1] ? "Both" : G.vul[ms] ? "Us" : G.vul[1 - ms] ? "Them" : "None";
 
-      // Info line
-      if (st.phase === "bidding") {
-        $("info").innerHTML = `<span>Deal <b>${st.board}</b> · Dealer <b>${NAMES[st.dealer]}</b></span><span>Vulnerable: <b>${vulTxt}</b></span>`;
+      if (G.phase === "bidding") {
+        $("info").innerHTML = `<span>Deal <b>${G.board}</b> · Dealer <b>${NAMES[G.dealer]}</b></span><span>Vulnerable: <b>${vulTxt}</b></span>`;
       } else {
-        const c = st.contract;
+        const c = G.contract;
         const con = `${c.level}${SYM[c.strain]}${c.dbl === 2 ? " XX" : c.dbl ? " X" : ""}`;
-        $("info").innerHTML = `<span>Contract <b>${con}</b> by <b>${NAMES[c.declarer]}</b></span><span>Tricks · Us <b>${st.won[0]}</b> · Them <b>${st.won[1]}</b></span>`;
+        $("info").innerHTML = `<span>Contract <b>${con}</b> by <b>${NAMES[c.declarer]}</b></span><span>Tricks · Us <b>${G.won[ms]}</b> · Them <b>${G.won[1 - ms]}</b></span>`;
       }
 
-      // North
-      const humanN = st.phase !== "bidding" && humanPlays(st, 0);
-      const showN = (st.phase === "play" && (humanN || (dummyShown(st) && dummyOf(st) === 0)));
-      let n = seatLabel(0);
-      if (showN) n += `<div class="hand" id="northHand"></div>`;
-      else n += `<div class="backs">${"<i></i>".repeat(Math.min(st.hands[0].length, 13))}</div>`;
+      // Top: partner
+      const top = atSlot(0);
+      const showTop = faceUp(top);
+      let n = seatLabel(top);
+      n += showTop ? `<div class="hand" id="topHand"></div>` : `<div class="backs">${"<i></i>".repeat(Math.min(G.hands[top].length, 13))}</div>`;
       $("north").innerHTML = n;
-      if (showN) handHtml($("northHand"), 0, st.phase === "play" && humanN && st.turn === 0 && st.trick.length < 4);
+      if (showTop) handHtml($("topHand"), top, myTurn() && G.turn === top && G.phase === "play");
 
-      // East / West
-      for (const seat of [1, 3]) {
-        const el = $(seat === 1 ? "east" : "west");
-        let html = seatLabel(seat);
-        const showD = st.phase === "play" && dummyShown(st) && dummyOf(st) === seat;
-        if (showD) html += `<div class="compact">${compactHtml(st.hands[seat])}</div>`;
-        else html += `<div class="backs">${"<i></i>".repeat(Math.min(st.hands[seat].length, 6))}</div><div class="count">${st.hands[seat].length} cards</div>`;
-        el.innerHTML = html;
+      // Left and right: opponents
+      for (const slot of [1, 3]) {
+        const t = atSlot(slot);
+        let html = seatLabel(t);
+        if (faceUp(t)) html += `<div class="compact">${compactHtml(G.hands[t])}</div>`;
+        else html += `<div class="backs">${"<i></i>".repeat(Math.min(G.hands[t].length, 6))}</div><div class="count">${G.hands[t].length} cards</div>`;
+        $(slot === 1 ? "east" : "west").innerHTML = html;
       }
 
-      // Center
+      // Center: the auction, or the trick
       const center = $("center");
-      if (st.phase === "bidding") {
+      if (G.phase === "bidding") {
         const order = [3, 0, 1, 2];
-        const heads = order.map((s) => `<th class="${st.vul[side(s)] ? "vul" : ""}">${SHORT[s]}</th>`).join("");
+        const heads = order.map((s) => `<th class="${G.vul[side(s)] ? "vul" : ""}">${SHORT[s]}${s === me ? " (you)" : ""}</th>`).join("");
         const cells = [];
-        for (let i = 0; i < order.indexOf(st.dealer); i++) cells.push("<td></td>");
-        for (const { c } of st.auction) {
+        for (let i = 0; i < order.indexOf(G.dealer); i++) cells.push("<td></td>");
+        for (const { c } of G.auction) {
           const red = typeof c === "number" && isRed(strain(c));
           cells.push(`<td class="${red ? "r" : ""}">${callText(c)}</td>`);
         }
-        cells.push(`<td class="now">${st.turn === ME ? "?" : "…"}</td>`);
+        cells.push(`<td class="now">${myTurn() ? "?" : "…"}</td>`);
         let rows = "";
         for (let i = 0; i < cells.length; i += 4) rows += `<tr>${cells.slice(i, i + 4).join("")}</tr>`;
         center.innerHTML = `<table class="auction"><tr>${heads}</tr>${rows}</table>`;
       } else {
-        const trick = st.trick.length ? st.trick : st.phase === "done" && st.last ? st.last : [];
-        const win = trick.length === 4 ? trickWinner(trick, trumpOf(st)).seat : -1;
-        let html = `<div class="trick">` + trick.map((t) => cardHtml(t.card, `p${t.seat}${t.seat === win ? " win" : ""}`)).join("") + `</div>`;
-        if (!trick.length && st.phase === "play") {
-          const t = st.turn;
-          const msg = humanPlays(st, t) ? (t === ME ? "Your lead" : "Lead from North") : `${NAMES[t]} to lead`;
+        const lastUp = !G.trick.length && G.last && (G.phase === "done" || showLastUntil > Date.now());
+        const trick = G.trick.length ? G.trick : lastUp ? G.last : [];
+        const win = trick.length === 4 ? trickWinner(trick, trumpOf(G)).seat : -1;
+        let html = `<div class="trick">` + trick.map((x) => cardHtml(x.card, `p${slotOf(x.seat)}${x.seat === win ? " win" : ""}`)).join("") + `</div>`;
+        if (!trick.length && G.phase === "play") {
+          const t = G.turn;
+          const msg = myTurn() ? (t === me ? "Your lead" : `Lead from ${NAMES[t]}`) : `${NAMES[t]} to lead`;
           html += `<div class="note">${msg}</div>`;
         }
+        if (G.phase === "done" && mode === "online" && room) html += `<div class="note">${resultLine()}</div>`;
         center.innerHTML = html;
       }
 
-      // Bidding box
-      const myBid = st.phase === "bidding" && st.turn === ME;
-      $("bidbox").hidden = st.phase !== "bidding";
-      if (st.phase === "bidding") renderBidBox(myBid);
+      $("bidbox").hidden = G.phase !== "bidding";
+      if (G.phase === "bidding") renderBidBox(myTurn());
 
-      // South
-      $("southLabel").outerHTML = `<div class="seat-label${(st.phase === "bidding" || st.phase === "play") && st.turn === ME && st.trick.length < 4 ? " turn" : ""}" id="southLabel">South · You${st.contract && st.phase !== "bidding" ? (st.contract.declarer === ME ? " · declarer" : dummyOf(st) === ME ? " · dummy" : "") : ""}</div>`;
-      handHtml($("south"), ME, st.phase === "play" && humanPlays(st, ME) && st.turn === ME && st.trick.length < 4);
-      const L = lens(st.orig[ME]);
-      $("hcp").textContent = `${hcp(st.orig[ME])} points · ${L[3]}-${L[2]}-${L[1]}-${L[0]}`;
-      const canHint = (st.phase === "bidding" && st.turn === ME) || (st.phase === "play" && humanPlays(st, st.turn) && st.trick.length < 4);
-      $("hint").disabled = !canHint;
-      $("hint").textContent = st.phase === "done" ? "Next deal" : "Hint";
-      if (st.phase === "done") $("hint").disabled = false;
+      // Bottom: you
+      $("southLabel").outerHTML = `<div class="seat-label${isTurn(me) ? " turn" : ""}" id="southLabel">${labelText(me)}</div>`;
+      handHtml($("south"), me, myTurn() && G.turn === me && G.phase === "play");
+      const L = lens(G.orig[me]);
+      $("hcp").textContent = `${hcp(G.orig[me])} pts · ${L[3]}-${L[2]}-${L[1]}-${L[0]}`;
+      const hint = $("hint");
+      if (G.phase === "done" || (mode === "online" && room?.status === "done")) {
+        hint.disabled = false;
+        hint.textContent = nextLabel();
+      } else {
+        hint.disabled = !myTurn();
+        hint.textContent = "Hint";
+      }
     }
 
-    function renderBidBox(active) {
-      const st = S;
-      const { min, canX, canXX } = legal(st, ME);
-      const maxLevelOk = (l) => bidNum(l, 4) >= min;
-      if (pickedLevel && !maxLevelOk(pickedLevel)) pickedLevel = 0;
-      const hl = typeof hintOn === "number" && st.phase === "bidding" ? hintOn : null;
+    function renderBidBox(on) {
+      const { min, canX, canXX } = legal(G, G.turn);
+      const levelOk = (l) => bidNum(l, 4) >= min;
+      if (pickedLevel && !levelOk(pickedLevel)) pickedLevel = 0;
+      const hl = typeof hintOn === "number" ? hintOn : null;
       $("levels").innerHTML = [1, 2, 3, 4, 5, 6, 7].map((l) =>
-        `<button data-level="${l}" class="${pickedLevel === l ? "sel" : ""}${hl !== null && level(hl) === l && !pickedLevel ? " hint" : ""}" ${!active || !maxLevelOk(l) ? "disabled" : ""}>${l}</button>`).join("");
+        `<button data-level="${l}" class="${pickedLevel === l ? "sel" : ""}${hl !== null && level(hl) === l && !pickedLevel ? " hint" : ""}" ${!on || !levelOk(l) ? "disabled" : ""}>${l}</button>`).join("");
       $("strains").innerHTML = [0, 1, 2, 3, 4].map((s) => {
         const v = pickedLevel ? bidNum(pickedLevel, s) : -1;
-        const en = active && pickedLevel && v >= min;
+        const en = on && pickedLevel && v >= min;
         const lbl = pickedLevel ? pickedLevel + SYM[s] : SYM[s];
         return `<button data-strain="${s}" class="${isRed(s) ? "red" : ""}${hl !== null && pickedLevel && v === hl ? " hint" : ""}" ${en ? "" : "disabled"}>${lbl}</button>`;
       }).join("");
       for (const b of document.querySelectorAll("[data-call]")) {
         const c = b.dataset.call;
-        b.disabled = !active || (c === "X" && !canX) || (c === "XX" && !canXX);
+        b.disabled = !on || (c === "X" && !canX) || (c === "XX" && !canXX);
         b.classList.toggle("hint", hintOn === c);
       }
     }
 
+    // ---------- Lobby ----------
+    // Who sits where once the game starts. Room seats are in joining order; the host is room seat 0.
+    function seatingFor(r) {
+      const people = rooms.seatList(r).flatMap((uid, i) => (uid ? [i] : []));
+      const owner = [-1, -1, -1, -1];
+      if (people.length >= 4) people.slice(0, 4).forEach((p, i) => { owner[[2, 3, 0, 1][i]] = p; });
+      else if (people.length === 3) people.forEach((p, i) => { owner[[2, 3, 0][i]] = p; });
+      else if (people.length === 2) { owner[2] = people[0]; owner[pairing === "rivals" ? 3 : 0] = people[1]; }
+      else owner[2] = people[0] ?? 0;
+      return owner;
+    }
+
+    function renderLobby() {
+      show("lobby");
+      const r = room;
+      $("lobby-code").textContent = seat.code;
+      const list = rooms.seatList(r);
+      const count = rooms.playerCount(r);
+      $("seated").innerHTML = list.map((uid, s) => uid
+        ? `<div><span class="dot${rooms.isOnline(r, s) ? " on" : ""}"></span>${s === seat.seat ? "You" : esc(rooms.nameOf(r, s))}${s === seat.seat && rooms.nameOf(r, s) !== `P${s + 1}` ? ` (${esc(rooms.nameOf(r, s))})` : ""}${s === 0 ? " · host" : ""}</div>` : "").join("");
+      const host = isHost();
+      $("pairing").hidden = !(host && count === 2);
+      for (const b of document.querySelectorAll("#pairing button")) b.setAttribute("aria-pressed", String(b.dataset.pair === pairing));
+      const owner = seatingFor(r);
+      const nm = (t) => (owner[t] < 0 ? "computer" : owner[t] === seat.seat ? "you" : esc(rooms.nameOf(r, owner[t])));
+      $("seating").innerHTML = count < 2 ? "Waiting for at least one friend. Computers fill the empty seats."
+        : `<b>${nm(2)}</b> &amp; <b>${nm(0)}</b> vs <b>${nm(1)}</b> &amp; <b>${nm(3)}</b>`;
+      $("seating").hidden = !host && count < 2;
+      $("start").hidden = !host;
+      $("start").disabled = count < 2;
+      $("lobby-note").textContent = host ? (count < 4 ? `${count} of 4 here. Start now or wait for more.` : "Everyone's here.") : "Waiting for the host to start…";
+    }
+
     // ---------- Sheets ----------
     function openSheet(html) { $("sheetBox").innerHTML = html; $("sheet").classList.add("show"); }
-    function closeSheet() { $("sheet").classList.remove("show"); }
+    function closeSheet() { $("sheet").classList.remove("show"); resultOpen = false; }
     function toast(msg) {
       const t = $("toast");
       t.textContent = msg;
@@ -764,106 +988,284 @@
       setTimeout(() => t.classList.remove("show"), 1600);
     }
 
-    function dealHtml(st) {
+    function dealHtml(g) {
       return `<div class="deal">` + [0, 3, 1, 2].map((s) =>
-        `<div><b>${NAMES[s]}${s === ME ? " (you)" : ""} · ${hcp(st.orig[s])}</b>${compactHtml(st.orig[s])}</div>`).join("") + `</div>`;
+        `<div><b>${NAMES[s]} · ${who(s)} · ${hcp(g.orig[s])}</b>${compactHtml(g.orig[s])}</div>`).join("") + `</div>`;
+    }
+
+    function resultLine() {
+      if (mode === "online" && room && typeof room.left === "number") {
+        return room.left === seat.seat ? "You left this game." : `${esc(rooms.nameOf(room, room.left))} left. Game over.`;
+      }
+      const r = G.result, c = G.contract;
+      if (!r) return "";
+      const diff = r.made - r.need;
+      const outcome = diff >= 0 ? (diff ? `made +${diff}` : "made") : `down ${-diff}`;
+      const ours = r.pts[mySide()] > 0;
+      return `${c.level}${SYM[c.strain]} ${outcome}: ${ours ? "+" + r.pts[mySide()] + " for us" : "+" + r.pts[1 - mySide()] + " for them"}`;
+    }
+
+    function nextLabel() {
+      if (mode !== "online") return "Next deal";
+      if (typeof room.left === "number") return "Back home";
+      const list = rooms.seatList(room);
+      const ready = list.flatMap((u, s) => (u && rooms.wantsAgain(room, s) ? [s] : []));
+      if (ready.includes(seat.seat)) {
+        const waitingOn = list.flatMap((u, s) => (u && s !== seat.seat && rooms.isOnline(room, s) && !rooms.wantsAgain(room, s) ? [esc(rooms.nameOf(room, s))] : []));
+        return `Waiting for ${waitingOn.join(", ") || "others"}…`;
+      }
+      return ready.length ? `Next deal (${ready.length} ready)` : "Next deal";
     }
 
     function showResult() {
-      const st = S;
-      if (st.phase !== "done" || !st.result) return;
-      const r = st.result, c = st.contract;
+      if (!G || G.phase !== "done" || !G.result) return;
+      const r = G.result, c = G.contract;
       const con = `${c.level}${SYM[c.strain]}${c.dbl === 2 ? " redoubled" : c.dbl ? " doubled" : ""}`;
       const diff = r.made - r.need;
       const outcome = diff >= 0 ? (diff ? `made with ${diff} overtrick${diff > 1 ? "s" : ""}` : "made exactly") : `went down ${-diff}`;
-      const ours = r.ds === 0;
-      const good = (r.sc > 0) === ours;
-      const pts = r.pts[0] ? `+${r.pts[0]} for us` : `+${r.pts[1]} for them`;
+      const ms = mySide();
+      const good = r.pts[ms] > 0;
+      const pts = good ? `+${r.pts[ms]} for us` : `+${r.pts[1 - ms]} for them`;
+      resultOpen = true;
       openSheet(`
         <h2>${good ? "Nice!" : "Unlucky"}</h2>
         <p><b>${con}</b> by ${NAMES[c.declarer]} ${outcome} (${r.made} tricks). <b>${pts}</b>.</p>
-        <p class="muted">Total: us ${st.totals[0]}, them ${st.totals[1]}</p>
-        ${dealHtml(st)}
+        <p class="muted">Total: us ${G.totals[ms]}, them ${G.totals[1 - ms]}</p>
+        ${dealHtml(G)}
         <div class="buttons"><button class="secondary" data-act="close">See table</button><button data-act="next">Next deal</button></div>`);
     }
 
-    function nextDeal() {
+    async function nextDeal() {
       closeSheet();
-      S = newState(S.board + 1, S.totals);
-      save(); render(); schedule();
+      if (mode === "solo") {
+        G = newDeal(G.board + 1, G.totals, SOLO_OWNER);
+        saveSolo();
+        update();
+        return;
+      }
+      if (!room || room.status !== "done") return;
+      if (typeof room.left === "number") return goHome();
+      try {
+        await rooms.playAgain(seat, (cur, round) => {
+          const g = JSON.parse(cur.state.g);
+          const next = newDeal(g.board + 1, g.totals, g.owner);
+          cur.round = round;
+          cur.status = "playing";
+          cur.state = { g: JSON.stringify(next) };
+          cur.turn = roomTurn(next);
+          cur.winner = null;
+          cur.left = null;
+          return cur;
+        });
+      } catch (err) {
+        console.error(err);
+        toast("Couldn't start the next deal. Try again.");
+      }
+      render();
     }
 
     function showMenu() {
+      const online = mode === "online";
       openSheet(`
         <h2>Bridge</h2>
-        <p class="muted">You sit South. North is your computer partner; East and West are the computer opponents. Scores add up across deals.</p>
+        <p class="muted">${online ? `Room <b>${seat.code}</b>. You sit at the bottom; your partner is at the top.` : "You sit South. North is your computer partner; East and West are the computer opponents. Scores add up across deals."}</p>
         <div class="buttons"><button data-act="help">How to play</button></div>
-        <div class="buttons"><button class="secondary" data-act="redeal">Skip this deal</button><button class="secondary" data-act="reset">Reset scores</button></div>
+        ${online ? "" : `<div class="buttons"><button class="secondary" data-act="redeal">Skip this deal</button><button class="secondary" data-act="reset">Reset scores</button></div>`}
+        <div class="buttons">${online ? `<button class="secondary" data-act="share">Share room link</button><button class="secondary" data-act="leave">Leave game</button>` : `<button class="secondary" data-act="home">Main menu</button>`}</div>
         <div class="buttons"><button class="secondary" data-act="close">Close</button></div>`);
     }
 
     function showHelp() {
       openSheet(`
         <h2>How to play</h2>
-        <p><b>The goal.</b> You and North are partners against East and West. Each deal, both sides bid for the right to name trumps, then you try to win the tricks you promised.</p>
+        <p><b>The goal.</b> Four players in two teams: you and the player opposite you are partners. Each deal, both sides bid for the right to name trumps, then you try to win the tricks you promised.</p>
         <p><b>Bidding.</b> A bid like 3♥ means “we’ll win 6 + 3 = 9 of the 13 tricks with hearts as trumps” (NT = no trumps). Each bid must be higher than the last: a higher number, or the same number in a higher suit (♣ &lt; ♦ &lt; ♥ &lt; ♠ &lt; NT). Three passes in a row end the bidding. Tap a number, then a suit.</p>
         <ul>
           <li>Count points: A = 4, K = 3, Q = 2, J = 1. About 12+ is enough to open; partners with 25 together can usually make game (3NT, 4♥, 4♠).</li>
           <li><b>Double</b> an opponent’s bid if you think they’ll fail: it raises the stakes. They may <b>redouble</b>.</li>
         </ul>
-        <p><b>Play.</b> The player left of the declarer leads. Then the declarer’s partner, the dummy, lays their cards face up and the declarer plays both hands. Follow the suit that was led if you can; otherwise play anything, and a trump wins. The highest card of the led suit (or highest trump) wins the trick, and the winner leads next. When our side declares, you play North’s cards too.</p>
+        <p><b>Play.</b> The player left of the declarer leads. Then the declarer’s partner, the dummy, lays their cards face up and the declarer plays both hands. Follow the suit that was led if you can; otherwise play anything, and a trump wins. The highest card of the led suit (or highest trump) wins the trick, and the winner leads next. If the declarer is a computer and you're the dummy, you play both hands.</p>
         <p><b>Scoring.</b> Making your contract scores points (much more for games and slams, and when vulnerable); falling short gives the other side points for each trick missed.</p>
+        <p><b>Online.</b> 2 to 4 friends; computers take the empty seats and run on the host's phone, so the host should keep the game open.</p>
         <p class="muted">Stuck? Tap Hint to see what the computer would do.</p>
         <div class="buttons"><button data-act="close">Got it</button></div>`);
     }
 
-    $("sheet").addEventListener("click", (e) => {
+    // ---------- Modes ----------
+    function goHome(error = "") {
+      clearTimeout(timer);
+      if (leaveRoom) leaveRoom();
+      leaveRoom = null;
+      mode = null;
+      G = room = seat = null;
+      seenTricks = resultShown = "";
+      showLastUntil = 0;
+      leftShown = false;
+      closeSheet();
+      show("home");
+      $("home-error").textContent = error;
+      for (const id of ["create", "join"]) $(id).disabled = false;
+    }
+
+    function startSolo() {
+      mode = "solo";
+      G = loadSolo() || newDeal(1, [0, 0], SOLO_OWNER);
+      saveSolo();
+      seenTricks = `${G.board}:${G.ntricks}`;
+      resultShown = G.phase === "done" ? `${G.board}` : "";
+      update();
+    }
+
+    function enterRoom(s) {
+      mode = "online";
+      seat = s;
+      leaveRoom = rooms.enter(s, (value) => {
+        room = value;
+        if (value.status === "waiting" || !value.state?.g) {
+          G = null;
+          clearTimeout(timer);
+          return renderLobby();
+        }
+        const fresh = !G;
+        G = JSON.parse(value.state.g);
+        if (fresh) { seenTricks = `${G.board}:${G.ntricks}`; resultShown = G.phase === "done" ? `${G.board}` : ""; }
+        if (resultOpen && G.phase !== "done") closeSheet();
+        if (typeof value.left === "number" && !leftShown) {
+          leftShown = true;
+          clearTimeout(timer);
+          openSheet(`<h2>Game over</h2><p>${resultLine()}</p><div class="buttons"><button class="secondary" data-act="close">See table</button><button data-act="home">Back home</button></div>`);
+        }
+        update();
+      }, goHome);
+    }
+
+    async function createRoom() {
+      for (const id of ["create", "join"]) $(id).disabled = true;
+      $("home-error").textContent = "";
+      await rooms.setMyName($("my-name").value);
+      try {
+        enterRoom(await rooms.createRoom(GAME, { seats: 4, min: 2, auto: false, makeRoom: () => ({ teams: 0, turn: 0, round: 0, state: { g: "" } }) }));
+      } catch (err) {
+        console.error(err);
+        goHome(err instanceof rooms.RoomError ? err.message : "Couldn't create a room. Check your connection and try again.");
+      }
+    }
+
+    async function joinRoom(code) {
+      for (const id of ["create", "join"]) $(id).disabled = true;
+      $("home-error").textContent = "";
+      await rooms.setMyName($("my-name").value);
+      try {
+        enterRoom(await rooms.joinRoom(GAME, code));
+      } catch (err) {
+        console.error(err);
+        goHome(err instanceof rooms.RoomError ? err.message : "Couldn't join. Check your connection and try again.");
+      }
+    }
+
+    async function startOnline() {
+      $("start").disabled = true;
+      try {
+        await rooms.startGame(seat, (cur) => {
+          const g = newDeal(1, [0, 0], seatingFor(cur));
+          cur.state = { g: JSON.stringify(g) };
+          cur.turn = roomTurn(g);
+          return cur;
+        });
+      } catch (err) {
+        $("lobby-note").textContent = err instanceof rooms.RoomError ? err.message : "Couldn't start. Try again.";
+        $("start").disabled = false;
+      }
+    }
+
+    async function leaveOnline() {
+      if (!seat) return goHome();
+      if (room && room.status === "playing" && !confirm("Leave the game? It ends for everyone.")) return;
+      const s = seat;
+      closeSheet();
+      await rooms.quit(s);
+      goHome();
+    }
+
+    // ---------- Input ----------
+    $("sheet").addEventListener("click", async (e) => {
       if (e.target === $("sheet")) return closeSheet();
       const b = e.target.closest("[data-act]");
       if (!b) return;
-      const act = b.dataset.act;
-      if (act === "close") closeSheet();
-      else if (act === "next") nextDeal();
-      else if (act === "help") showHelp();
-      else if (act === "redeal") nextDeal();
-      else if (act === "reset") { S.totals = [0, 0]; save(); render(); closeSheet(); }
+      const a = b.dataset.act;
+      if (a === "close") closeSheet();
+      else if (a === "next") nextDeal();
+      else if (a === "help") showHelp();
+      else if (a === "redeal") { closeSheet(); G = newDeal(G.board + 1, G.totals, SOLO_OWNER); saveSolo(); update(); }
+      else if (a === "reset") { G.totals = [0, 0]; saveSolo(); render(); closeSheet(); }
+      else if (a === "home") goHome();
+      else if (a === "leave") leaveOnline();
+      else if (a === "share") { closeSheet(); if ((await rooms.share(seat.code, "Bridge")) === "copied") toast("Link copied"); }
     });
-
-    // ---------- Input ----------
-    $("menu").addEventListener("click", showMenu);
-    document.addEventListener("click", (e) => {
+    $("menu").addEventListener("click", () => (mode ? showMenu() : showHelp()));
+    $("home-help").addEventListener("click", showHelp);
+    $("play").addEventListener("click", (e) => {
       const card = e.target.closest("button.card");
       if (card) {
-        const seat = +card.dataset.seat;
-        if (S.phase === "play" && humanPlays(S, seat)) doPlay(seat, +card.dataset.card);
+        if (G.phase === "play" && myTurn() && +card.dataset.seat === G.turn) act("play", +card.dataset.card);
         return;
       }
-      if (S.phase !== "bidding" || S.turn !== ME) return;
+      if (!G || G.phase !== "bidding" || !myTurn()) return;
       const lv = e.target.closest("[data-level]");
-      if (lv) { pickedLevel = +lv.dataset.level; renderBidBox(true); return; }
+      if (lv && !lv.disabled) { pickedLevel = +lv.dataset.level; renderBidBox(true); return; }
       const sb = e.target.closest("[data-strain]");
-      if (sb && pickedLevel) { doCall(bidNum(pickedLevel, +sb.dataset.strain)); return; }
+      if (sb && !sb.disabled && pickedLevel) { act("call", bidNum(pickedLevel, +sb.dataset.strain)); return; }
       const cb = e.target.closest("[data-call]");
-      if (cb) doCall(cb.dataset.call);
+      if (cb && !cb.disabled) act("call", cb.dataset.call);
     });
     $("hint").addEventListener("click", () => {
-      const st = S;
-      if (st.phase === "done") return showResult();
-      if (st.phase === "bidding" && st.turn === ME) {
-        hintOn = botCall(st, ME);
+      if (!G) return;
+      if (G.phase === "done" || (mode === "online" && room?.status === "done")) return nextDeal();
+      if (!myTurn()) return;
+      if (G.phase === "bidding") {
+        hintOn = botCall(G, G.turn);
         pickedLevel = typeof hintOn === "number" ? level(hintOn) : 0;
         renderBidBox(true);
         if (typeof hintOn !== "number") toast(`Hint: ${callText(hintOn)}`);
-      } else if (st.phase === "play" && humanPlays(st, st.turn)) {
-        hintOn = botPlay(st, st.turn);
+      } else {
+        hintOn = botPlay(G, G.turn);
         render();
       }
     });
+    $("solo").addEventListener("click", startSolo);
+    $("create").addEventListener("click", createRoom);
+    $("join-form").addEventListener("submit", (e) => { e.preventDefault(); joinRoom($("join-code").value); });
+    $("join-code").addEventListener("input", () => {
+      $("join-code").value = $("join-code").value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+      $("home-error").textContent = "";
+    });
+    $("my-name").value = rooms.myName();
+    $("my-name").addEventListener("change", () => { $("my-name").value = rooms.cleanRoomName($("my-name").value); });
+    for (const b of document.querySelectorAll("#pairing button")) b.addEventListener("click", () => { pairing = b.dataset.pair; renderLobby(); });
+    $("start").addEventListener("click", startOnline);
+    $("lobby-leave").addEventListener("click", leaveOnline);
+    $("share").addEventListener("click", async () => {
+      if ((await rooms.share(seat.code, "Bridge")) === "copied") $("share").textContent = "Link copied";
+    });
+    $("copy").addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(seat.code); $("copy").textContent = "Copied"; } catch { prompt("Room code:", seat.code); }
+      setTimeout(() => ($("copy").textContent = "Copy code"), 1500);
+    });
     window.addEventListener("resize", render);
+    // Presence: someone's (away) mark changes without a move.
+    setInterval(() => { if (mode === "online" && room) render(); }, 5000);
 
-    S = load() || newState(1, [0, 0]);
-    render();
-    schedule();
+    // Opening a shared link (?room=CODE) joins straight away; otherwise a saved solo game resumes.
+    const linked = rooms.roomFromUrl();
+    if (linked) { $("join-code").value = linked; joinRoom(linked); }
+    else if (loadSolo()) startSolo();
+    else goHome();
+
+    window.__br = {
+      rooms, botCall, botPlay, legalCards, myTurn, actor, act,
+      get G() { return G; }, get room() { return room; }, get seat() { return seat; }, get mode() { return mode; },
+      get hintOn() { return hintOn; },
+    };
   </script>
 </body>
 </html>
