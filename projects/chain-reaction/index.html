@@ -1,0 +1,583 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#161618" media="(prefers-color-scheme: dark)">
+  <title>Chain Reaction</title>
+  <meta name="description" content="Add orbs to your cells; when one fills up it bursts into its neighbours and takes them over. 2–4 players online or on one phone.">
+  <style>
+    :root {
+      --bg: #f7f6f3;
+      --text: #1d1d1f;
+      --muted: #6b6b70;
+      --panel: #ffffff;
+      --line: #d9d2c6;
+      --soft: #ece7df;
+      --accent: #c2571a;
+      --danger: #b3261e;
+      --cell: #ffffff;
+      --p0: #e03e3e; --p1: #2f6fd6; --p2: #24a05a; --p3: #d9940f;
+      color-scheme: light;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #161618;
+        --text: #ececef;
+        --muted: #9a9aa2;
+        --panel: #1f1f22;
+        --line: #3a3a40;
+        --soft: #2a2a2e;
+        --accent: #f08a4b;
+        --danger: #ff8a80;
+        --cell: #1c1c1f;
+        --p0: #ff5f5f; --p1: #5f97ff; --p2: #3fd37f; --p3: #f7bd3f;
+        color-scheme: dark;
+      }
+    }
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    html, body { min-height: 100%; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 17px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      justify-content: center;
+      -webkit-tap-highlight-color: transparent;
+    }
+    main {
+      width: 100%;
+      max-width: 480px;
+      padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    h1 { font-size: 1.6rem; margin: 0; display: flex; align-items: center; gap: 10px; }
+    h1 .logo { position: relative; width: 0.9em; height: 0.9em; }
+    h1 .logo i { position: absolute; width: 0.45em; height: 0.45em; border-radius: 50%; background: var(--p0); }
+    h1 .logo i:nth-child(1) { left: 0; top: 0.4em; }
+    h1 .logo i:nth-child(2) { left: 0.45em; top: 0.4em; }
+    h1 .logo i:nth-child(3) { left: 0.22em; top: 0; }
+    h2 { font-size: 1.05rem; margin: 0; }
+    p { margin: 0; }
+    .muted { color: var(--muted); }
+    button {
+      font: inherit; font-weight: 650; border: 0; border-radius: 12px; padding: 12px 16px;
+      background: var(--accent); color: #fff; cursor: pointer; touch-action: manipulation;
+    }
+    button:disabled { opacity: 0.5; cursor: default; }
+    button.secondary { background: var(--soft); color: var(--text); }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+    #home { display: flex; flex-direction: column; gap: 12px; }
+    .row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+    .join { display: flex; gap: 10px; }
+    .join input {
+      flex: 1; min-width: 0; font: inherit; font-size: 1.3rem; letter-spacing: 0.3em; text-transform: uppercase; text-align: center;
+      padding: 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--text);
+    }
+    .error { color: var(--danger); min-height: 1.4em; font-size: 0.95rem; }
+    .seg { display: flex; background: var(--soft); border-radius: 12px; padding: 4px; gap: 4px; }
+    .seg button { flex: 1; background: transparent; color: var(--text); padding: 9px 6px; font-size: 0.95rem; }
+    .seg button[aria-pressed="true"] { background: var(--panel); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+    .name-row { display: flex; align-items: center; gap: 10px; font-weight: 650; }
+    .name-row span { white-space: nowrap; }
+    .name-row input {
+      flex: 1; min-width: 0; font: inherit; font-weight: 500; padding: 10px 12px; border-radius: 12px;
+      border: 1px solid var(--line); background: var(--bg); color: var(--text);
+    }
+    .clock { font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 600; }
+    .clock.low { color: var(--danger); }
+
+    .bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .players { display: flex; gap: 6px; flex-wrap: wrap; }
+    .chip {
+      display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px;
+      background: var(--soft); font-size: 0.85rem; font-weight: 600; border: 2px solid transparent;
+    }
+    .chip.turn { border-color: var(--pc); }
+    .chip.out { opacity: 0.45; text-decoration: line-through; }
+    .chip .disc { width: 12px; height: 12px; border-radius: 50%; background: var(--pc); }
+    .chip .count { color: var(--muted); font-variant-numeric: tabular-nums; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); opacity: 0.4; }
+    .dot.on { background: #2e9d5b; opacity: 1; }
+    .code { font-size: 0.85rem; color: var(--muted); }
+    .code b { font-size: 1.05rem; letter-spacing: 0.15em; color: var(--text); }
+    .bigcode { font-size: 2.6rem; font-weight: 800; letter-spacing: 0.25em; text-align: center; margin: 0; }
+    .status { text-align: center; font-size: 1.15rem; font-weight: 700; min-height: 1.5em; }
+    .seated { display: flex; flex-direction: column; gap: 6px; }
+    .seated div { display: flex; align-items: center; gap: 8px; }
+
+    /* The grid lines take the colour of the player whose turn it is. */
+    .board {
+      --gc: var(--line);
+      display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px; padding: 2px;
+      background: color-mix(in srgb, var(--gc) 70%, transparent); border-radius: 10px; user-select: none; -webkit-user-select: none;
+      width: min(100%, calc((100svh - 260px) * 6 / 9)); align-self: center; transition: background 250ms;
+    }
+    .cell {
+      position: relative; aspect-ratio: 1; background: var(--cell); border: 0; border-radius: 4px; padding: 0;
+      cursor: default; touch-action: manipulation;
+    }
+    .cell:disabled { opacity: 1; }
+    .cell.ok { cursor: pointer; }
+    .cell.last { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--oc) 45%, transparent); }
+    .orbs { position: absolute; inset: 0; pointer-events: none; }
+    .orb {
+      position: absolute; width: 40%; height: 40%; border-radius: 50%;
+      background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--oc) 40%, #fff), var(--oc) 55%, color-mix(in srgb, var(--oc) 70%, #000));
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+    }
+    .n1 .orb { left: 30%; top: 30%; }
+    .n2 .orb:nth-child(1) { left: 14%; top: 30%; } .n2 .orb:nth-child(2) { left: 46%; top: 30%; }
+    .n3 .orb:nth-child(1) { left: 14%; top: 42%; } .n3 .orb:nth-child(2) { left: 46%; top: 42%; } .n3 .orb:nth-child(3) { left: 30%; top: 14%; }
+    /* One orb short of bursting: it trembles. */
+    @keyframes wobble { 0%, 100% { transform: rotate(0) scale(1); } 25% { transform: rotate(8deg) scale(1.04); } 75% { transform: rotate(-8deg) scale(1.04); } }
+    .cell.full .orbs { animation: wobble 0.5s ease-in-out infinite; }
+    @keyframes burst { from { box-shadow: inset 0 0 0 40px color-mix(in srgb, var(--oc) 55%, transparent); } to { box-shadow: inset 0 0 0 0 transparent; } }
+    .cell.burst { animation: burst 300ms ease-out; }
+    @keyframes pop { from { transform: scale(0.3); } to { transform: scale(1); } }
+    .cell.grew .orbs { animation: pop 160ms ease-out; }
+    @media (prefers-reduced-motion: reduce) { .cell.full .orbs, .cell.burst, .cell.grew .orbs { animation: none; } }
+
+    .hint { text-align: center; font-size: 0.9rem; color: var(--muted); min-height: 1.3em; }
+    .rules { font-size: 0.9rem; color: var(--muted); }
+    .rules li { margin: 2px 0; }
+    .rules summary { cursor: pointer; font-weight: 600; color: var(--text); }
+  </style>
+</head>
+<body>
+  <main>
+    <h1><span class="logo" aria-hidden="true"><i></i><i></i><i></i></span>Chain Reaction</h1>
+
+    <section id="home">
+      <div class="card">
+        <label class="name-row"><span>Your name</span>
+          <input id="my-name" maxlength="16" autocomplete="nickname" spellcheck="false" placeholder="So friends know it's you">
+        </label>
+        <div class="seg" id="mode" role="group" aria-label="Players">
+          <button type="button" data-mode="2" aria-pressed="true">2 players</button>
+          <button type="button" data-mode="3" aria-pressed="false">3 players</button>
+          <button type="button" data-mode="4" aria-pressed="false">4 players</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Play friends online</h2>
+        <p class="muted">Create a room and send the code or link. The game starts once everyone is in.</p>
+        <div class="seg" id="timer" role="group" aria-label="Turn timer">
+          <button type="button" data-secs="0" aria-pressed="true">No timer</button>
+          <button type="button" data-secs="15" aria-pressed="false">15 s</button>
+          <button type="button" data-secs="30" aria-pressed="false">30 s</button>
+        </div>
+        <button id="create">Create room</button>
+      </div>
+      <div class="card">
+        <h2>Join a room</h2>
+        <form class="join" id="join-form" autocomplete="off">
+          <input id="join-code" maxlength="4" autocapitalize="characters" spellcheck="false" placeholder="CODE" aria-label="Room code">
+          <button id="join" type="submit">Join</button>
+        </form>
+        <p class="error" id="home-error" role="alert"></p>
+      </div>
+      <div class="card">
+        <h2>Same phone</h2>
+        <p class="muted">Pass the phone around. Works offline.</p>
+        <button class="secondary" id="local">Play here</button>
+      </div>
+      <details class="card rules">
+        <summary>How to play</summary>
+        <ul>
+          <li>On your turn, tap an empty cell or one of your own to add an orb.</li>
+          <li>A cell bursts when it holds as many orbs as it has neighbours: 2 in a corner, 3 on an edge, 4 in the middle.</li>
+          <li>A burst throws one orb into each neighbour and makes those cells yours, which can set off more bursts.</li>
+          <li>Once everyone has played, a player with no orbs left is out. The last colour on the board wins.</li>
+        </ul>
+      </details>
+    </section>
+
+    <section id="game" hidden>
+      <div class="bar">
+        <div class="players" id="players"></div>
+        <div class="code" id="room-label"></div>
+      </div>
+
+      <div class="card" id="waiting" hidden>
+        <p class="muted" style="text-align: center">Send this code to your friends</p>
+        <p class="bigcode" id="waiting-code"></p>
+        <div class="row">
+          <button id="share">Share link</button>
+          <button class="secondary" id="copy">Copy code</button>
+        </div>
+        <div class="seated" id="seated"></div>
+        <p class="muted" id="waiting-note" style="text-align: center; font-size: 0.9rem"></p>
+      </div>
+
+      <p class="status" id="status" aria-live="polite"></p>
+      <div class="board" id="board" role="grid" aria-label="Board" hidden></div>
+      <p class="hint" id="hint"></p>
+
+      <div class="row">
+        <button id="rematch" hidden>Play again</button>
+        <button id="skip" hidden>Skip</button>
+        <button class="secondary" id="leave">Leave</button>
+      </div>
+    </section>
+  </main>
+
+  <script type="module">
+    import * as rooms from "../shared/rooms.js";
+
+    const GAME = "chain-reaction";
+    const COLS = 6, ROWS = 9, CELLS = COLS * ROWS;
+    const COLOURS = ["Red", "Blue", "Green", "Gold"];
+
+    // ---------- rules ----------
+    const neighbours = (i) => {
+      const r = Math.floor(i / COLS), c = i % COLS, out = [];
+      if (r > 0) out.push(i - COLS);
+      if (r < ROWS - 1) out.push(i + COLS);
+      if (c > 0) out.push(i - 1);
+      if (c < COLS - 1) out.push(i + 1);
+      return out;
+    };
+    const NB = Array.from({ length: CELLS }, (_, i) => neighbours(i));
+    const crit = (i) => NB[i].length;
+
+    // board: 2 chars per cell, "--" empty or owner seat + orb count ("03" = three of seat 0's orbs).
+    const EMPTY = "--".repeat(CELLS);
+    const decode = (b) => Array.from({ length: CELLS }, (_, i) => (b[2 * i] === "-" ? { o: -1, n: 0 } : { o: Number(b[2 * i]), n: Number(b[2 * i + 1]) }));
+    const encode = (cells) => cells.map((x) => (x.n ? `${x.o}${Math.min(x.n, 9)}` : "--")).join("");
+    const canPlace = (board, i, p) => board[2 * i] === "-" || Number(board[2 * i]) === p;
+
+    // Adds seat p's orb at cell i and runs every burst it sets off, one wave at a time.
+    // Returns the board after each step: [after the orb lands, after wave 1, …]. Bursting stops as soon as
+    // p owns every orb (it could otherwise go on forever).
+    function play(board, i, p) {
+      const cells = decode(board);
+      cells[i] = { o: p, n: cells[i].n + 1 };
+      const steps = [encode(cells)];
+      for (let wave = 0; wave < 500; wave++) {
+        const full = cells.flatMap((x, k) => (x.n >= crit(k) ? [k] : []));
+        if (!full.length || cells.every((x) => !x.n || x.o === p)) break;
+        for (const k of full) {
+          cells[k].n -= crit(k);
+          if (!cells[k].n) cells[k].o = -1;
+          for (const j of NB[k]) { cells[j].n += 1; cells[j].o = p; }
+        }
+        steps.push(encode(cells));
+      }
+      return steps;
+    }
+    const ownersOf = (board) => new Set(decode(board).filter((x) => x.n).map((x) => x.o));
+    const orbsOf = (board, s) => decode(board).reduce((t, x) => t + (x.o === s ? x.n : 0), 0);
+    // A seat is still in until it has played and then lost all its orbs.
+    const alive = (room, s, moved = parseMoved(room)) => !!rooms.seatList(room)[s] && (!moved[s] || ownersOf(room.board).has(s));
+    const parseMoved = (room) => (room.state?.moved || "").split(",").map((v) => v === "1");
+    // The next seat after s that's still in.
+    function nextAlive(room, s, moved) {
+      for (let k = 1; k <= room.seats; k++) { const n = (s + k) % room.seats; if (alive(room, n, moved)) return n; }
+      return s;
+    }
+
+    // ---------- room shape ----------
+    // board: above. last: the cell the last orb was added to. state: { moved: "1,1,0" who has had a turn,
+    // by: the seat that added it }.
+    function freshRoom(seats, round = 0) {
+      return { board: EMPTY, round, turn: round % seats, last: null, winner: null, left: null, state: { moved: Array(seats).fill(0).join(","), by: -1 } };
+    }
+    const dealRoom = (room, round) => Object.assign(room, freshRoom(room.seats, round), { status: "playing" });
+
+    // ---------- state ----------
+    let seat = null;      // { backend, code, seat } (seat is "local" on one phone)
+    let leave = null;
+    let room = null;
+    let mode = 2;
+    let turnSecs = 0;
+    let busy = false;
+    let shown = null;     // { round, board } on screen now
+    let anim = null;      // { steps, k, timer } bursts being played out
+    let passing = false;
+
+    const $ = (id) => document.getElementById(id);
+    const boardEl = $("board");
+    boardEl.innerHTML = Array.from({ length: CELLS }, (_, i) =>
+      `<button class="cell" data-i="${i}" role="gridcell" aria-label="Row ${Math.floor(i / COLS) + 1}, column ${(i % COLS) + 1}"><span class="orbs"></span></button>`).join("");
+    const cellEls = [...boardEl.children];
+
+    const local = () => seat?.seat === "local";
+    const me = () => (local() ? room.turn : seat.seat);
+    const myTurn = () => room?.status === "playing" && room.turn === me();
+    const esc = (t) => String(t).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+    const label = (s) => (local() ? COLOURS[s] : s === me() ? "You" : esc(rooms.nameOf(room, s)));
+
+    function setBusy(b) { for (const id of ["create", "join", "local"]) $(id).disabled = b; }
+
+    function stopAnim() { if (anim) clearTimeout(anim.timer); anim = null; }
+
+    function showHome(error = "") {
+      if (leave) leave();
+      stopAnim();
+      leave = null;
+      seat = room = shown = null;
+      $("game").hidden = true;
+      $("home").hidden = false;
+      $("home-error").textContent = error;
+      setBusy(false);
+    }
+
+    function start(s) {
+      seat = s;
+      shown = null;
+      stopAnim();
+      $("home").hidden = true;
+      $("game").hidden = false;
+      setBusy(false);
+      leave = rooms.enter(s, onRoom, showHome);
+    }
+
+    // A new room value: play out the bursts of the move that led to it, then show it.
+    function onRoom(value) {
+      room = value;
+      const by = room.state?.by;
+      // The move starts from the board the last animation ends on (another move can arrive mid-animation).
+      const base = anim ? anim.steps[anim.steps.length - 1] : shown?.board;
+      if (shown && shown.round === room.round && base !== room.board && typeof room.last === "number" && by >= 0) {
+        const steps = play(base, room.last, by);
+        if (steps[steps.length - 1] === room.board) {
+          stopAnim();
+          anim = { steps, k: 0, timer: 0 };
+          const delay = Math.max(70, Math.min(260, 4000 / steps.length));
+          const tick = () => {
+            if (!anim) return;
+            drawBoard(anim.steps[anim.k], anim.k ? anim.steps[anim.k - 1] : base);
+            shown = { round: room.round, board: anim.steps[anim.k] };
+            anim.k++;
+            if (anim.k < anim.steps.length) anim.timer = setTimeout(tick, delay);
+            else { anim = null; render(); }
+          };
+          tick();
+          render();
+          return;
+        }
+      }
+      if (!anim || shown?.round !== room.round) { stopAnim(); shown = room.status === "waiting" ? null : { round: room.round, board: room.board }; }
+      render();
+    }
+
+    // ---------- moves ----------
+    async function move(i) {
+      if (busy || anim || !myTurn() || !canPlace(room.board, i, room.turn)) return;
+      const mover = me(), round = room.round, uid = seat.backend.uid;
+      busy = true;
+      try {
+        const r = await seat.backend.transact(seat.code, (cur) => {
+          if (!cur || cur.status !== "playing" || cur.turn !== mover || cur.round !== round) return undefined;
+          if (!local() && rooms.seatOf(cur, uid) !== mover) return undefined;
+          if (!canPlace(cur.board, i, mover)) return undefined;
+          const steps = play(cur.board, i, mover);
+          const moved = parseMoved(cur);
+          moved[mover] = true;
+          cur.board = steps[steps.length - 1];
+          cur.last = i;
+          cur.state = { moved: moved.map(Number).join(","), by: mover };
+          const still = rooms.seatList(cur).flatMap((u, s) => (u && alive(cur, s, moved) ? [s] : []));
+          if (still.length === 1) { cur.status = "done"; cur.winner = still[0]; return cur; }
+          cur.turn = nextAlive(cur, mover, moved);
+          return cur;
+        });
+        if (!r.committed) $("hint").textContent = "That move didn't go through.";
+      } catch (err) {
+        console.error(err);
+        $("hint").textContent = "Move didn't go through. Try again.";
+      } finally { busy = false; if (room) render(); }
+    }
+
+    // The turn timer can hand the turn to a player who's already out: they pass it straight on.
+    async function passIfOut() {
+      if (passing || local() || !room || room.status !== "playing" || room.turn !== me() || alive(room, me())) return;
+      const mover = me(), round = room.round;
+      passing = true;
+      try {
+        await seat.backend.transact(seat.code, (cur) => {
+          if (!cur || cur.status !== "playing" || cur.turn !== mover || cur.round !== round || alive(cur, mover)) return undefined;
+          cur.turn = nextAlive(cur, mover, parseMoved(cur));
+          return cur;
+        });
+      } catch (err) { console.error(err); } finally { passing = false; }
+    }
+
+    async function rematch() {
+      if (!room || room.status !== "done") return;
+      try { await rooms.playAgain(seat, (cur, round) => dealRoom(cur, round)); }
+      catch (err) { console.error(err); $("hint").textContent = "Couldn't start a new game. Try again."; }
+    }
+
+    // ---------- rendering ----------
+    function drawBoard(board, before) {
+      const cells = decode(board), prev = before ? decode(before) : null;
+      cellEls.forEach((el, i) => {
+        const x = cells[i], p = prev?.[i];
+        const n = Math.min(x.n, 3);
+        const burst = p && p.n >= crit(i) && x.n < p.n;
+        el.className = "cell" + (x.n && x.n === crit(i) - 1 ? " full" : "") + (burst ? " burst" : "") + (p && x.n > p.n ? " grew" : "");
+        el.style.setProperty("--oc", `var(--p${x.n ? x.o : burst ? p.o : 0})`);
+        const html = x.n ? `<span class="orbs n${n}">${'<span class="orb"></span>'.repeat(n)}</span>` : `<span class="orbs"></span>`;
+        if (el.dataset.html !== html) { el.innerHTML = html; el.dataset.html = html; }
+        el.setAttribute("aria-label", `Row ${Math.floor(i / COLS) + 1}, column ${(i % COLS) + 1}: ${x.n ? `${x.n} ${COLOURS[x.o]}` : "empty"}`);
+      });
+    }
+
+    function render() {
+      if (!room || !seat) return;
+      const r = room;
+      const mine = me();
+      const playing = r.status === "playing";
+      const seats = rooms.seatList(r);
+      const moved = parseMoved(r);
+
+      $("room-label").innerHTML = local() ? "Same phone" : `Room <b>${seat.code}</b>${r.turnSecs ? ` · ⏱ ${r.turnSecs} s` : ""}`;
+      $("players").innerHTML = seats.map((uid, s) => {
+        if (!uid) return "";
+        const out = r.status !== "waiting" && !alive(r, s, moved);
+        return `<span class="chip${playing && r.turn === s ? " turn" : ""}${out ? " out" : ""}" style="--pc: var(--p${s})"><span class="disc"></span>${label(s)}` +
+          (r.status !== "waiting" ? `<span class="count">${orbsOf(r.board, s)}</span>` : "") +
+          (local() ? "" : `<span class="dot${rooms.isOnline(r, s) ? " on" : ""}"></span>`) + `</span>`;
+      }).join("");
+
+      const waiting = r.status === "waiting";
+      $("waiting").hidden = !waiting;
+      boardEl.hidden = waiting;
+      if (waiting) {
+        $("waiting-code").textContent = seat.code;
+        const count = rooms.playerCount(r);
+        $("seated").innerHTML = seats.map((uid, s) => uid ? `<div><span class="chip" style="--pc: var(--p${s})"><span class="disc"></span>${label(s)}${s === mine && rooms.nameOf(r, s) !== `P${s + 1}` ? ` (${esc(rooms.nameOf(r, s))})` : ""}${s === 0 ? " (host)" : ""}</span></div>` : "").join("");
+        $("waiting-note").textContent = `${count} of ${r.seats} here. The game starts when everyone's in.`;
+        $("status").textContent = $("hint").textContent = "";
+        $("rematch").hidden = $("skip").hidden = true;
+        return;
+      }
+
+      // Board (while bursts play out, the animation draws it)
+      if (!anim) drawBoard(r.board, null);
+      const canAct = myTurn() && !busy && !anim;
+      boardEl.style.setProperty("--gc", `var(--p${playing ? r.turn : r.winner === "draw" ? mine : r.winner ?? mine})`);
+      cellEls.forEach((el, i) => {
+        const ok = canAct && canPlace(r.board, i, r.turn);
+        el.classList.toggle("ok", ok);
+        el.classList.toggle("last", !anim && r.last === i);
+        el.disabled = !ok;
+      });
+
+      // Status
+      const online = (s) => local() || rooms.isOnline(r, s);
+      let status = "", hint = "";
+      if (playing) {
+        if (local()) status = `${COLOURS[r.turn]}'s turn`;
+        else status = myTurn() ? "Your turn" : `${label(r.turn)}'s turn${online(r.turn) ? "…" : " (away)"}`;
+        if (!local() && !alive(r, mine, moved)) hint = "You're out. Watch the others finish.";
+        else if (myTurn() && !moved[r.turn]) hint = "Tap any empty cell to start.";
+        else if (myTurn()) hint = "Tap an empty cell or one of yours.";
+        const left = rooms.turnLeft(r);
+        if (left !== null) status += ` <span class="clock${left <= 5 ? " low" : ""}">${left ? `0:${String(left).padStart(2, "0")}` : "time's up"}</span>`;
+      } else if (typeof r.left === "number") {
+        status = r.left === mine ? "You left this game" : `${label(r.left)} left. ${r.winner === "draw" ? "Game over" : r.winner === mine ? "You win 🎉" : `${label(r.winner)} wins`}`;
+      } else if (local()) status = `${COLOURS[r.winner]} wins! 🎉`;
+      else status = r.winner === mine ? "You win! 🎉" : `${label(r.winner)} wins`;
+      $("status").innerHTML = status;
+      $("hint").textContent = hint;
+
+      $("rematch").hidden = r.status !== "done" || (!local() && typeof r.left === "number" && r.left !== mine && !online(r.left));
+      if (r.status === "done") {
+        const ready = local() ? [] : seats.flatMap((u, s) => (u && rooms.wantsAgain(r, s) ? [s] : []));
+        const waitingOn = seats.flatMap((u, s) => (u && s !== mine && online(s) && !rooms.wantsAgain(r, s) ? [label(s)] : []));
+        $("rematch").disabled = ready.includes(mine);
+        $("rematch").textContent = ready.includes(mine) ? `Waiting for ${waitingOn.join(", ") || "others"}…` : ready.length ? `Play again (${ready.map(label).join(", ")} ready)` : "Play again";
+      }
+      $("skip").hidden = !(playing && !myTurn() && rooms.turnLeft(r) === 0);
+      $("skip").textContent = `Skip ${label(r.turn)}`;
+      $("leave").disabled = false;
+      passIfOut();
+    }
+
+    // ---------- actions ----------
+    async function createRoom() {
+      setBusy(true);
+      $("home-error").textContent = "";
+      await rooms.setMyName($("my-name").value);
+      try {
+        start(await rooms.createRoom(GAME, { seats: mode, min: mode, auto: true, turnSecs, makeRoom: () => freshRoom(mode) }));
+      } catch (err) {
+        console.error(err);
+        showHome(err instanceof rooms.RoomError ? err.message : "Couldn't create a room. Check your connection and try again.");
+      }
+    }
+    async function joinRoom(code) {
+      setBusy(true);
+      $("home-error").textContent = "";
+      await rooms.setMyName($("my-name").value);
+      try {
+        start(await rooms.joinRoom(GAME, code));
+      } catch (err) {
+        console.error(err);
+        showHome(err instanceof rooms.RoomError ? err.message : "Couldn't join. Check your connection and try again.");
+      }
+    }
+
+    // ---------- wiring ----------
+    for (const [group, set] of [["mode", (b) => (mode = Number(b.dataset.mode))], ["timer", (b) => (turnSecs = Number(b.dataset.secs))]]) {
+      for (const b of document.querySelectorAll(`#${group} button`)) {
+        b.addEventListener("click", () => {
+          set(b);
+          for (const o of document.querySelectorAll(`#${group} button`)) o.setAttribute("aria-pressed", String(o === b));
+        });
+      }
+    }
+    boardEl.addEventListener("click", (e) => {
+      const el = e.target.closest(".cell");
+      if (el && !el.disabled) move(Number(el.dataset.i));
+    });
+    $("my-name").value = rooms.myName();
+    $("my-name").addEventListener("change", () => { $("my-name").value = rooms.cleanRoomName($("my-name").value); });
+    $("skip").addEventListener("click", async () => {
+      $("skip").disabled = true;
+      if (!(await rooms.skipTurn(seat, room))) $("hint").textContent = "Couldn't skip yet.";
+      $("skip").disabled = false;
+    });
+    setInterval(() => { if (room?.turnSecs && room.status === "playing") render(); }, 1000);
+    $("create").addEventListener("click", createRoom);
+    $("join-form").addEventListener("submit", (e) => { e.preventDefault(); joinRoom($("join-code").value); });
+    $("join-code").addEventListener("input", () => {
+      $("join-code").value = $("join-code").value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+      $("home-error").textContent = "";
+    });
+    $("local").addEventListener("click", () => start(rooms.localRoom(GAME, mode, () => freshRoom(mode))));
+    $("rematch").addEventListener("click", rematch);
+    $("leave").addEventListener("click", async () => {
+      if (!seat || !room) return showHome();
+      const s = seat;
+      const others = local() ? 0 : rooms.seatList(room).filter((u, i) => u && i !== me() && rooms.isOnline(room, i)).length;
+      if (room.status === "playing" && others && !confirm(rooms.playerCount(room) === 2 ? "Leave the game? Your friend wins this round." : "Leave the game? It ends in a draw for everyone.")) return;
+      $("leave").disabled = true;
+      await rooms.quit(s);
+      showHome();
+    });
+    $("share").addEventListener("click", async () => {
+      if ((await rooms.share(seat.code, "Chain Reaction")) === "copied") $("share").textContent = "Link copied";
+    });
+    $("copy").addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(seat.code); $("copy").textContent = "Copied"; } catch { prompt("Room code:", seat.code); }
+      setTimeout(() => ($("copy").textContent = "Copy code"), 1500);
+    });
+
+    // Opening a shared link (?room=CODE) joins straight away.
+    const linked = rooms.roomFromUrl();
+    if (linked) { $("join-code").value = linked.toUpperCase(); joinRoom(linked); }
+
+    // Hooks for automated tests.
+    window.__cr = { rooms, play, move, canPlace, alive, get room() { return room; }, get seat() { return seat; }, get animating() { return !!anim; } };
+  </script>
+</body>
+</html>
