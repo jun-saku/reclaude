@@ -4,7 +4,7 @@ claudeOS for remote and mobile friendly development: small web projects (calcula
 toys) built by Claude from a phone, each published at its own link.
 
 - `projects/<name>/` → `https://reclaude.junsaku.dev/<name>/`
-- There's no index page; share each project's link directly.
+- `https://reclaude.junsaku.dev/` lists the games (`site/index.html`); each game's own link can be shared too.
 
 ## Projects
 

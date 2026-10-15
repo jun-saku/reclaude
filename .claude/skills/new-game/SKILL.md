@@ -11,8 +11,8 @@ and `firebase/database.rules.json` (who may write what). Read `CLAUDE.md` first;
 
 ## The one rule that keeps games independent
 
-- **A game PR touches only `projects/<name>/`** (plus a README line, and its own section in `tests/e2e.cjs` if you add
-  one). A change like that cannot break another game: games don't import each other and their rooms are tagged with
+- **A game PR touches only `projects/<name>/`** (plus a README line, its card on the landing page `site/index.html`, and its
+  own section in `tests/e2e.cjs` if you add one). A change like that cannot break another game: games don't import each other and their rooms are tagged with
   their own name.
 - **Changes to `shared/` or the rules go in their own PR**, titled as an engine change, never inside "add my game".
   Every online game uses them, so a change there goes live for all games at once: run `cd tests && npm run e2e` and
@@ -31,7 +31,8 @@ and `firebase/database.rules.json` (who may write what). Read `CLAUDE.md` first;
    version). **Start from `projects/five-line/index.html`**, the most complete example: lobby, 2–4 players, teams,
    hidden hands, names, timer, pass, Leave, Play again. `four-in-a-row` is a smaller 2-player example with a
    same-phone mode.
-4. Test (below), add a line to `README.md` under Projects, commit, push, open a PR.
+4. Test (below), add a line to `README.md` under Projects and a card to `site/index.html` (newest first: icon, title,
+   one line, player tags), commit, push, open a PR.
 
 ## The engine, in short
 
@@ -104,7 +105,7 @@ secret goal) goes in private data: one string per seat, ≤ 512 chars, readable 
 
 ## Before asking for a merge
 
-- [ ] The PR touches only `projects/<name>/` (+ README, + its own e2e section), or is clearly an engine PR.
+- [ ] The PR touches only `projects/<name>/` (+ README, + its landing-page card, + its own e2e section), or is clearly an engine PR.
 - [ ] Works on a phone: touch, no sideways scroll, safe areas, light and dark.
 - [ ] Online: create, join by code and by link, play to a win, Play again, Leave mid-game, reload mid-game.
 - [ ] `node scripts/build.mjs` passes, and `npm run e2e` passes if the game is online.

@@ -3,7 +3,7 @@
 //
 // Each folder projects/<name>/ is published at /<name>/ and must contain an index.html.
 // Names must be lowercase-kebab-case and are the URL, so they can't change once shared.
-// Folders starting with "_" (templates, drafts) are skipped. There is no index page.
+// Folders starting with "_" (templates, drafts) are skipped. site/ (the landing page index.html, 404.html) goes to the root.
 // shared/ is published at /shared/ for code used by several projects.
 
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
