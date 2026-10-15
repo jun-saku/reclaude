@@ -11,7 +11,7 @@ and `firebase/database.rules.json` (who may write what). Read `CLAUDE.md` first;
 
 ## The one rule that keeps games independent
 
-- **A game PR touches only `projects/<name>/`** (plus a README line, its card on the landing page `site/index.html`, and its
+- **A game PR touches only `projects/<name>/`** (plus a README line, its card on the landing page `site/games/index.html`, and its
   own section in `tests/e2e.cjs` if you add one). A change like that cannot break another game: games don't import each other and their rooms are tagged with
   their own name.
 - **Changes to `shared/` or the rules go in their own PR**, titled as an engine change, never inside "add my game".
@@ -31,7 +31,7 @@ and `firebase/database.rules.json` (who may write what). Read `CLAUDE.md` first;
    version). **Start from `projects/five-line/index.html`**, the most complete example: lobby, 2–4 players, teams,
    hidden hands, names, timer, pass, Leave, Play again. `four-in-a-row` is a smaller 2-player example with a
    same-phone mode.
-4. Test (below), add a line to `README.md` under Projects and a card to `site/index.html` (newest first: icon, title,
+4. Test (below), add a line to `README.md` under Projects and a card to `site/games/index.html` (newest first: icon, title,
    one line, player tags), commit, push, open a PR.
 
 ## The engine, in short
