@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#161618" media="(prefers-color-scheme: dark)">
   <title>Chain Reaction</title>
-  <meta name="description" content="Add orbs to your cells; when one fills up it bursts into its neighbours and takes them over. 2–4 players online or on one phone.">
+  <meta name="description" content="Add orbs to your cells; when one fills up it bursts into its neighbours and takes them over. 2–6 players online or on one phone.">
   <style>
     :root {
       --bg: #f7f6f3;
@@ -18,7 +18,7 @@
       --accent: #c2571a;
       --danger: #b3261e;
       --cell: #ffffff;
-      --p0: #e03e3e; --p1: #2f6fd6; --p2: #24a05a; --p3: #d9940f;
+      --p0: #e03e3e; --p1: #2f6fd6; --p2: #24a05a; --p3: #d9940f; --p4: #8a4bd4; --p5: #e0559a;
       color-scheme: light;
     }
     @media (prefers-color-scheme: dark) {
@@ -32,7 +32,7 @@
         --accent: #f08a4b;
         --danger: #ff8a80;
         --cell: #1c1c1f;
-        --p0: #ff5f5f; --p1: #5f97ff; --p2: #3fd37f; --p3: #f7bd3f;
+        --p0: #ff5f5f; --p1: #5f97ff; --p2: #3fd37f; --p3: #f7bd3f; --p4: #b88cff; --p5: #ff7fbf;
         color-scheme: dark;
       }
     }
@@ -158,10 +158,14 @@
         <label class="name-row"><span>Your name</span>
           <input id="my-name" maxlength="16" autocomplete="nickname" spellcheck="false" placeholder="So friends know it's you">
         </label>
-        <div class="seg" id="mode" role="group" aria-label="Players">
-          <button type="button" data-mode="2" aria-pressed="true">2 players</button>
-          <button type="button" data-mode="3" aria-pressed="false">3 players</button>
-          <button type="button" data-mode="4" aria-pressed="false">4 players</button>
+        <div class="name-row"><span>Players</span>
+        <div class="seg" id="mode" role="group" aria-label="Players" style="flex: 1">
+          <button type="button" data-mode="2" aria-pressed="true">2</button>
+          <button type="button" data-mode="3" aria-pressed="false">3</button>
+          <button type="button" data-mode="4" aria-pressed="false">4</button>
+          <button type="button" data-mode="5" aria-pressed="false">5</button>
+          <button type="button" data-mode="6" aria-pressed="false">6</button>
+        </div>
         </div>
       </div>
       <div class="card">
@@ -232,7 +236,7 @@
 
     const GAME = "chain-reaction";
     const COLS = 6, ROWS = 9, CELLS = COLS * ROWS;
-    const COLOURS = ["Red", "Blue", "Green", "Gold"];
+    const COLOURS = ["Red", "Blue", "Green", "Gold", "Purple", "Pink"];
 
     // ---------- rules ----------
     const neighbours = (i) => {
