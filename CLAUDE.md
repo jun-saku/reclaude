@@ -8,15 +8,16 @@ The user usually works from their phone, so keep replies short and end with the 
 - `https://reclaude.junsaku.dev/<name>/`: one project, from `projects/<name>/`. This is the address to share
   (Cloudflare Pages custom domain; `https://reclaude.pages.dev/<name>/` is the same site). Also still published at
   `https://jun-saku.github.io/reclaude/<name>/` so old links keep working.
-- Anything else, including the root: the blank 404 page. There is no index page and projects
-  don't link to each other.
+- `https://reclaude.junsaku.dev/games/`: the landing page (`site/games/index.html`), a card linking to each game.
+  Non-games (the calculator) aren't listed. Projects don't link to each other.
+- Anything else, including the root: the blank 404 page.
 
 ## Layout
 
 - `projects/<name>/`: one project. `index.html` is required; add any other files it needs
   (images, sounds, extra scripts) next to it.
 - `projects/_template/`: starting point for new projects.
-- `site/`: files copied to the site root (`404.html`).
+- `site/`: files copied to the site root (`404.html`, and `games/`: the landing page).
 - `shared/`: code used by several projects, published at `/shared/` and imported as `../shared/<file>`.
   `shared/rooms.js` is the multiplayer room system: 2–10 seats, teams, auto-start or a host-started lobby, codes, share
   links, presence, player names (`myName`/`setMyName`/`nameOf`, remembered per device), an optional turn timer

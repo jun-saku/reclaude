@@ -3,7 +3,7 @@
 //
 // Each folder projects/<name>/ is published at /<name>/ and must contain an index.html.
 // Names must be lowercase-kebab-case and are the URL, so they can't change once shared.
-// Folders starting with "_" (templates, drafts) are skipped. There is no index page.
+// Folders starting with "_" (templates, drafts) are skipped. site/ goes to the root: 404.html, and games/ (the landing page).
 // shared/ is published at /shared/ for code used by several projects.
 
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
@@ -14,7 +14,7 @@ const ROOT = new URL("..", import.meta.url).pathname;
 const OUT = join(ROOT, "_site");
 const PROJECTS = join(ROOT, "projects");
 const NAME_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
-const RESERVED = new Set(["404", "assets", "shared"]);
+const RESERVED = new Set(["404", "assets", "games", "shared"]);
 
 rmSync(OUT, { recursive: true, force: true });
 mkdirSync(OUT);
