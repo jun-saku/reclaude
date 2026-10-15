@@ -8,6 +8,7 @@ toys) built by Claude from a phone, each published at its own link.
 
 ## Projects
 
+- [Wall Race](https://reclaude.junsaku.dev/wall-race/): race your pawn to the far side or drop walls to block the others (Quoridor-style), 2–4 players online with a room code or 2 on one phone
 - [Bridge](https://reclaude.junsaku.dev/bridge/): contract bridge, 2–4 friends online with a room code (computers fill empty seats), or you and a computer partner against two computer opponents
 - [Four in a Row](https://reclaude.junsaku.dev/four-in-a-row/): drop discs and line up four, online with a room code or on one phone
 - [Tile Rummy](https://reclaude.junsaku.dev/tile-rummy/): make runs and groups of numbered tiles, rearrange the table, and empty your rack first, 2–4 players online with a room code

@@ -1,0 +1,671 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#161618" media="(prefers-color-scheme: dark)">
+  <title>Wall Race</title>
+  <meta name="description" content="Race your pawn across a 9×9 board, or drop walls to block your friends. A Quoridor-style game for 2–4 players online or on one phone.">
+  <style>
+    :root {
+      --bg: #f7f6f3;
+      --text: #1d1d1f;
+      --muted: #6b6b70;
+      --panel: #ffffff;
+      --line: #d9d2c6;
+      --soft: #ece7df;
+      --accent: #c2571a;
+      --danger: #b3261e;
+      --groove: #c9bfae;
+      --cell: #fbf8f2;
+      --wall: #6b4a2b;
+      --p0: #d64545; --p1: #2f6fd6; --p2: #2a9a5b; --p3: #d99a13;
+      --ring: rgba(0, 0, 0, 0.18);
+      color-scheme: light;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #161618;
+        --text: #ececef;
+        --muted: #9a9aa2;
+        --panel: #1f1f22;
+        --line: #3a3a40;
+        --soft: #2a2a2e;
+        --accent: #f08a4b;
+        --danger: #ff8a80;
+        --groove: #0e0e10;
+        --cell: #2a2a2f;
+        --wall: #e0b27a;
+        --p0: #ff6b6b; --p1: #6ea1ff; --p2: #4fd083; --p3: #f5c04f;
+        --ring: rgba(255, 255, 255, 0.25);
+        color-scheme: dark;
+      }
+    }
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    html, body { min-height: 100%; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 17px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      justify-content: center;
+      -webkit-tap-highlight-color: transparent;
+    }
+    main {
+      width: 100%;
+      max-width: 480px;
+      padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    h1 { font-size: 1.6rem; margin: 0; display: flex; align-items: center; gap: 10px; }
+    h1 .logo { display: inline-flex; align-items: center; gap: 3px; }
+    h1 .logo i { width: 0.5em; height: 0.5em; border-radius: 50%; background: var(--p0); }
+    h1 .logo i:last-child { background: var(--p1); }
+    h1 .logo b { width: 4px; height: 0.9em; border-radius: 2px; background: var(--wall); }
+    h2 { font-size: 1.05rem; margin: 0; }
+    p { margin: 0; }
+    .muted { color: var(--muted); }
+    button {
+      font: inherit; font-weight: 650; border: 0; border-radius: 12px; padding: 12px 16px;
+      background: var(--accent); color: #fff; cursor: pointer; touch-action: manipulation;
+    }
+    button:disabled { opacity: 0.5; cursor: default; }
+    button.secondary { background: var(--soft); color: var(--text); }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+    #home { display: flex; flex-direction: column; gap: 12px; }
+    .row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+    .join { display: flex; gap: 10px; }
+    .join input {
+      flex: 1; min-width: 0; font: inherit; font-size: 1.3rem; letter-spacing: 0.3em; text-transform: uppercase; text-align: center;
+      padding: 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--text);
+    }
+    .error { color: var(--danger); min-height: 1.4em; font-size: 0.95rem; }
+    .seg { display: flex; background: var(--soft); border-radius: 12px; padding: 4px; gap: 4px; }
+    .seg button { flex: 1; background: transparent; color: var(--text); padding: 9px 6px; font-size: 0.95rem; }
+    .seg button[aria-pressed="true"] { background: var(--panel); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+    .name-row { display: flex; align-items: center; gap: 10px; font-weight: 650; }
+    .name-row span { white-space: nowrap; }
+    .name-row input {
+      flex: 1; min-width: 0; font: inherit; font-weight: 500; padding: 10px 12px; border-radius: 12px;
+      border: 1px solid var(--line); background: var(--bg); color: var(--text);
+    }
+    .clock { font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 600; }
+    .clock.low { color: var(--danger); }
+
+    .bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .players { display: flex; gap: 6px; flex-wrap: wrap; }
+    .chip {
+      display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px;
+      background: var(--soft); font-size: 0.85rem; font-weight: 600; border: 2px solid transparent;
+    }
+    .chip.turn { border-color: var(--accent); }
+    .chip .disc { width: 12px; height: 12px; border-radius: 50%; background: var(--pc); }
+    .chip .walls { color: var(--muted); font-variant-numeric: tabular-nums; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); opacity: 0.4; }
+    .dot.on { background: #2e9d5b; opacity: 1; }
+    .code { font-size: 0.85rem; color: var(--muted); }
+    .code b { font-size: 1.05rem; letter-spacing: 0.15em; color: var(--text); }
+    .bigcode { font-size: 2.6rem; font-weight: 800; letter-spacing: 0.25em; text-align: center; margin: 0; }
+    .status { text-align: center; font-size: 1.15rem; font-weight: 700; min-height: 1.5em; }
+    .seated { display: flex; flex-direction: column; gap: 6px; }
+    .seated div { display: flex; align-items: center; gap: 8px; }
+
+    /* Board: everything is placed in percent of the board, so it scales with the page. Cells are C% wide with
+       G% grooves between them; walls sit in the grooves. The board turns so your own side is at the bottom. */
+    .board {
+      position: relative; width: 100%; aspect-ratio: 1; background: var(--groove); border-radius: 10px;
+      border: 4px solid var(--groove); user-select: none; -webkit-user-select: none; touch-action: manipulation;
+      transition: transform 300ms ease;
+    }
+    .board.walling { touch-action: none; cursor: crosshair; }
+    .cell {
+      position: absolute; width: var(--c); height: var(--c); left: var(--x); top: var(--y);
+      background: var(--cell); border-radius: 3px; border: 0; padding: 0; cursor: default;
+    }
+    .cell:disabled { opacity: 1; }
+    .cell.goal { background: color-mix(in srgb, var(--gc) 22%, var(--cell)); }
+    .cell.ok { cursor: pointer; }
+    .cell.ok::after {
+      content: ""; position: absolute; inset: 32%; border-radius: 50%; background: var(--gc, var(--accent)); opacity: 0.45;
+    }
+    .cell.from { box-shadow: inset 0 0 0 2px var(--ring); }
+    .board.walling .cell { cursor: crosshair; }
+    .wall {
+      position: absolute; background: var(--wall); border-radius: 3px; pointer-events: none;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+    }
+    .wall.last { box-shadow: 0 0 0 2px var(--accent); }
+    .wall.ghost { background: var(--accent); opacity: 0.75; box-shadow: none; }
+    .wall.ghost.bad { background: var(--danger); opacity: 0.45; }
+    @keyframes drop { from { transform: scale(1.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .wall.new { animation: drop 200ms ease-out; }
+    .pawn {
+      position: absolute; width: var(--s); height: var(--s); left: var(--x); top: var(--y); border-radius: 50%;
+      background: var(--pc); border: 3px solid color-mix(in srgb, var(--pc) 55%, #000);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.35); pointer-events: none;
+      transition: left 220ms ease, top 220ms ease;
+    }
+    .pawn.turn { box-shadow: 0 0 0 3px var(--panel), 0 0 0 5px var(--pc); }
+    @media (prefers-reduced-motion: reduce) { .board, .pawn { transition: none; } .wall.new { animation: none; } }
+
+    .hint { text-align: center; font-size: 0.9rem; color: var(--muted); min-height: 1.3em; }
+    .rules { font-size: 0.9rem; color: var(--muted); }
+    .rules li { margin: 2px 0; }
+    .rules summary { cursor: pointer; font-weight: 600; color: var(--text); }
+  </style>
+</head>
+<body>
+  <main>
+    <h1><span class="logo" aria-hidden="true"><i></i><b></b><i></i></span>Wall Race</h1>
+
+    <section id="home">
+      <div class="card">
+        <label class="name-row"><span>Your name</span>
+          <input id="my-name" maxlength="16" autocomplete="nickname" spellcheck="false" placeholder="So friends know it's you">
+        </label>
+      </div>
+      <div class="card">
+        <h2>Play friends online</h2>
+        <p class="muted">Create a room and send the code or link. The game starts once everyone is in.</p>
+        <div class="seg" id="mode" role="group" aria-label="Players">
+          <button type="button" data-mode="2" aria-pressed="true">2 players</button>
+          <button type="button" data-mode="3" aria-pressed="false">3 players</button>
+          <button type="button" data-mode="4" aria-pressed="false">4 players</button>
+        </div>
+        <div class="seg" id="timer" role="group" aria-label="Turn timer">
+          <button type="button" data-secs="0" aria-pressed="true">No timer</button>
+          <button type="button" data-secs="30" aria-pressed="false">30 s</button>
+          <button type="button" data-secs="60" aria-pressed="false">1 min</button>
+        </div>
+        <button id="create">Create room</button>
+      </div>
+      <div class="card">
+        <h2>Join a room</h2>
+        <form class="join" id="join-form" autocomplete="off">
+          <input id="join-code" maxlength="4" autocapitalize="characters" spellcheck="false" placeholder="CODE" aria-label="Room code">
+          <button id="join" type="submit">Join</button>
+        </form>
+        <p class="error" id="home-error" role="alert"></p>
+      </div>
+      <div class="card">
+        <h2>Same phone</h2>
+        <p class="muted">Two players take turns on this phone. Works offline.</p>
+        <button class="secondary" id="local">Play here</button>
+      </div>
+      <details class="card rules">
+        <summary>How to play</summary>
+        <ul>
+          <li>Be the first to get your pawn to the far side of the board (the tinted row).</li>
+          <li>On your turn, either <b>move</b> one square (tap a dot), or <b>place a wall</b>.</li>
+          <li>Walls are two squares long and block everyone. You get 10 walls with 2 players, 7 with 3, 5 with 4.</li>
+          <li>To place one, switch to Wall, tap or drag on the board, tap again (or Turn) to switch direction, then Place.</li>
+          <li>A wall may never shut a player off from their goal completely.</li>
+          <li>Facing another pawn, you can jump over it. If a wall or pawn is behind it, step diagonally instead.</li>
+        </ul>
+      </details>
+    </section>
+
+    <section id="game" hidden>
+      <div class="bar">
+        <div class="players" id="players"></div>
+        <div class="code" id="room-label"></div>
+      </div>
+
+      <div class="card" id="waiting" hidden>
+        <p class="muted" style="text-align: center">Send this code to your friends</p>
+        <p class="bigcode" id="waiting-code"></p>
+        <div class="row">
+          <button id="share">Share link</button>
+          <button class="secondary" id="copy">Copy code</button>
+        </div>
+        <div class="seated" id="seated"></div>
+        <p class="muted" id="waiting-note" style="text-align: center; font-size: 0.9rem"></p>
+      </div>
+
+      <p class="status" id="status" aria-live="polite"></p>
+      <div class="board" id="board" aria-label="Board" hidden></div>
+      <p class="hint" id="hint"></p>
+
+      <div id="controls" hidden>
+        <div class="seg" id="tool" role="group" aria-label="Move or wall">
+          <button type="button" data-tool="move" aria-pressed="true">Move</button>
+          <button type="button" data-tool="wall" aria-pressed="false" id="wall-tool">Wall</button>
+        </div>
+      </div>
+      <div class="row" id="wall-row" hidden>
+        <button class="secondary" id="turn-wall">↻ Turn</button>
+        <button id="place">Place wall</button>
+      </div>
+
+      <div class="row">
+        <button id="rematch" hidden>Play again</button>
+        <button id="skip" hidden>Skip</button>
+        <button class="secondary" id="leave">Leave</button>
+      </div>
+    </section>
+  </main>
+
+  <script type="module">
+    import * as rooms from "../shared/rooms.js";
+
+    const GAME = "wall-race";
+    const N = 9;   // cells per side
+    const S = 8;   // wall slots per side (the grooves' crossings)
+    const COLOURS = ["Red", "Blue", "Green", "Gold"];
+    const WALLS = { 2: 10, 3: 7, 4: 5 };
+
+    // ---------- rules ----------
+    // Sides: 0 bottom, 1 left, 2 top, 3 right. Seats sit on sides so that 2 players face each other.
+    const sidesFor = (seats) => (seats === 2 ? [0, 2] : seats === 3 ? [0, 1, 2] : [0, 1, 2, 3]);
+    const HOME = [8 * N + 4, 4 * N, 4, 4 * N + 8];
+    const atGoal = (side, cell) => side === 0 ? cell < N : side === 1 ? cell % N === N - 1 : side === 2 ? cell >= N * (N - 1) : cell % N === 0;
+    const DIRS = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+
+    // Walls: a string of S*S chars, "-" none, "h" horizontal, "v" vertical, one per groove crossing. A horizontal
+    // wall at (r, c) lies under cells (r, c) and (r, c+1); a vertical one right of cells (r, c) and (r+1, c).
+    const wallAt = (w, r, c) => (r >= 0 && r < S && c >= 0 && c < S ? w[r * S + c] : "-");
+    // Can a pawn step from (r, c) by (dr, dc)? Off the board counts as a wall.
+    function open(w, r, c, dr, dc) {
+      const nr = r + dr, nc = c + dc;
+      if (nr < 0 || nr >= N || nc < 0 || nc >= N) return false;
+      if (dr) { const rr = Math.min(r, nr); return wallAt(w, rr, c) !== "h" && wallAt(w, rr, c - 1) !== "h"; }
+      const cc = Math.min(c, nc);
+      return wallAt(w, r, cc) !== "v" && wallAt(w, r - 1, cc) !== "v";
+    }
+    // Squares the pawn in `seat` may move to. pos: cell per seat (-1 for an empty seat).
+    function movesFrom(w, pos, seat) {
+      const occ = new Set(pos.filter((p, i) => i !== seat && p >= 0));
+      const r = Math.floor(pos[seat] / N), c = pos[seat] % N;
+      const out = new Set();
+      for (const [dr, dc] of DIRS) {
+        if (!open(w, r, c, dr, dc)) continue;
+        const r1 = r + dr, c1 = c + dc, n = r1 * N + c1;
+        if (!occ.has(n)) { out.add(n); continue; }
+        // Facing a pawn: jump straight over it, or if a wall or pawn is behind it, step to its side.
+        if (open(w, r1, c1, dr, dc) && !occ.has((r1 + dr) * N + c1 + dc)) { out.add((r1 + dr) * N + c1 + dc); continue; }
+        for (const [sr, sc] of dr ? [[0, -1], [0, 1]] : [[-1, 0], [1, 0]]) {
+          const d = (r1 + sr) * N + c1 + sc;
+          if (open(w, r1, c1, sr, sc) && !occ.has(d) && d !== pos[seat]) out.add(d);
+        }
+      }
+      return [...out];
+    }
+    // Is there still a way from `cell` to the side's goal (pawns don't block paths)?
+    function hasPath(w, cell, side) {
+      const seen = new Set([cell]);
+      const queue = [cell];
+      while (queue.length) {
+        const x = queue.shift();
+        if (atGoal(side, x)) return true;
+        const r = Math.floor(x / N), c = x % N;
+        for (const [dr, dc] of DIRS) {
+          const n = (r + dr) * N + c + dc;
+          if (open(w, r, c, dr, dc) && !seen.has(n)) { seen.add(n); queue.push(n); }
+        }
+      }
+      return false;
+    }
+    // Why a wall can't go at slot with orientation o ("h"/"v"), or "" if it can.
+    function wallProblem(w, slot, o, pos, seats) {
+      const r = Math.floor(slot / S), c = slot % S;
+      if (w[slot] !== "-") return "There's already a wall there.";
+      if (o === "h" ? wallAt(w, r, c - 1) === "h" || wallAt(w, r, c + 1) === "h" : wallAt(w, r - 1, c) === "v" || wallAt(w, r + 1, c) === "v") return "That overlaps another wall.";
+      const next = w.slice(0, slot) + o + w.slice(slot + 1);
+      const sides = sidesFor(seats);
+      if (pos.some((p, s) => p >= 0 && !hasPath(next, p, sides[s]))) return "That would shut someone in.";
+      return "";
+    }
+
+    // ---------- room shape ----------
+    // board: the walls (above). state: { pos: "76,4" cell per seat, walls: "10,10" walls left per seat }.
+    // last: the cell the last pawn moved to, or 100 + slot for the last wall placed.
+    const EMPTY = "-".repeat(S * S);
+    const parse = (room) => ({ pos: room.state.pos.split(",").map(Number), walls: room.state.walls.split(",").map(Number) });
+    const pack = (st) => ({ pos: st.pos.join(","), walls: st.walls.join(",") });
+    function freshRoom(seats, round = 0) {
+      const sides = sidesFor(seats);
+      return {
+        board: EMPTY, round, turn: round % seats, last: null, winner: null, left: null,
+        state: pack({ pos: sides.map((d) => HOME[d]), walls: sides.map(() => WALLS[seats]) }),
+      };
+    }
+    const dealRoom = (room, round) => Object.assign(room, freshRoom(room.seats, round), { status: "playing" });
+
+    // ---------- state ----------
+    let seat = null;      // { backend, code, seat } (seat is "local" on one phone)
+    let leave = null;
+    let room = null;
+    let mode = 2;
+    let turnSecs = 0;
+    let tool = "move";
+    let ghost = null;     // { slot, o } wall being placed
+    let lastO = "h";
+    let busy = false;
+    let lastBoard = null;
+
+    const $ = (id) => document.getElementById(id);
+    const boardEl = $("board");
+    const C = 9.4, G = (100 - N * C) / (N - 1); // cell and groove size, % of the board
+    const at = (k) => k * (C + G);
+    boardEl.innerHTML = Array.from({ length: N * N }, (_, i) =>
+      `<button class="cell" data-i="${i}" style="--x: ${at(i % N)}%; --y: ${at(Math.floor(i / N))}%; --c: ${C}%" aria-label="Row ${Math.floor(i / N) + 1}, column ${(i % N) + 1}"></button>`).join("") +
+      `<div id="walls"></div><div id="pawns"></div><div class="wall ghost" id="ghost" hidden></div>`;
+    const cells = [...boardEl.querySelectorAll(".cell")];
+    const wallStyle = (slot, o) => {
+      const r = Math.floor(slot / S), c = slot % S;
+      return o === "h"
+        ? `left: ${at(c)}%; top: ${at(r + 1) - G}%; width: ${2 * C + G}%; height: ${G}%`
+        : `left: ${at(c + 1) - G}%; top: ${at(r)}%; width: ${G}%; height: ${2 * C + G}%`;
+    };
+
+    const local = () => seat?.seat === "local";
+    const me = () => (local() ? room.turn : seat.seat);
+    const myTurn = () => room?.status === "playing" && room.turn === me();
+    const esc = (t) => String(t).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+    const label = (s) => (local() ? COLOURS[s] : s === me() ? "You" : esc(rooms.nameOf(room, s)));
+    // The board turns so this player's pawn starts at the bottom (not on one phone: it'd spin every turn).
+    const rotation = () => (local() ? 0 : [0, 270, 180, 90][sidesFor(room.seats)[me()]]);
+
+    function setBusy(b) { for (const id of ["create", "join", "local"]) $(id).disabled = b; }
+
+    function showHome(error = "") {
+      if (leave) leave();
+      leave = null;
+      seat = room = ghost = lastBoard = null;
+      $("game").hidden = true;
+      $("home").hidden = false;
+      $("home-error").textContent = error;
+      setBusy(false);
+    }
+
+    function start(s) {
+      seat = s;
+      lastBoard = null;
+      setTool("move");
+      $("home").hidden = true;
+      $("game").hidden = false;
+      setBusy(false);
+      leave = rooms.enter(s, (value) => { room = value; render(); }, showHome);
+    }
+
+    function setTool(t) {
+      tool = t;
+      ghost = null;
+      for (const b of document.querySelectorAll("#tool button")) b.setAttribute("aria-pressed", String(b.dataset.tool === t));
+      if (room) render();
+    }
+
+    // ---------- moves ----------
+    // One write by the player on turn: move = cell, or wall = { slot, o }.
+    async function act(move) {
+      if (busy || !myTurn()) return;
+      const mover = me(), round = room.round, uid = seat.backend.uid;
+      busy = true;
+      try {
+        const r = await seat.backend.transact(seat.code, (cur) => {
+          if (!cur || cur.status !== "playing" || cur.turn !== mover || cur.round !== round) return undefined;
+          if (!local() && rooms.seatOf(cur, uid) !== mover) return undefined;
+          const st = parse(cur);
+          if (typeof move === "number") {
+            if (!movesFrom(cur.board, st.pos, mover).includes(move)) return undefined;
+            st.pos[mover] = move;
+            cur.last = move;
+            if (atGoal(sidesFor(cur.seats)[mover], move)) { cur.state = pack(st); cur.status = "done"; cur.winner = mover; return cur; }
+          } else {
+            if (st.walls[mover] <= 0 || wallProblem(cur.board, move.slot, move.o, st.pos, cur.seats)) return undefined;
+            cur.board = cur.board.slice(0, move.slot) + move.o + cur.board.slice(move.slot + 1);
+            st.walls[mover] -= 1;
+            cur.last = 100 + move.slot;
+          }
+          cur.state = pack(st);
+          cur.turn = rooms.nextSeat(cur, mover);
+          return cur;
+        });
+        if (!r.committed) { $("hint").textContent = "That move didn't go through."; return; }
+        ghost = null;
+        tool = "move";
+        setTool("move");
+      } catch (err) {
+        console.error(err);
+        $("hint").textContent = "Move didn't go through. Try again.";
+      } finally { busy = false; if (room) render(); }
+    }
+
+    async function rematch() {
+      if (!room || room.status !== "done") return;
+      try { await rooms.playAgain(seat, (cur, round) => dealRoom(cur, round)); }
+      catch (err) { console.error(err); $("hint").textContent = "Couldn't start a new game. Try again."; }
+    }
+
+    // ---------- rendering ----------
+    function render() {
+      if (!room || !seat) return;
+      const r = room;
+      const mine = me();
+      const playing = r.status === "playing";
+      const seats = rooms.seatList(r);
+      const st = r.state?.pos ? parse(r) : null;
+      const sides = sidesFor(r.seats);
+
+      $("room-label").innerHTML = local() ? "Same phone" : `Room <b>${seat.code}</b>${r.turnSecs ? ` · ⏱ ${r.turnSecs < 60 ? `${r.turnSecs} s` : `${r.turnSecs / 60} min`}` : ""}`;
+      $("players").innerHTML = seats.map((uid, s) => {
+        if (!uid) return "";
+        return `<span class="chip${playing && r.turn === s ? " turn" : ""}" style="--pc: var(--p${s})"><span class="disc"></span>${label(s)}` +
+          (st ? `<span class="walls" aria-label="${st.walls[s]} walls left">▮${st.walls[s]}</span>` : "") +
+          (local() ? "" : `<span class="dot${rooms.isOnline(r, s) ? " on" : ""}"></span>`) + `</span>`;
+      }).join("");
+
+      const waiting = r.status === "waiting";
+      $("waiting").hidden = !waiting;
+      boardEl.hidden = waiting;
+      if (waiting) {
+        $("waiting-code").textContent = seat.code;
+        const count = rooms.playerCount(r);
+        $("seated").innerHTML = seats.map((uid, s) => uid ? `<div><span class="chip" style="--pc: var(--p${s})"><span class="disc"></span>${label(s)}${s === mine && rooms.nameOf(r, s) !== `P${s + 1}` ? ` (${esc(rooms.nameOf(r, s))})` : ""}${s === 0 ? " (host)" : ""}</span></div>` : "").join("");
+        $("waiting-note").textContent = `${count} of ${r.seats} here. The game starts when everyone's in.`;
+        $("status").textContent = "";
+        $("hint").textContent = "";
+        $("controls").hidden = $("wall-row").hidden = $("rematch").hidden = $("skip").hidden = true;
+        return;
+      }
+
+      // Board
+      boardEl.style.transform = `rotate(${rotation()}deg)`;
+      const turnSide = sides[playing ? r.turn : mine];
+      const canAct = myTurn() && !busy;
+      const targets = new Set(canAct && tool === "move" ? movesFrom(r.board, st.pos, r.turn) : []);
+      boardEl.classList.toggle("walling", canAct && tool === "wall");
+      boardEl.style.setProperty("--gc", `var(--p${mine})`);
+      cells.forEach((el, i) => {
+        el.className = "cell" + (atGoal(local() ? turnSide : sides[mine], i) ? " goal" : "") + (targets.has(i) ? " ok" : "") +
+          (r.last === i ? " from" : "");
+        el.disabled = !targets.has(i);
+      });
+      $("walls").innerHTML = [...r.board].map((o, slot) => o === "-" ? "" :
+        `<div class="wall${r.last === 100 + slot ? " last" : ""}${lastBoard && lastBoard[slot] === "-" ? " new" : ""}" style="${wallStyle(slot, o)}"></div>`).join("");
+      lastBoard = r.board;
+      // Pawns stay the same elements so they glide from square to square.
+      const pawnsEl = $("pawns");
+      if (pawnsEl.children.length !== r.seats) pawnsEl.innerHTML = seats.map((_, s) => `<div class="pawn" style="--pc: var(--p${s})"></div>`).join("");
+      st.pos.forEach((p, s) => {
+        const el = pawnsEl.children[s];
+        el.hidden = p < 0;
+        el.style.setProperty("--x", `${at(p % N) + C * 0.16}%`);
+        el.style.setProperty("--y", `${at(Math.floor(p / N)) + C * 0.16}%`);
+        el.style.setProperty("--s", `${C * 0.68}%`);
+        el.classList.toggle("turn", playing && r.turn === s);
+      });
+      const g = $("ghost");
+      g.hidden = !(canAct && tool === "wall" && ghost);
+      let problem = "";
+      if (!g.hidden) {
+        problem = wallProblem(r.board, ghost.slot, ghost.o, st.pos, r.seats);
+        g.style.cssText = wallStyle(ghost.slot, ghost.o);
+        g.classList.toggle("bad", !!problem);
+      }
+
+      // Controls
+      const wallsLeft = st.walls[playing ? r.turn : mine];
+      $("controls").hidden = !playing || !myTurn();
+      $("wall-tool").textContent = `Wall (${wallsLeft} left)`;
+      $("wall-tool").disabled = wallsLeft <= 0;
+      $("wall-row").hidden = !(canAct && tool === "wall");
+      $("place").disabled = !ghost || !!problem;
+      $("turn-wall").disabled = !ghost;
+
+      // Status
+      const online = (s) => local() || rooms.isOnline(r, s);
+      let status = "", hint = "";
+      if (playing) {
+        if (local()) status = `${COLOURS[r.turn]}'s turn`;
+        else status = myTurn() ? "Your turn" : `${label(r.turn)}'s turn${online(r.turn) ? "…" : " (away)"}`;
+        if (myTurn()) {
+          hint = tool === "move" ? "Tap a dot to move" + (wallsLeft ? ", or switch to Wall." : ".")
+            : !ghost ? "Tap or drag on the board where the wall should go."
+            : problem || "Tap again or Turn to switch direction, then Place.";
+          if (local()) hint = `Head for the tinted row. ${hint}`;
+        }
+        const left = rooms.turnLeft(r);
+        if (left !== null) status += ` <span class="clock${left <= 10 ? " low" : ""}">${left ? `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}` : "time's up"}</span>`;
+      } else if (typeof r.left === "number") {
+        status = r.left === mine ? "You left this game" : `${label(r.left)} left. ${r.winner === "draw" ? "Game over" : r.winner === mine ? "You win 🎉" : `${label(r.winner)} wins`}`;
+      } else if (local()) status = `${COLOURS[r.winner]} wins! 🎉`;
+      else status = r.winner === mine ? "You win! 🎉" : `${label(r.winner)} wins`;
+      $("status").innerHTML = status;
+      $("hint").textContent = hint;
+
+      $("rematch").hidden = r.status !== "done" || (!local() && typeof r.left === "number" && r.left !== mine && !online(r.left));
+      if (r.status === "done") {
+        const ready = local() ? [] : seats.flatMap((u, s) => (u && rooms.wantsAgain(r, s) ? [s] : []));
+        const waitingOn = seats.flatMap((u, s) => (u && s !== mine && online(s) && !rooms.wantsAgain(r, s) ? [label(s)] : []));
+        $("rematch").disabled = ready.includes(mine);
+        $("rematch").textContent = ready.includes(mine) ? `Waiting for ${waitingOn.join(", ") || "others"}…` : ready.length ? `Play again (${ready.map(label).join(", ")} ready)` : "Play again";
+      }
+      $("skip").hidden = !(playing && !myTurn() && rooms.turnLeft(r) === 0);
+      $("skip").textContent = `Skip ${label(r.turn)}`;
+      $("leave").disabled = false;
+    }
+
+    // ---------- wall placing ----------
+    // Finds the groove crossing nearest a point on screen, undoing the board's rotation.
+    function slotAt(e) {
+      const rect = boardEl.getBoundingClientRect();
+      const fx = (e.clientX - rect.left) / rect.width, fy = (e.clientY - rect.top) / rect.height;
+      const rot = rotation();
+      const [bx, by] = rot === 90 ? [fy, 1 - fx] : rot === 180 ? [1 - fx, 1 - fy] : rot === 270 ? [1 - fy, fx] : [fx, fy];
+      const k = (v) => Math.max(0, Math.min(S - 1, Math.round((v * 100 + G / 2) / (C + G)) - 1));
+      return k(by) * S + k(bx);
+    }
+    let drag = null; // { start slot, moved }
+    boardEl.addEventListener("pointerdown", (e) => {
+      if (tool !== "wall" || !myTurn() || busy) return;
+      e.preventDefault();
+      const slot = slotAt(e);
+      drag = { slot, moved: false, same: ghost?.slot === slot };
+      ghost = { slot, o: ghost?.o || lastO };
+      boardEl.setPointerCapture?.(e.pointerId);
+      render();
+    });
+    boardEl.addEventListener("pointermove", (e) => {
+      if (!drag) return;
+      const slot = slotAt(e);
+      if (slot !== ghost.slot) { ghost.slot = slot; drag.moved = true; render(); }
+    });
+    const endDrag = () => {
+      if (!drag) return;
+      // Tapping the wall that's already there turns it.
+      if (drag.same && !drag.moved) { ghost.o = ghost.o === "h" ? "v" : "h"; lastO = ghost.o; render(); }
+      drag = null;
+    };
+    boardEl.addEventListener("pointerup", endDrag);
+    boardEl.addEventListener("pointercancel", () => { drag = null; });
+    $("turn-wall").addEventListener("click", () => { if (ghost) { ghost.o = ghost.o === "h" ? "v" : "h"; lastO = ghost.o; render(); } });
+    $("place").addEventListener("click", () => { if (ghost) act({ ...ghost }); });
+
+    boardEl.addEventListener("click", (e) => {
+      if (tool !== "move") return;
+      const el = e.target.closest(".cell");
+      if (el && !el.disabled) act(Number(el.dataset.i));
+    });
+
+    // ---------- actions ----------
+    async function createRoom() {
+      setBusy(true);
+      $("home-error").textContent = "";
+      await rooms.setMyName($("my-name").value);
+      try {
+        start(await rooms.createRoom(GAME, { seats: mode, min: mode, auto: true, turnSecs, makeRoom: () => freshRoom(mode) }));
+      } catch (err) {
+        console.error(err);
+        showHome(err instanceof rooms.RoomError ? err.message : "Couldn't create a room. Check your connection and try again.");
+      }
+    }
+    async function joinRoom(code) {
+      setBusy(true);
+      $("home-error").textContent = "";
+      await rooms.setMyName($("my-name").value);
+      try {
+        start(await rooms.joinRoom(GAME, code));
+      } catch (err) {
+        console.error(err);
+        showHome(err instanceof rooms.RoomError ? err.message : "Couldn't join. Check your connection and try again.");
+      }
+    }
+
+    // ---------- wiring ----------
+    for (const [group, set] of [["mode", (b) => (mode = Number(b.dataset.mode))], ["timer", (b) => (turnSecs = Number(b.dataset.secs))]]) {
+      for (const b of document.querySelectorAll(`#${group} button`)) {
+        b.addEventListener("click", () => {
+          set(b);
+          for (const o of document.querySelectorAll(`#${group} button`)) o.setAttribute("aria-pressed", String(o === b));
+        });
+      }
+    }
+    for (const b of document.querySelectorAll("#tool button")) b.addEventListener("click", () => setTool(b.dataset.tool));
+    $("my-name").value = rooms.myName();
+    $("my-name").addEventListener("change", () => { $("my-name").value = rooms.cleanRoomName($("my-name").value); });
+    $("skip").addEventListener("click", async () => {
+      $("skip").disabled = true;
+      if (!(await rooms.skipTurn(seat, room))) $("hint").textContent = "Couldn't skip yet.";
+      $("skip").disabled = false;
+    });
+    setInterval(() => { if (room?.turnSecs && room.status === "playing") render(); }, 1000);
+    $("create").addEventListener("click", createRoom);
+    $("join-form").addEventListener("submit", (e) => { e.preventDefault(); joinRoom($("join-code").value); });
+    $("join-code").addEventListener("input", () => {
+      $("join-code").value = $("join-code").value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+      $("home-error").textContent = "";
+    });
+    $("local").addEventListener("click", () => start(rooms.localRoom(GAME, 2, () => freshRoom(2))));
+    $("rematch").addEventListener("click", rematch);
+    $("leave").addEventListener("click", async () => {
+      if (!seat || !room) return showHome();
+      const s = seat;
+      const others = local() ? 0 : rooms.seatList(room).filter((u, i) => u && i !== me() && rooms.isOnline(room, i)).length;
+      if (room.status === "playing" && others && !confirm(rooms.playerCount(room) === 2 ? "Leave the game? Your friend wins this round." : "Leave the game? It ends in a draw for everyone.")) return;
+      $("leave").disabled = true;
+      await rooms.quit(s);
+      showHome();
+    });
+    $("share").addEventListener("click", async () => {
+      if ((await rooms.share(seat.code, "Wall Race")) === "copied") $("share").textContent = "Link copied";
+    });
+    $("copy").addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(seat.code); $("copy").textContent = "Copied"; } catch { prompt("Room code:", seat.code); }
+      setTimeout(() => ($("copy").textContent = "Copy code"), 1500);
+    });
+
+    // Opening a shared link (?room=CODE) joins straight away.
+    const linked = rooms.roomFromUrl();
+    if (linked) { $("join-code").value = linked.toUpperCase(); joinRoom(linked); }
+
+    // Hooks for automated tests.
+    window.__wr = { rooms, movesFrom, wallProblem, hasPath, act, get room() { return room; }, get seat() { return seat; } };
+  </script>
+</body>
+</html>
