@@ -35,6 +35,10 @@ rules are in [`firebase/database.rules.json`](firebase/database.rules.json) and 
 when a change reaches `main`: GitHub Actions signs in to Google with Workload Identity Federation (no stored
 key; Google trusts only this repo's `main` branch) as the `rules-deployer` service account.
 
+App Check (reCAPTCHA v3) proves requests come from this site: the site key is in `shared/rooms.js`, the secret
+key only in Firebase console → App Check. Turn on enforcement there (Realtime Database, then Authentication) once
+App Check → Metrics shows almost all requests as verified.
+
 One-time setup (done) in Cloud Shell for project `reclaude-67a01`: a `rules-deployer` service account with
 *Firebase Realtime Database Admin* and *Firebase Viewer*, a workload identity pool `github` with provider
 `reclaude` limited to `jun-saku/reclaude` on `refs/heads/main`, and *Workload Identity User* for that repo on the

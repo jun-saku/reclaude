@@ -71,6 +71,12 @@ only its own `projects/<name>/` folder; engine changes to `shared/` or the rules
 
 - Project `reclaude-67a01`, Realtime Database in asia-southeast1, anonymous sign-in. The web config in a page
   is public by design; access is controlled by `firebase/database.rules.json`.
+- App Check (reCAPTCHA v3) is set up in `shared/rooms.js` (real Firebase only, not the emulator): pages get a token
+  proving they are this site, and once enforcement is on in the Firebase console, requests without one are refused.
+  The site key in `rooms.js` is public; the secret key lives only in the Firebase console (never ask for it). The
+  reCAPTCHA domains are reclaude.junsaku.dev, reclaude.pages.dev (and its preview subdomains) and jun-saku.github.io:
+  a new domain must be added there first. The SDK loads reCAPTCHA from www.google.com; its badge is hidden and the
+  required notice is on the games page.
 - Rules are published automatically: on `main`, the workflow's `publish_rules` job deploys
   `firebase/database.rules.json` (after the rules tests pass, before the site deploys), signing in to Google with
   Workload Identity Federation (no stored key; only this repo's `main` is trusted). Never ask the user to paste
