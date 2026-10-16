@@ -1,0 +1,9 @@
+# Cloudflare Pages response headers for every path. The Content-Security-Policy for scripts and connections is a
+# <meta> tag the build adds to each page (scripts/build.mjs); this one only stops other sites from framing the games
+# (meta tags can't). Both policies apply together.
+/*
+  Content-Security-Policy: frame-ancestors 'none'
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()

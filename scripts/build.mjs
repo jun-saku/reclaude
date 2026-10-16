@@ -70,5 +70,44 @@ function stamp(dir) {
 }
 for (const name of built) stamp(join(OUT, name));
 
+// Content-Security-Policy, added to every page as a <meta> tag: scripts may only come from this site, the page's own
+// inline scripts (by hash, so injected ones can't run), Firebase, reCAPTCHA (App Check) and the two allowed CDNs, and
+// pages may only connect to Firebase and Google's APIs. 127.0.0.1 is the Firebase emulator the tests use.
+// site/_headers adds the rest (no framing by other sites, nosniff, referrer and permissions policies).
+// A new external source must be added here, or the browser blocks it.
+const CSP = {
+  "default-src": ["'self'"],
+  "script-src": ["'self'", "https://www.gstatic.com", "https://www.google.com/recaptcha/", "https://*.firebasedatabase.app",
+    "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com"],
+  "style-src": ["'self'", "'unsafe-inline'"],
+  "img-src": ["'self'", "data:", "https://www.gstatic.com"],
+  "connect-src": ["'self'", "https://*.firebasedatabase.app", "wss://*.firebasedatabase.app", "https://*.googleapis.com",
+    "https://www.google.com", "http://127.0.0.1:9000", "ws://127.0.0.1:9000", "http://127.0.0.1:9099"],
+  "frame-src": ["https://www.google.com", "https://recaptcha.google.com"],
+  "object-src": ["'none'"],
+  "base-uri": ["'none'"],
+  "form-action": ["'self'"],
+};
+function addCsp(dir) {
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, e.name);
+    if (e.isDirectory()) { addCsp(full); continue; }
+    if (!e.name.endsWith(".html")) continue;
+    const html = readFileSync(full, "utf8");
+    const hashes = [...html.matchAll(/<script\b(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)]
+      .map((m) => `'sha256-${createHash("sha256").update(m[1]).digest("base64")}'`);
+    const policy = Object.entries(CSP)
+      .map(([k, v]) => [k, ...(k === "script-src" ? [...v, ...hashes] : v)].join(" ")).join("; ");
+    const out = html.replace(/<meta charset="utf-8">/i, (m) => `${m}\n  <meta http-equiv="Content-Security-Policy" content="${policy}">`);
+    if (out === html) { errors.push(`${full}: no <meta charset="utf-8"> to put the security policy after`); continue; }
+    writeFileSync(full, out);
+  }
+}
+addCsp(OUT);
+if (errors.length) {
+  console.error(errors.join("\n"));
+  process.exit(1);
+}
+
 
 console.log(`_site: ${built.length} project(s)${built.length ? ": " + built.join(", ") : ""}`);
