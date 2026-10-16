@@ -45,10 +45,10 @@ export const FIREBASE_CONFIG = {
   appId: "1:720774301235:web:d91c1208d791c73b684546",
 };
 const FIREBASE_VERSION = "10.14.1";
-// App Check (reCAPTCHA v3): real Firebase only serves requests that carry a token proving they come from these
-// pages, once enforcement is switched on in the Firebase console. The site key is public by design; its secret
-// key lives only in the Firebase console. The reCAPTCHA domains list is reclaude.junsaku.dev,
-// reclaude.pages.dev (previews too) and jun-saku.github.io.
+// App Check (Google Cloud Fraud Defense, formerly reCAPTCHA Enterprise): real Firebase only serves requests that
+// carry a token proving they come from these pages, once enforcement is switched on in the Firebase console. The site
+// key is public by design. Its allowed domains are reclaude.junsaku.dev, reclaude.pages.dev (previews too) and
+// jun-saku.github.io.
 const RECAPTCHA_SITE_KEY = "6LeLUvItAAAAAPUZJnPJDiK_K8E9q0ZQGs9r16gi";
 const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no I, O, 0, 1
 export const CODE_RE = /^[A-HJ-NP-Z2-9]{4}$/;
@@ -134,7 +134,7 @@ async function firebaseBackend({ emulator = false } = {}) {
   const app = appMod.initializeApp(config);
   if (check$) {
     try {
-      check$.initializeAppCheck(app, { provider: new check$.ReCaptchaV3Provider(RECAPTCHA_SITE_KEY), isTokenAutoRefreshEnabled: true });
+      check$.initializeAppCheck(app, { provider: new check$.ReCaptchaEnterpriseProvider(RECAPTCHA_SITE_KEY), isTokenAutoRefreshEnabled: true });
       // reCAPTCHA's floating badge would cover game buttons; the notice it stands for is on the games page.
       const style = document.createElement("style");
       style.textContent = ".grecaptcha-badge { visibility: hidden; }";
