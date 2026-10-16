@@ -145,10 +145,18 @@
     .share { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
     .bigcode { font-size: clamp(2.6rem, 16vw, 3.4rem); font-weight: 800; letter-spacing: 0.18em; margin: 0; padding-left: 0.18em; }
     .row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+    /* Back to the games list; hidden while in a room or a game (use Leave there). */
+    .home-link {
+      align-self: flex-start; display: inline-flex; align-items: center; gap: 2px; margin: -6px 0 -6px -6px; padding: 6px;
+      color: var(--muted); font-size: 0.9rem; font-weight: 600; text-decoration: none; border-radius: 8px;
+    }
+    .home-link:active { opacity: 0.6; }
+    main:has(#home[hidden]) .home-link { display: none; }
   </style>
 </head>
 <body>
   <main>
+    <a class="home-link" href="../games/">‹ All games</a>
     <h1><span class="discs" aria-hidden="true"><i></i><i></i><i></i><i></i></span>Four in a Row</h1>
 
     <section id="home">

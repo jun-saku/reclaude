@@ -230,10 +230,18 @@
     .dot.on { background: #2e9d5b; opacity: 1; }
     .seating { font-size: 0.9rem; line-height: 1.5; background: var(--bg); border-radius: 10px; padding: 8px 10px; }
     .away { font-weight: 500; text-transform: none; letter-spacing: 0; opacity: 0.8; }
+    /* Back to the games list; hidden while in a room or a game (use Leave there). */
+    .home-link {
+      align-self: flex-start; display: inline-flex; align-items: center; gap: 2px; margin: -6px 0 -6px -6px; padding: 6px;
+      color: var(--muted); font-size: 0.9rem; font-weight: 600; text-decoration: none; border-radius: 8px;
+    }
+    .home-link:active { opacity: 0.6; }
+    main:has(#home[hidden]) .home-link { display: none; }
   </style>
 </head>
 <body>
   <main class="game">
+    <a class="home-link" href="../games/">‹ All games</a>
     <header>
       <h1>Bridge</h1>
       <div class="score" id="usBox"><span>Us</span><b id="us">0</b></div>
@@ -242,11 +250,6 @@
     </header>
 
     <section id="home" hidden>
-      <div class="panel">
-        <h2>Play the computer</h2>
-        <p class="muted">You and a computer partner against two computer opponents.</p>
-        <button class="big" id="solo">Play</button>
-      </div>
       <div class="panel">
         <h2>Play friends online</h2>
         <p class="muted">2 to 4 players. Create a room and send the code or link; computer players take any empty seats.</p>
@@ -259,6 +262,11 @@
           <button id="join" type="submit">Join</button>
         </form>
         <p class="error" id="home-error" role="alert"></p>
+      </div>
+      <div class="panel">
+        <h2>Play the computer</h2>
+        <p class="muted">You and a computer partner against two computer opponents.</p>
+        <button class="big secondary" id="solo">Play</button>
       </div>
       <button class="secondary" id="home-help">How to play</button>
     </section>
@@ -1105,6 +1113,7 @@
       show("home");
       $("home-error").textContent = error;
       for (const id of ["create", "join"]) $(id).disabled = false;
+      $("solo").textContent = loadSolo() ? "Continue game" : "Play";
     }
 
     function startSolo() {
@@ -1255,10 +1264,9 @@
     // Presence: someone's (away) mark changes without a move.
     setInterval(() => { if (mode === "online" && room) render(); }, 5000);
 
-    // Opening a shared link (?room=CODE) joins straight away; otherwise a saved solo game resumes.
+    // Opening a shared link (?room=CODE) joins straight away; otherwise the menu (a saved solo game is one tap away).
     const linked = rooms.roomFromUrl();
     if (linked) { $("join-code").value = linked; joinRoom(linked); }
-    else if (loadSolo()) startSolo();
     else goHome();
 
     window.__br = {

@@ -154,10 +154,18 @@
     .rules { font-size: 0.9rem; color: var(--muted); }
     .rules li { margin: 2px 0; }
     .rules summary { cursor: pointer; font-weight: 600; color: var(--text); }
+    /* Back to the games list; hidden while in a room or a game (use Leave there). */
+    .home-link {
+      align-self: flex-start; display: inline-flex; align-items: center; gap: 2px; margin: -6px 0 -6px -6px; padding: 6px;
+      color: var(--muted); font-size: 0.9rem; font-weight: 600; text-decoration: none; border-radius: 8px;
+    }
+    .home-link:active { opacity: 0.6; }
+    main:has(#home[hidden]) .home-link { display: none; }
   </style>
 </head>
 <body>
   <main>
+    <a class="home-link" href="../games/">‹ All games</a>
     <h1><span class="mini" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>Five Line</h1>
 
     <section id="home">
