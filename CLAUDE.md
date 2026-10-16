@@ -37,9 +37,12 @@ The user usually works from their phone, so keep replies short and end with the 
 - `scripts/new-project.mjs`: creates a project from the template.
 - `scripts/rules.mjs`: generates `firebase/database.rules.json` (room rules repeat per seat). Edit the rules there, never
   the JSON, then run `node scripts/rules.mjs`; `npm run rules` fails if the two don't match.
-- `tests/`: dev-only tests, never published. `npm run rules` checks the database rules on the Firebase emulator (CI runs
+- `tests/`: dev-only tests, never published. `tests/smoke.cjs` (run after the build: `node tests/smoke.cjs`) opens every
+  page at 390px and fails on JavaScript errors, blocked scripts, sideways scroll, a game missing from the games page or
+  its "‹ All games" link, or a same-device game that won't start; it's part of the required `build` check, needs no
+  per-game code, and lists non-games (no card, no link) in `NOT_GAMES`. `npm run rules` checks the database rules on the Firebase emulator (CI runs
   it); `npm run e2e` plays the online games on the real Firebase SDK + emulator in headless Chromium.
-- `.github/workflows/pages.yml`: builds every push and PR (the `build` check `main` requires) and runs the rules test; from `main` it
+- `.github/workflows/pages.yml`: builds and smoke-tests every push and PR (the `build` check `main` requires) and runs the rules test; from `main` it
   deploys to Cloudflare Pages; on PRs it uploads a Cloudflare preview and comments its link.
   Cloudflare uploads use the `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` repo secrets (set by the user;
   never ask for their values) and are skipped while those are missing.
