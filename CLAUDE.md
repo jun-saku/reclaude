@@ -94,7 +94,8 @@ only its own `projects/<name>/` folder; engine changes to `shared/` or the rules
   `firebase/database.rules.json` (after the rules tests pass, before the site deploys), signing in to Google with
   Workload Identity Federation (no stored key; only this repo's `main` is trusted). Never ask the user to paste
   rules. Because a rules PR goes live on merge, call out rules changes clearly in the PR.
-- Rooms are shared by all games: each room has a `game` field, seats `players.s0`..`s5`, and a numeric `turn` (seat).
+- Rooms are shared by all games: each room has a `game` field, seats `players.s0`..`s9` (2–10 players), and a numeric `turn`
+  (seat).
   Every field a game writes must be allowed in the rules (unknown fields are rejected); put free-form game data in
   `state`, and anything a player must not see (their hand) in private data.
 - The rules also enforce play: while `playing`, only the player in seat `turn` may change the game (board, turn,

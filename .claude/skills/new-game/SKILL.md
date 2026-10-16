@@ -11,12 +11,13 @@ and `firebase/database.rules.json` (who may write what). Read `CLAUDE.md` first;
 
 ## The one rule that keeps games independent
 
-- **A game PR touches only `projects/<name>/`** (plus a README line, its card on the landing page `site/games/index.html`, and its
-  own test file `tests/e2e/<name>.cjs` if you add one). A change like that cannot break another game: games don't import each other and their rooms are tagged with
-  their own name.
+- **A game PR touches only `projects/<name>/`** (plus a README line, its card on the games page
+  `site/games/index.html`, and its own test file `tests/e2e/<name>.cjs` if you add one). A change like that cannot
+  break another game: games don't import each other and their rooms are tagged with their own name.
 - **Changes to `shared/` or the rules go in their own PR**, titled as an engine change, never inside "add my game".
   Every online game uses them, so a change there goes live for all games at once: run `cd tests && npm run e2e` and
-  `npm run rules` and try each online game before asking for a merge.
+  `npm run rules` (CI's `e2e` job also runs every game's test for such a PR) and try each online game on the preview
+  before asking for a merge.
 - Need something the engine doesn't do? Keep it inside your game if you can (in `state`, private data, or the page).
   Only if that's impossible, propose an engine change as a separate PR first.
 
@@ -27,12 +28,19 @@ and `firebase/database.rules.json` (who may write what). Read `CLAUDE.md` first;
 2. Build the game in `projects/<name>/index.html` (more files next to it if needed). No build step, no npm packages.
    Follow `CLAUDE.md` → "Adding a project": phone first, touch controls, safe-area padding, light and dark mode,
    relative paths only.
-   Put the `‹ All games` link (`<a class="home-link" href="../games/">`, styles included) first in `<main>`, copied from
-   any other game: it hides itself while `#home` is hidden, so players use Leave in a room.
+   Page conventions the smoke test and shared styles rely on:
+   - The `‹ All games` link (`<a class="home-link" href="../games/">`, styles included) first in `<main>`, copied from
+     any other game. It hides itself while `<section id="home">` (the start screen) is hidden, so players use Leave
+     in a room.
+   - A same-phone mode, if the game has one, starts from a button with `id="local"` and hides `#home`.
+   - Security policy (added by the build): scripts only in `<script>` blocks or files in the folder; no `onclick=`
+     -style attributes (use `addEventListener`), no `eval`/`new Function`, no external sources beyond those allowed
+     in `CLAUDE.md`. They would be blocked in the browser.
+   - Escape anything a player typed (names) before putting it into HTML.
 3. For online play: `import * as rooms from "../shared/rooms.js";` (exactly this form; the build adds a cache-busting
    version). **Start from `projects/five-line/index.html`**, the most complete example: lobby, 2–4 players, teams,
-   hidden hands, names, timer, pass, Leave, Play again. `four-in-a-row` is a smaller 2-player example with a
-   same-phone mode.
+   hidden hands, names, timer, pass, Leave, Play again. `chain-reaction` is a simpler 2–6 player example with a
+   same-phone mode; `four-in-a-row` a small 2-player one.
 4. Test (below), add a line to `README.md` under Projects and a card to `site/games/index.html` (newest first: icon, title,
    one line, player tags), commit, push, open a PR.
 
@@ -99,10 +107,14 @@ secret goal) goes in private data: one string per seat, ≤ 512 chars, readable 
 ## Testing
 
 - Quick UI test: open the page with `?backend=fake` in several tabs of one browser (they share rooms, no rules).
+- Smoke test: `node scripts/build.mjs && node tests/smoke.cjs` (also part of the required `build` check). It finds new
+  games by itself; a project that isn't a game (no card, no link) goes in its `NOT_GAMES` list.
 - Real rules: `cd tests && npm run e2e` (the real Firebase SDK on the emulator). For a new online game, add
   `tests/e2e/<name>.cjs` (named like the game's folder) that plays one game through and checks the winner, like
   `five-line.cjs`; CI then runs it on every PR that changes the game. `E2E=<name> npm run e2e` runs just yours.
 - Drive it with Playwright at 390px wide, screenshot light and dark, and look at the screenshots before pushing.
+- Real Firebase: App Check is enforced, so only the live site and the PR's Cloudflare preview can reach it (not a
+  local server). Ask the user to play one online game on the preview, across two devices, before merging.
 - An engine PR also needs `npm run rules`, new cases in `tests/rules.test.mjs`, and rules edited in
   `scripts/rules.mjs` (then `node scripts/rules.mjs`), never in the JSON.
 
@@ -110,6 +122,7 @@ secret goal) goes in private data: one string per seat, ≤ 512 chars, readable 
 
 - [ ] The PR touches only `projects/<name>/` (+ README, + its landing-page card, + its own `tests/e2e/<name>.cjs`), or is clearly an engine PR.
 - [ ] Works on a phone: touch, no sideways scroll, safe areas, light and dark.
-- [ ] Online: create, join by code and by link, play to a win, Play again, Leave mid-game, reload mid-game.
+- [ ] Online: create, join by code and by link, play to a win, Play again, Leave mid-game, reload mid-game
+      (`?backend=fake` and the emulator test), then the user tries it on the preview.
 - [ ] `node scripts/build.mjs` and `node tests/smoke.cjs` pass, and `E2E=<name> npm run e2e` passes if the game is online.
 - [ ] Short summary for the user with the game link and the PR's Cloudflare preview link.
