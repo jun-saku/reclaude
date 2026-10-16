@@ -47,7 +47,8 @@ service account. To revoke, delete the service account or the pool in Google Clo
 ## Tests
 
 Dev-only, in `tests/` (needs Java): `npm install`, then `npm run rules` to check the database rules on the Firebase
-emulator (also run by CI), or `npm run e2e` to play the online games on the real Firebase SDK and emulator.
+emulator (also run by CI), or `npm run e2e` to play the online games on the real Firebase SDK and emulator (one file per game in
+`tests/e2e/`; `E2E=wall-race npm run e2e` runs only that one). PRs run the tests of the games they change.
 
 ## Deploying
 
