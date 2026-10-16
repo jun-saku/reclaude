@@ -251,11 +251,6 @@
 
     <section id="home" hidden>
       <div class="panel">
-        <h2>Play the computer</h2>
-        <p class="muted">You and a computer partner against two computer opponents.</p>
-        <button class="big" id="solo">Play</button>
-      </div>
-      <div class="panel">
         <h2>Play friends online</h2>
         <p class="muted">2 to 4 players. Create a room and send the code or link; computer players take any empty seats.</p>
         <label class="name-row"><span>Your name</span>
@@ -267,6 +262,11 @@
           <button id="join" type="submit">Join</button>
         </form>
         <p class="error" id="home-error" role="alert"></p>
+      </div>
+      <div class="panel">
+        <h2>Play the computer</h2>
+        <p class="muted">You and a computer partner against two computer opponents.</p>
+        <button class="big secondary" id="solo">Play</button>
       </div>
       <button class="secondary" id="home-help">How to play</button>
     </section>
@@ -1113,6 +1113,7 @@
       show("home");
       $("home-error").textContent = error;
       for (const id of ["create", "join"]) $(id).disabled = false;
+      $("solo").textContent = loadSolo() ? "Continue game" : "Play";
     }
 
     function startSolo() {
@@ -1263,10 +1264,9 @@
     // Presence: someone's (away) mark changes without a move.
     setInterval(() => { if (mode === "online" && room) render(); }, 5000);
 
-    // Opening a shared link (?room=CODE) joins straight away; otherwise a saved solo game resumes.
+    // Opening a shared link (?room=CODE) joins straight away; otherwise the menu (a saved solo game is one tap away).
     const linked = rooms.roomFromUrl();
     if (linked) { $("join-code").value = linked; joinRoom(linked); }
-    else if (loadSolo()) startSolo();
     else goHome();
 
     window.__br = {
