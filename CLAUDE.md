@@ -6,8 +6,7 @@ The user usually works from their phone, so keep replies short and end with the 
 ## Addresses
 
 - `https://reclaude.junsaku.dev/<name>/`: one project, from `projects/<name>/`. This is the address to share
-  (Cloudflare Pages custom domain; `https://reclaude.pages.dev/<name>/` is the same site). Also still published at
-  `https://jun-saku.github.io/reclaude/<name>/` so old links keep working.
+  (Cloudflare Pages custom domain; `https://reclaude.pages.dev/<name>/` is the same site).
 - `https://reclaude.junsaku.dev/games/`: the landing page (`site/games/index.html`), a card linking to each game.
   Non-games (the calculator) aren't listed. Projects don't link to each other.
 - Anything else, including the root: the blank 404 page.
@@ -35,7 +34,7 @@ The user usually works from their phone, so keep replies short and end with the 
 - `tests/`: dev-only tests, never published. `npm run rules` checks the database rules on the Firebase emulator (CI runs
   it); `npm run e2e` plays the online games on the real Firebase SDK + emulator in headless Chromium.
 - `.github/workflows/pages.yml`: builds every push and PR (the `build` check `main` requires) and runs the rules test; from `main` it
-  deploys to Cloudflare Pages and GitHub Pages; on PRs it uploads a Cloudflare preview and comments its link.
+  deploys to Cloudflare Pages; on PRs it uploads a Cloudflare preview and comments its link.
   Cloudflare uploads use the `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` repo secrets (set by the user;
   never ask for their values) and are skipped while those are missing.
 
@@ -48,11 +47,11 @@ only its own `projects/<name>/` folder; engine changes to `shared/` or the rules
    short and lowercase-kebab-case.
 2. Keep it self-contained: no build step, no npm packages. External scripts only from
    cdn.jsdelivr.net, cdnjs.cloudflare.com, or www.gstatic.com/firebasejs (Firebase).
-3. Use relative paths only (`./sprite.png`, never `/sprite.png`): the same build is served at the domain root
-   on Cloudflare and under `/reclaude/` on GitHub Pages.
+3. Use relative paths only (`./sprite.png`, never `/sprite.png`), so a page works wherever the build is served
+   (production, PR previews, a local server, the tests' `/reclaude/` prefix).
 4. It must work on a phone: touch controls (not only keyboard), no horizontal scroll, safe-area
    padding, and both light and dark mode.
-5. Test it: `node scripts/build.mjs`, serve `_site` under a `/reclaude/` path, then drive it with
+5. Test it: `node scripts/build.mjs`, serve `_site` (e.g. `python3 -m http.server -d _site`), then drive it with
    Playwright at 390px wide (tap through the main interactions, check results, screenshot light and dark).
    Look at the screenshots before pushing.
 6. Commit to your `claude/...` branch and push.
@@ -72,11 +71,12 @@ only its own `projects/<name>/` folder; engine changes to `shared/` or the rules
 - Project `reclaude-67a01`, Realtime Database in asia-southeast1, anonymous sign-in. The web config in a page
   is public by design; access is controlled by `firebase/database.rules.json`.
 - App Check (Fraud Defense, formerly reCAPTCHA Enterprise, `ReCaptchaEnterpriseProvider`) is set up in
-  `shared/rooms.js` (real Firebase only, not the emulator): pages get a token proving they are this site, and once
-  enforcement is on in the Firebase console, requests without one are refused. The site key in `rooms.js` is public
-  (never ask for any secret key) and must be a Fraud Defense key in the `reclaude-67a01` Cloud project itself. The key's domains are reclaude.junsaku.dev, reclaude.pages.dev (and its preview subdomains) and jun-saku.github.io:
-  a new domain must be added there first. The SDK loads reCAPTCHA from www.google.com; its badge is hidden and the
-  required notice is on the games page.
+  `shared/rooms.js` (real Firebase only, not the emulator) and enforced in the Firebase console for the Realtime
+  Database and Authentication: requests without a token proving they come from this site are refused. The site key in
+  `rooms.js` is public (never ask for any secret key) and must be a Fraud Defense key in the `reclaude-67a01` Cloud
+  project itself. Its domains are reclaude.junsaku.dev and reclaude.pages.dev (with its preview subdomains): a new
+  domain must be added to the key first, or online play there is blocked. The SDK loads reCAPTCHA from
+  www.google.com; its badge is hidden and the required notice is on the games page.
 - Rules are published automatically: on `main`, the workflow's `publish_rules` job deploys
   `firebase/database.rules.json` (after the rules tests pass, before the site deploys), signing in to Google with
   Workload Identity Federation (no stored key; only this repo's `main` is trusted). Never ask the user to paste

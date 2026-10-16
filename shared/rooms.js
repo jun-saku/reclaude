@@ -45,10 +45,10 @@ export const FIREBASE_CONFIG = {
   appId: "1:720774301235:web:d91c1208d791c73b684546",
 };
 const FIREBASE_VERSION = "10.14.1";
-// App Check (Google Cloud Fraud Defense, formerly reCAPTCHA Enterprise): real Firebase only serves requests that
-// carry a token proving they come from these pages, once enforcement is switched on in the Firebase console. The site
-// key is public by design. Its allowed domains are reclaude.junsaku.dev, reclaude.pages.dev (previews too) and
-// jun-saku.github.io. The key must belong to the Firebase project's own Google Cloud project (reclaude-67a01),
+// App Check (Google Cloud Fraud Defense, formerly reCAPTCHA Enterprise), enforced in the Firebase console for the
+// Realtime Database and Authentication: real Firebase only serves requests that carry a token proving they come from
+// these pages. The site key is public by design. Its allowed domains are reclaude.junsaku.dev and reclaude.pages.dev
+// (previews too); a new domain must be added to the key first. The key must belong to the Firebase project's own Google Cloud project (reclaude-67a01),
 // or every token exchange fails and requests count as invalid.
 const RECAPTCHA_SITE_KEY = "6LecO_ItAAAAAI10_tvsamfYq29E9EAG1rNkCE8Z";
 const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no I, O, 0, 1

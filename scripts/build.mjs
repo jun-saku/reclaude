@@ -70,7 +70,5 @@ function stamp(dir) {
 }
 for (const name of built) stamp(join(OUT, name));
 
-// Serve files as-is; don't let GitHub Pages run Jekyll over them.
-writeFileSync(join(OUT, ".nojekyll"), "");
 
 console.log(`_site: ${built.length} project(s)${built.length ? ": " + built.join(", ") : ""}`);
