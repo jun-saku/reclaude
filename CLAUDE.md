@@ -29,9 +29,9 @@ The user usually works from their phone, so keep replies short and end with the 
   `../shared/<file>` link in project files to `../shared/<file>?v=<content hash>`, so browsers never mix a new
   page with an old cached shared file. Always reference shared code with exactly that `../shared/<file>` form.
   It also adds a Content-Security-Policy `<meta>` tag to every page: scripts only from this site, each page's own
-  inline `<script>` blocks (by hash), Firebase, reCAPTCHA and the two allowed CDNs; connections only to Firebase and
-  Google APIs. No inline event handlers (`onclick=`), `eval` or other external sources: they are blocked. A new
-  external source has to be added to `CSP` in `build.mjs` first.
+  inline `<script>` blocks (by hash), and Firebase's and reCAPTCHA's own folders on gstatic/google.com; connections
+  only to Firebase and Google APIs. No inline event handlers (`onclick=`), `eval` or other external sources: they are
+  blocked. A new external source has to be added to `CSP` in `build.mjs` first, as an exact folder, never a whole host.
 - `site/_headers`: Cloudflare response headers for every path (no framing by other sites, nosniff, referrer and
   permissions policies).
 - `scripts/new-project.mjs`: creates a project from the template.
@@ -57,9 +57,10 @@ only its own `projects/<name>/` folder; engine changes to `shared/` or the rules
 
 1. `node scripts/new-project.mjs <name> "Title" "Description"`. The name is the URL, so keep it
    short and lowercase-kebab-case.
-2. Keep it self-contained: no build step, no npm packages. External scripts only from
-   cdn.jsdelivr.net, cdnjs.cloudflare.com, or www.gstatic.com/firebasejs (Firebase); the security policy blocks
-   anything else, and inline `onclick=`-style handlers (use `addEventListener`).
+2. Keep it self-contained: no build step, no npm packages, no external scripts besides Firebase (loaded by
+   `shared/rooms.js`). If a game truly needs a library, prefer a copy in its folder; a CDN script (cdn.jsdelivr.net or
+   cdnjs.cloudflare.com only, pinned version) must first be added to `CSP` in `scripts/build.mjs` as its exact folder.
+   The security policy blocks anything else, and inline `onclick=`-style handlers (use `addEventListener`).
 3. Use relative paths only (`./sprite.png`, never `/sprite.png`), so a page works wherever the build is served
    (production, PR previews, a local server, the tests' `/reclaude/` prefix).
 4. It must work on a phone: touch controls (not only keyboard), no horizontal scroll, safe-area
