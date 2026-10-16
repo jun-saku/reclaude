@@ -48,8 +48,9 @@ const FIREBASE_VERSION = "10.14.1";
 // App Check (Google Cloud Fraud Defense, formerly reCAPTCHA Enterprise): real Firebase only serves requests that
 // carry a token proving they come from these pages, once enforcement is switched on in the Firebase console. The site
 // key is public by design. Its allowed domains are reclaude.junsaku.dev, reclaude.pages.dev (previews too) and
-// jun-saku.github.io.
-const RECAPTCHA_SITE_KEY = "6LeLUvItAAAAAPUZJnPJDiK_K8E9q0ZQGs9r16gi";
+// jun-saku.github.io. The key must belong to the Firebase project's own Google Cloud project (reclaude-67a01),
+// or every token exchange fails and requests count as invalid.
+const RECAPTCHA_SITE_KEY = "6LecO_ItAAAAAI10_tvsamfYq29E9EAG1rNkCE8Z";
 const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no I, O, 0, 1
 export const CODE_RE = /^[A-HJ-NP-Z2-9]{4}$/;
 export const MAX_SEATS = 10; // scripts/rules.mjs SEATS must match
