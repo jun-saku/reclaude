@@ -230,10 +230,18 @@
     .dot.on { background: #2e9d5b; opacity: 1; }
     .seating { font-size: 0.9rem; line-height: 1.5; background: var(--bg); border-radius: 10px; padding: 8px 10px; }
     .away { font-weight: 500; text-transform: none; letter-spacing: 0; opacity: 0.8; }
+    /* Back to the games list; hidden while in a room or a game (use Leave there). */
+    .home-link {
+      align-self: flex-start; display: inline-flex; align-items: center; gap: 2px; margin: -6px 0 -6px -6px; padding: 6px;
+      color: var(--muted); font-size: 0.9rem; font-weight: 600; text-decoration: none; border-radius: 8px;
+    }
+    .home-link:active { opacity: 0.6; }
+    main:has(#home[hidden]) .home-link { display: none; }
   </style>
 </head>
 <body>
   <main class="game">
+    <a class="home-link" href="../games/">‹ All games</a>
     <header>
       <h1>Bridge</h1>
       <div class="score" id="usBox"><span>Us</span><b id="us">0</b></div>

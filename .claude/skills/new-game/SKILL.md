@@ -27,6 +27,8 @@ and `firebase/database.rules.json` (who may write what). Read `CLAUDE.md` first;
 2. Build the game in `projects/<name>/index.html` (more files next to it if needed). No build step, no npm packages.
    Follow `CLAUDE.md` → "Adding a project": phone first, touch controls, safe-area padding, light and dark mode,
    relative paths only.
+   Put the `‹ All games` link (`<a class="home-link" href="../games/">`, styles included) first in `<main>`, copied from
+   any other game: it hides itself while `#home` is hidden, so players use Leave in a room.
 3. For online play: `import * as rooms from "../shared/rooms.js";` (exactly this form; the build adds a cache-busting
    version). **Start from `projects/five-line/index.html`**, the most complete example: lobby, 2–4 players, teams,
    hidden hands, names, timer, pass, Leave, Play again. `four-in-a-row` is a smaller 2-player example with a

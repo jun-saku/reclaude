@@ -203,10 +203,18 @@
     }
     .message .save-msg { margin: 0; font-size: 0.85rem; max-width: 300px; padding: 0 16px; }
     .message .save-msg:empty { display: none; }
+    /* Back to the games list; hidden while in a room or a game (use Leave there). */
+    .home-link {
+      align-self: flex-start; display: inline-flex; align-items: center; gap: 2px; margin: -6px 0 -6px -6px; padding: 6px;
+      color: var(--muted); font-size: 0.9rem; font-weight: 600; text-decoration: none; border-radius: 8px;
+    }
+    .home-link:active { opacity: 0.6; }
+    main:has(#home[hidden]) .home-link { display: none; }
   </style>
 </head>
 <body>
   <main class="game">
+    <a class="home-link" href="../games/">‹ All games</a>
     <header>
       <h1>2048</h1>
       <div class="score"><span>Score</span><b id="score">0</b></div>
