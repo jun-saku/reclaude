@@ -57,6 +57,43 @@ jobs:
       - run: npm ci
       - run: npm run rules
 
+  # End-to-end tests on PRs: only the games a PR changes (tests/pick-e2e.mjs), or all of them when shared code, the
+  # rules or the test setup change. Real Firebase SDK + emulator, headless Chrome. Not a required check, so it never
+  # holds up a merge; a red result is still worth a look.
+  e2e:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Pick tests
+        id: pick
+        run: node tests/pick-e2e.mjs "origin/${{ github.base_ref }}" >> "$GITHUB_OUTPUT"
+      - if: steps.pick.outputs.tests != ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tests/package-lock.json
+      - if: steps.pick.outputs.tests != ''
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - if: steps.pick.outputs.tests != ''
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ hashFiles('tests/package-lock.json') }}
+      - if: steps.pick.outputs.tests != ''
+        name: Run ${{ steps.pick.outputs.tests }}
+        run: |
+          node scripts/build.mjs
+          npm install --no-save --prefix "$RUNNER_TEMP/pw" playwright-core@1.56.1
+          cd tests && npm ci
+          E2E="${{ steps.pick.outputs.tests }}" NODE_PATH="$RUNNER_TEMP/pw/node_modules" CHROMIUM_PATH="$(command -v google-chrome)" npm run e2e
+
   # Publishes firebase/database.rules.json to the live database, on main only, after the rules tests pass.
   # Signs in to Google with GitHub's short-lived ID token (Workload Identity Federation): no stored key.
   # Google only accepts tokens from jun-saku/reclaude on refs/heads/main (set up once in Cloud Shell).

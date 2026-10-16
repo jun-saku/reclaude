@@ -12,7 +12,7 @@ and `firebase/database.rules.json` (who may write what). Read `CLAUDE.md` first;
 ## The one rule that keeps games independent
 
 - **A game PR touches only `projects/<name>/`** (plus a README line, its card on the landing page `site/games/index.html`, and its
-  own section in `tests/e2e.cjs` if you add one). A change like that cannot break another game: games don't import each other and their rooms are tagged with
+  own test file `tests/e2e/<name>.cjs` if you add one). A change like that cannot break another game: games don't import each other and their rooms are tagged with
   their own name.
 - **Changes to `shared/` or the rules go in their own PR**, titled as an engine change, never inside "add my game".
   Every online game uses them, so a change there goes live for all games at once: run `cd tests && npm run e2e` and
@@ -99,16 +99,17 @@ secret goal) goes in private data: one string per seat, ≤ 512 chars, readable 
 ## Testing
 
 - Quick UI test: open the page with `?backend=fake` in several tabs of one browser (they share rooms, no rules).
-- Real rules: `cd tests && npm run e2e` (the real Firebase SDK on the emulator). For a new online game, add a short
-  section to `tests/e2e.cjs` that plays one game through and checks the winner, like the Five Line section.
+- Real rules: `cd tests && npm run e2e` (the real Firebase SDK on the emulator). For a new online game, add
+  `tests/e2e/<name>.cjs` (named like the game's folder) that plays one game through and checks the winner, like
+  `five-line.cjs`; CI then runs it on every PR that changes the game. `E2E=<name> npm run e2e` runs just yours.
 - Drive it with Playwright at 390px wide, screenshot light and dark, and look at the screenshots before pushing.
 - An engine PR also needs `npm run rules`, new cases in `tests/rules.test.mjs`, and rules edited in
   `scripts/rules.mjs` (then `node scripts/rules.mjs`), never in the JSON.
 
 ## Before asking for a merge
 
-- [ ] The PR touches only `projects/<name>/` (+ README, + its landing-page card, + its own e2e section), or is clearly an engine PR.
+- [ ] The PR touches only `projects/<name>/` (+ README, + its landing-page card, + its own `tests/e2e/<name>.cjs`), or is clearly an engine PR.
 - [ ] Works on a phone: touch, no sideways scroll, safe areas, light and dark.
 - [ ] Online: create, join by code and by link, play to a win, Play again, Leave mid-game, reload mid-game.
-- [ ] `node scripts/build.mjs` and `node tests/smoke.cjs` pass, and `npm run e2e` passes if the game is online.
+- [ ] `node scripts/build.mjs` and `node tests/smoke.cjs` pass, and `E2E=<name> npm run e2e` passes if the game is online.
 - [ ] Short summary for the user with the game link and the PR's Cloudflare preview link.

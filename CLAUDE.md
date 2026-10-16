@@ -41,7 +41,10 @@ The user usually works from their phone, so keep replies short and end with the 
   page at 390px and fails on JavaScript errors, blocked scripts, sideways scroll, a game missing from the games page or
   its "‹ All games" link, or a same-device game that won't start; it's part of the required `build` check, needs no
   per-game code, and lists non-games (no card, no link) in `NOT_GAMES`. `npm run rules` checks the database rules on the Firebase emulator (CI runs
-  it); `npm run e2e` plays the online games on the real Firebase SDK + emulator in headless Chromium.
+  it); `npm run e2e` plays the online games on the real Firebase SDK + emulator in headless Chromium, one file per game
+  in `tests/e2e/<name>.cjs` (`engine.cjs` for room features); `E2E=wall-race,engine npm run e2e` runs only some. On
+  PRs, CI's `e2e` job runs only the tests for the games the PR changes (`tests/pick-e2e.mjs`), or all of them when
+  `shared/`, the rules, the build or the test setup change; it isn't a required check.
 - `.github/workflows/pages.yml`: builds and smoke-tests every push and PR (the `build` check `main` requires) and runs the rules test; from `main` it
   deploys to Cloudflare Pages; on PRs it uploads a Cloudflare preview and comments its link.
   Cloudflare uploads use the `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` repo secrets (set by the user;
