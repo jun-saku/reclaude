@@ -74,7 +74,7 @@ only its own `projects/<name>/` folder; engine changes to `shared/` or the rules
 - App Check (Fraud Defense, formerly reCAPTCHA Enterprise, `ReCaptchaEnterpriseProvider`) is set up in
   `shared/rooms.js` (real Firebase only, not the emulator): pages get a token proving they are this site, and once
   enforcement is on in the Firebase console, requests without one are refused. The site key in `rooms.js` is public
-  (never ask for any secret key). The key's domains are reclaude.junsaku.dev, reclaude.pages.dev (and its preview subdomains) and jun-saku.github.io:
+  (never ask for any secret key) and must be a Fraud Defense key in the `reclaude-67a01` Cloud project itself. The key's domains are reclaude.junsaku.dev, reclaude.pages.dev (and its preview subdomains) and jun-saku.github.io:
   a new domain must be added there first. The SDK loads reCAPTCHA from www.google.com; its badge is hidden and the
   required notice is on the games page.
 - Rules are published automatically: on `main`, the workflow's `publish_rules` job deploys
