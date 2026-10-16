@@ -24,8 +24,7 @@ See [CLAUDE.md](CLAUDE.md) for how projects are added, tested and deployed.
 
 ```sh
 node scripts/build.mjs
-mkdir -p /tmp/serve && ln -sfn "$PWD/_site" /tmp/serve/reclaude
-python3 -m http.server 8000 -d /tmp/serve   # open http://localhost:8000/reclaude/<name>/
+python3 -m http.server 8000 -d _site   # open http://localhost:8000/<name>/
 ```
 
 ## Firebase
@@ -37,8 +36,8 @@ key; Google trusts only this repo's `main` branch) as the `rules-deployer` servi
 
 App Check (Google Cloud Fraud Defense, formerly reCAPTCHA Enterprise) proves requests come from this site: the site
 key is in `shared/rooms.js` and is registered in Firebase console → App Check with the Fraud Defense provider.
-Turn on enforcement there (Realtime Database, then Authentication) once App Check → Metrics shows almost all
-requests as verified.
+Enforcement is on for the Realtime Database and Authentication; switching it off there is the quick fix if online
+play ever breaks.
 
 One-time setup (done) in Cloud Shell for project `reclaude-67a01`: a `rules-deployer` service account with
 *Firebase Realtime Database Admin* and *Firebase Viewer*, a workload identity pool `github` with provider
@@ -53,8 +52,8 @@ emulator (also run by CI), or `npm run e2e` to play the online games on the real
 ## Deploying
 
 `claude/...` → PR → `main`. Each PR gets a Cloudflare preview link (posted as a comment); merging into
-`main` publishes to **Cloudflare Pages** (`reclaude.junsaku.dev`, also `reclaude.pages.dev`) and to GitHub Pages
-(`jun-saku.github.io/reclaude`, kept for old links).
+`main` publishes to **Cloudflare Pages** (`reclaude.junsaku.dev`, also `reclaude.pages.dev`). GitHub Pages
+(`jun-saku.github.io/reclaude`) has been retired.
 
 Cloudflare setup (once):
 1. Cloudflare → My Profile → **API Tokens** → Create Token → **Create Custom Token**: permission
@@ -66,7 +65,7 @@ Cloudflare setup (once):
    under Workers & Pages → reclaude → **Custom domains** (done).
 
 Repo settings (done):
-- Settings → Pages → Source: **GitHub Actions**.
+- Settings → Pages: unpublished (the site is only on Cloudflare).
 - Settings → General: default branch `main`; squash merging only; auto-merge off.
 - Settings → Rules → Rulesets → `protect-main` (default branch): require a pull request (0 approvals),
   require the `build` check, block force pushes, restrict deletions, empty bypass list.

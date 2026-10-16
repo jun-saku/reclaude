@@ -1,8 +1,7 @@
 name: Build and deploy
 
 # Every PR and push is built and the database rules are tested, so problems are caught before merging.
-# On main, the database rules are published to Firebase first, then the site goes to Cloudflare Pages
-# (production) and, for old links, GitHub Pages.
+# On main, the database rules are published to Firebase first, then the site goes to Cloudflare Pages.
 # PRs get a Cloudflare preview link, posted as a PR comment.
 # Cloudflare steps are skipped until the CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets exist.
 on:
@@ -28,10 +27,6 @@ jobs:
         with:
           node-version: 22
       - run: node scripts/build.mjs
-      - if: github.ref == 'refs/heads/main'
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: _site
 
   # Checks firebase/database.rules.json against the Firebase emulator (tests/rules.test.mjs).
   rules:
@@ -81,22 +76,6 @@ jobs:
           service_account: rules-deployer@reclaude-67a01.iam.gserviceaccount.com
       - name: Publish database rules
         run: npx --yes firebase-tools@13.35.1 deploy --only database --project reclaude-67a01 --non-interactive
-
-  # GitHub Pages: kept so jun-saku.github.io/reclaude/... links keep working.
-  # Waits for the rules so the site and the rules it expects go live together.
-  deploy:
-    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && needs.build.result == 'success' && needs.publish_rules.result == 'success' }}
-    needs: [build, publish_rules]
-    runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
 
   # Cloudflare Pages: production from main, previews for PRs. Uploads the built site directly
   # (no Cloudflare-GitHub connection needed, and direct uploads don't use Cloudflare's build quota).
