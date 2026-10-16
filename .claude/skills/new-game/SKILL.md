@@ -110,5 +110,5 @@ secret goal) goes in private data: one string per seat, ≤ 512 chars, readable 
 - [ ] The PR touches only `projects/<name>/` (+ README, + its landing-page card, + its own e2e section), or is clearly an engine PR.
 - [ ] Works on a phone: touch, no sideways scroll, safe areas, light and dark.
 - [ ] Online: create, join by code and by link, play to a win, Play again, Leave mid-game, reload mid-game.
-- [ ] `node scripts/build.mjs` passes, and `npm run e2e` passes if the game is online.
+- [ ] `node scripts/build.mjs` and `node tests/smoke.cjs` pass, and `npm run e2e` passes if the game is online.
 - [ ] Short summary for the user with the game link and the PR's Cloudflare preview link.

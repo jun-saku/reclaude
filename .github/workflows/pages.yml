@@ -27,6 +27,11 @@ jobs:
         with:
           node-version: 22
       - run: node scripts/build.mjs
+      # Smoke test of every page (tests/smoke.cjs): part of the required build check. Uses the runner's own Chrome.
+      - name: Smoke test
+        run: |
+          npm install --no-save --prefix "$RUNNER_TEMP/pw" playwright-core@1.56.1
+          NODE_PATH="$RUNNER_TEMP/pw/node_modules" CHROMIUM_PATH="$(command -v google-chrome)" node tests/smoke.cjs
 
   # Checks firebase/database.rules.json against the Firebase emulator (tests/rules.test.mjs).
   rules:
