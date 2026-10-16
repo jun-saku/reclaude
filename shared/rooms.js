@@ -45,6 +45,11 @@ export const FIREBASE_CONFIG = {
   appId: "1:720774301235:web:d91c1208d791c73b684546",
 };
 const FIREBASE_VERSION = "10.14.1";
+// App Check (Google Cloud Fraud Defense, formerly reCAPTCHA Enterprise): real Firebase only serves requests that
+// carry a token proving they come from these pages, once enforcement is switched on in the Firebase console. The site
+// key is public by design. Its allowed domains are reclaude.junsaku.dev, reclaude.pages.dev (previews too) and
+// jun-saku.github.io.
+const RECAPTCHA_SITE_KEY = "6LeLUvItAAAAAPUZJnPJDiK_K8E9q0ZQGs9r16gi";
 const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no I, O, 0, 1
 export const CODE_RE = /^[A-HJ-NP-Z2-9]{4}$/;
 export const MAX_SEATS = 10; // scripts/rules.mjs SEATS must match
@@ -116,15 +121,26 @@ function stamped(fn) {
 
 async function firebaseBackend({ emulator = false } = {}) {
   const base = `https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/`;
-  const [appMod, authMod, db$] = await Promise.all([
+  const [appMod, authMod, db$, check$] = await Promise.all([
     import(base + "firebase-app.js"),
     import(base + "firebase-auth.js"),
     import(base + "firebase-database.js"),
+    // The emulator doesn't check App Check. If the script can't load, play goes on without it (until enforced).
+    emulator ? null : import(base + "firebase-app-check.js").catch((err) => { console.warn("App Check unavailable", err); return null; }),
   ]);
   const config = emulator
     ? { ...FIREBASE_CONFIG, projectId: "demo-reclaude", databaseURL: "http://127.0.0.1:9000?ns=demo-reclaude-default-rtdb" }
     : FIREBASE_CONFIG;
   const app = appMod.initializeApp(config);
+  if (check$) {
+    try {
+      check$.initializeAppCheck(app, { provider: new check$.ReCaptchaEnterpriseProvider(RECAPTCHA_SITE_KEY), isTokenAutoRefreshEnabled: true });
+      // reCAPTCHA's floating badge would cover game buttons; the notice it stands for is on the games page.
+      const style = document.createElement("style");
+      style.textContent = ".grecaptcha-badge { visibility: hidden; }";
+      document.head.append(style);
+    } catch (err) { console.warn("App Check unavailable", err); }
+  }
   const auth = authMod.getAuth(app);
   const db = db$.getDatabase(app);
   if (emulator) {
