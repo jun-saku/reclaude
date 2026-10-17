@@ -185,6 +185,62 @@ await expect('a room without a timer: no skipping', false, async () => {
   await update(B.r('rooms/TQMB'), { turn: 1, turnAt: serverTimestamp() });
 });
 
+console.log('-- real-time rooms (live/<code>/<seat>)');
+const slot = (d, r = 0) => ({ d, t: serverTimestamp(), r });
+const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+await expect('a live room with 6 updates a second', true, () => set(A.r('rooms/LVAA'), { ...room(A.uid), live: true, liveHz: 6 }));
+await expect('a live room with 20 updates a second', false, () => set(A.r('rooms/LVAB'), { ...room(A.uid), live: true, liveHz: 20 }));
+await expect('a live flag that is not true/false', false, () => set(A.r('rooms/LVAB'), { ...room(A.uid), live: 'yes' }));
+await update(B.r('rooms/LVAA'), { 'players/s1': B.uid });
+await update(C.r('rooms/LVAA'), { 'players/s2': C.uid });
+await expect('sending a live update before the game starts', false, () => set(B.r('live/LVAA/s1'), slot('x')));
+await expect('the host clearing live slots before the start', true, () => remove(A.r('live/LVAA')));
+await update(A.r('rooms/LVAA'), { status: 'playing', turnAt: Date.now() });
+await expect('turning live off mid-game', false, () => update(A.r('rooms/LVAA'), { live: false }));
+await expect('changing liveHz mid-game', false, () => update(A.r('rooms/LVAA'), { liveHz: 10 }));
+await expect('B sending a live update to their own slot', true, () => set(B.r('live/LVAA/s1'), slot('10,20,90')));
+await expect('C reading every live slot of their room', true, () => get(C.r('live/LVAA')));
+await expect('a stranger reading the live slots', false, () => get(D.r('live/LVAA')));
+await expect("B writing into C's slot", false, () => set(B.r('live/LVAA/s2'), slot('fake')));
+await expect('a stranger writing a slot', false, () => set(D.r('live/LVAA/s2'), slot('x')));
+await expect('a second update within 90 ms', false, () => set(B.r('live/LVAA/s1'), slot('11,20,90')));
+await pause(120);
+await expect('the next update 120 ms later', true, () => set(B.r('live/LVAA/s1'), slot('12,20,90')));
+await pause(120);
+await expect('an update over 256 characters', false, () => set(B.r('live/LVAA/s1'), slot('x'.repeat(257))));
+await expect('an update with a made-up time', false, () => set(B.r('live/LVAA/s1'), { d: 'x', t: 1, r: 0 }));
+await expect('an update for another round', false, () => set(B.r('live/LVAA/s1'), slot('x', 3)));
+await expect('an update with an extra field', false, () => set(B.r('live/LVAA/s1'), { ...slot('x'), hp: 99 }));
+await expect('an update that is not text', false, () => set(B.r('live/LVAA/s1'), { d: 5, t: serverTimestamp(), r: 0 }));
+await expect('B removing their own slot', true, () => remove(B.r('live/LVAA/s1')));
+await expect('the host clearing everyone\'s slots mid-game', false, () => remove(A.r('live/LVAA')));
+await expect('live updates in a room that is not live', false, () => set(B.r('live/TQMA/s1'), slot('x')));
+// The lead (turn) only changes hands once the lead has been quiet for 3 seconds.
+await set(A.r('live/LVAA/s0'), slot('lead'));
+await expect('B taking the lead from an active lead', false, () => update(B.r('rooms/LVAA'), { turn: 1, turnAt: serverTimestamp() }));
+await expect('the lead changing the game state', true, () => update(A.r('rooms/LVAA'), { 'state/wave': 1 }));
+await expect('B changing the game state while not the lead', false, () => update(B.r('rooms/LVAA'), { 'state/wave': 9 }));
+await pause(3200);
+await expect('B taking the lead while also changing the state', false, () => update(B.r('rooms/LVAA'), { turn: 1, turnAt: serverTimestamp(), 'state/wave': 9 }));
+await expect('B handing the lead to C', false, () => update(B.r('rooms/LVAA'), { turn: 2, turnAt: serverTimestamp() }));
+await expect('a stranger taking the lead', false, () => update(D.r('rooms/LVAA'), { turn: 1, turnAt: serverTimestamp() }));
+await expect('B taking the lead after 3 quiet seconds', true, () => update(B.r('rooms/LVAA'), { turn: 1, turnAt: serverTimestamp() }));
+await expect('C taking it straight back', false, () => update(C.r('rooms/LVAA'), { turn: 2, turnAt: serverTimestamp() }));
+await expect('the new lead handing the lead on', true, () => update(B.r('rooms/LVAA'), { turn: 2, turnAt: serverTimestamp() }));
+await expect('taking the lead in a room that is not live', false, async () => {
+  await set(A.r('rooms/LVAC'), { ...room(A.uid), seats: 2, min: 2 }); await update(B.r('rooms/LVAC'), { 'players/s1': B.uid });
+  await update(A.r('rooms/LVAC'), { status: 'playing', turn: 0, turnAt: Date.now() - 999999 });
+  await update(B.r('rooms/LVAC'), { turn: 1, turnAt: serverTimestamp() });
+});
+await expect('a live update while the game is over', false, async () => {
+  await update(C.r('rooms/LVAA'), { status: 'done', winner: 'draw' });
+  await set(C.r('live/LVAA/s2'), slot('x'));
+});
+await expect('a live update in the next round', true, async () => {
+  await update(A.r('rooms/LVAA'), { status: 'playing', round: 1, turn: 0, winner: null, turnAt: Date.now() });
+  await set(C.r('live/LVAA/s2'), slot('x', 1));
+});
+
 console.log('-- leaderboards (scores/<game>): generic, each game checks its own scores');
 const entry = (name, score) => ({ name, score, at: serverTimestamp() });
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));

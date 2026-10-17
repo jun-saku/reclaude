@@ -21,7 +21,8 @@ The user usually works from their phone, so keep replies short and end with the 
   `shared/rooms.js` is the multiplayer room system: 2–10 seats, teams, auto-start or a host-started lobby, codes, share
   links, presence, player names (`myName`/`setMyName`/`nameOf`, remembered per device), an optional turn timer
   (`turnSecs` on `createRoom`, `turnLeft`, `skipTurn`), private per-seat data (`setPrivate`/`watchPrivate`, e.g. hands
-  of cards), idle disconnect, and Firebase / emulator / stand-in / same-device backends. New multiplayer games must use it rather than copying room code.
+  of cards), real-time rooms (`live: true`, `joinLive`: fast per-seat updates in `live/<CODE>`, a lead seat that
+  hands over by itself), idle disconnect, and Firebase / emulator / stand-in / same-device backends. New multiplayer games must use it rather than copying room code.
   It also has public leaderboards (`topScores`, `myScore`, `saveScore`; `scores/<game>/<uid>` in the rules), which
   connect only briefly. The rules only check a name and a number: each game validates its own scores. The 🏆 Top 10
   sheet is shared too (`shared/leaderboard.js`, `topTen`); 2048 uses both.
