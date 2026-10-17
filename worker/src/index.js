@@ -5,8 +5,13 @@
 // reads the room as that player to find their seat, then runs the game from the game's module (src/games.js):
 // the players send their input, the server sends each of them the game about 10 times a second.
 //
+// There is no game loop running on its own: the game moves on whenever a message comes in (phones send at least
+// one every 100 ms while connected, shared/server.js), by however long it's been. Each message is its own short
+// piece of work, which keeps every one well inside Cloudflare's per-request CPU limit (10 ms on the free plan),
+// where a loop running on a timer for the whole game would be cut off.
+//
 // Lifecycle (nothing keeps running, or costs anything, once nobody plays):
-// - The game loop runs only while at least one seated player is connected.
+// - The game only moves while at least one seated player is connected (and sending).
 // - When the last one goes, the game is saved to the room's storage and an alarm is set for 10 minutes. Anyone
 //   reconnecting before then carries on from there; otherwise the alarm deletes everything the room stored.
 // - A connection that sends nothing for 30 s is closed (phones send a ping every 5 s, and close their connection
@@ -17,7 +22,7 @@ import { DurableObject } from "cloudflare:workers";
 import { GAMES } from "./games.js";
 import { AuthError, readRoom, seatIn, verifyIdToken } from "./auth.js";
 
-const TICK_MS = 1000 / 30;     // the game advances 30 times a second
+const TICK_MS = 1000 / 30;     // the game advances in steps of this (at most 15 of them per message)
 const SEND_MS = 100;           // and is sent to the players 10 times a second
 const IDLE_MS = 30_000;        // a silent connection is closed after this
 const KEEP_MS = 10 * 60_000;   // an empty room's game is kept this long (the tests shorten it with the KEEP_MS variable)
@@ -44,7 +49,10 @@ export default {
     const origin = request.headers.get("Origin") || "";
     if (!ORIGINS.some((r) => r.test(origin)) && !(env.EMULATOR === "1" && LOCAL.test(origin))) return new Response("Forbidden", { status: 403 });
     const room = env.ROOMS.get(env.ROOMS.idFromName(`${m[1]}:${m[2]}:${m[3]}`));
-    return room.fetch(request);
+    try { return await room.fetch(request); } catch (err) {
+      // The player went away mid-connect, or the room's server restarted: their page simply tries again.
+      return new Response(`Try again (${String(err?.message || err).slice(0, 80)})`, { status: 503 });
+    }
   },
 };
 
@@ -56,7 +64,6 @@ export class GameRoom extends DurableObject {
     this.meta = null;       // { game, code, created }
     this.mod = null;        // the game's module
     this.state = null;      // the game, while it's loaded
-    this.timer = null;
     this.startedAt = 0;
     this.lastTick = 0;
     this.lastSend = 0;
@@ -91,9 +98,10 @@ export class GameRoom extends DurableObject {
     let msg;
     try { msg = JSON.parse(data); } catch { return this.drop(socket, 4000, "Not JSON"); }
     if (!msg || typeof msg !== "object") return;
-    if (msg.t === "ping") return send(socket, { t: "pong", id: Number(msg.id) || 0 });
-    if (conn.seat === null) return this.hello(socket, conn, msg);
-    if (this.state) this.mod.input(this.state, conn.seat, msg, { dev: this.env.EMULATOR === "1" });
+    if (msg.t === "ping") send(socket, { t: "pong", id: Number(msg.id) || 0 });
+    else if (conn.seat === null) return this.hello(socket, conn, msg);
+    else if (this.state && msg.t !== "tick") this.mod.input(this.state, conn.seat, msg, { dev: this.env.EMULATOR === "1" });
+    if (conn.seat !== null) this.advance(now);
   }
 
   // A new connection proves who it is; it then takes its seat (replacing any older connection for that seat).
@@ -116,7 +124,7 @@ export class GameRoom extends DurableObject {
     if (!this.state) await this.load(room);
     this.mod.join(this.state, seat, room);
     send(socket, { t: "hi", seat });
-    this.start();
+    this.advance(Date.now());
   }
 
   // The game: the one saved when the room last emptied (same room), or a new one.
@@ -124,24 +132,21 @@ export class GameRoom extends DurableObject {
     const saved = await this.ctx.storage.get("game");
     this.state = saved && saved.created === this.meta.created ? this.mod.load(saved.game, room) : this.mod.create(room);
     this.startedAt = saved?.startedAt || Date.now();
+    this.lastTick = this.lastSend = 0;
     await this.ctx.storage.deleteAlarm();
   }
 
-  start() {
-    if (this.timer) return;
-    this.lastTick = this.lastSend = Date.now();
-    this.timer = setInterval(() => this.tick(), TICK_MS);
-  }
-
-  tick() {
-    const now = Date.now();
-    const dt = Math.min(0.1, (now - this.lastTick) / 1000);
-    this.lastTick = now;
+  // Moves the game on to now (in steps of TICK_MS, at most half a second at once), and sends it to everyone if
+  // it's time.
+  advance(now) {
     for (const [socket, c] of this.conns) if (now - c.lastAt > IDLE_MS) this.drop(socket, 4005, "Idle");
     if (!this.state) return;
+    if (!this.lastTick) this.lastTick = now;
     if (now - this.startedAt > MAX_GAME_MS) this.mod.timeUp?.(this.state);
-    this.mod.tick(this.state, dt);
-    if (now - this.lastSend >= SEND_MS) {
+    let left = Math.min(500, now - this.lastTick);
+    this.lastTick = now;
+    while (left > 0) { const step = Math.min(TICK_MS, left); this.mod.tick(this.state, step / 1000); left -= step; }
+    if (now - this.lastSend >= SEND_MS - 20) { // (a little early rather than a whole message late)
       this.lastSend = now;
       for (const [socket, c] of this.conns) {
         if (c.seat === null) continue;
@@ -156,9 +161,7 @@ export class GameRoom extends DurableObject {
     this.conns.delete(socket);
     if (conn.seat !== null && this.state && ![...this.conns.values()].some((c) => c.seat === conn.seat)) this.mod.leave(this.state, conn.seat);
     if ([...this.conns.values()].some((c) => c.seat !== null)) return;
-    // Nobody's playing: stop, keep the game for a while in case someone comes back, then forget it.
-    clearInterval(this.timer);
-    this.timer = null;
+    // Nobody's playing: keep the game for a while in case someone comes back, then forget it.
     if (this.state) {
       const game = this.mod.save(this.state);
       this.state = null;

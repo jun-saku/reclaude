@@ -6,7 +6,7 @@
 //   leave(state, seat)              their last connection closed
 //   input(state, seat, msg, { dev }) a message from a player (any JSON object; check it, players can send anything);
 //                                   dev is true on the local test server only, for test shortcuts
-//   tick(state, dt)                 advance the game by dt seconds (30 times a second)
+//   tick(state, dt)                 advance the game by dt seconds (steps of at most 1/30 s)
 //   view(state, seat) → object      what to send that player (10 times a second)
 //   timeUp?(state)                  the game has run for 2 hours: end it
 import probe from "./games/probe.js";
