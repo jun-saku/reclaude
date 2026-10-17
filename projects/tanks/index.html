@@ -1,0 +1,1237 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#161618" media="(prefers-color-scheme: dark)">
+  <title>Tanks</title>
+  <meta name="description" content="Battle City-style co-op: defend your base from waves of enemy tanks, solo or with 2–4 friends online, and post your best wave to the Top 10.">
+  <style>
+    :root {
+      --bg: #f7f6f3;
+      --text: #1d1d1f;
+      --muted: #6b6b70;
+      --panel: #ffffff;
+      --line: #d9d2c6;
+      --soft: #ece7df;
+      --accent: #c2571a;
+      --danger: #b3261e;
+      --arena-edge: #3a3a40;
+      --p0: #d9a514; --p1: #2f9e55; --p2: #2f6fd6; --p3: #d6458c;
+      color-scheme: light;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #161618;
+        --text: #ececef;
+        --muted: #9a9aa2;
+        --panel: #1f1f22;
+        --line: #3a3a40;
+        --soft: #2a2a2e;
+        --accent: #f08a4b;
+        --danger: #ff8a80;
+        --arena-edge: #4a4a52;
+        --p0: #f2c23a; --p1: #48c774; --p2: #5f97ff; --p3: #ff7fbf;
+        color-scheme: dark;
+      }
+    }
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    html, body { min-height: 100%; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 17px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      justify-content: center;
+      -webkit-tap-highlight-color: transparent;
+    }
+    main {
+      width: 100%;
+      max-width: 480px;
+      padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .title-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    h1 { font-size: 1.6rem; margin: 0; display: flex; align-items: center; gap: 10px; }
+    h1 svg { width: 1.1em; height: 1.1em; }
+    h2 { font-size: 1.05rem; margin: 0; }
+    p { margin: 0; }
+    .muted { color: var(--muted); }
+    button {
+      font: inherit; font-weight: 650; border: 0; border-radius: 12px; padding: 12px 16px;
+      background: var(--accent); color: #fff; cursor: pointer; touch-action: manipulation;
+    }
+    button:disabled { opacity: 0.5; cursor: default; }
+    button.secondary { background: var(--soft); color: var(--text); }
+    .trophy { background: var(--soft); color: var(--text); padding: 8px 12px; font-size: 1.1rem; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+    #home { display: flex; flex-direction: column; gap: 12px; }
+    .row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+    .join { display: flex; gap: 10px; }
+    .join input, .save input {
+      flex: 1; min-width: 0; font: inherit; padding: 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--text);
+    }
+    .join input { font-size: 1.3rem; letter-spacing: 0.3em; text-transform: uppercase; text-align: center; }
+    .save { display: flex; gap: 10px; }
+    .error { color: var(--danger); min-height: 1.4em; font-size: 0.95rem; }
+    .name-row { display: flex; align-items: center; gap: 10px; font-weight: 650; }
+    .name-row span { white-space: nowrap; }
+    .name-row input {
+      flex: 1; min-width: 0; font: inherit; font-weight: 500; padding: 10px 12px; border-radius: 12px;
+      border: 1px solid var(--line); background: var(--bg); color: var(--text);
+    }
+
+    .bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .players { display: flex; gap: 6px; flex-wrap: wrap; }
+    .chip {
+      display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px;
+      background: var(--soft); font-size: 0.85rem; font-weight: 600; border: 2px solid transparent;
+    }
+    .chip.lead { border-color: var(--pc); }
+    .chip.out { opacity: 0.5; }
+    .chip .disc { width: 12px; height: 12px; border-radius: 3px; background: var(--pc); }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); opacity: 0.4; }
+    .dot.on { background: #2e9d5b; opacity: 1; }
+    .code { font-size: 0.85rem; color: var(--muted); }
+    .code b { font-size: 1.05rem; letter-spacing: 0.15em; color: var(--text); }
+    .bigcode { font-size: 2.6rem; font-weight: 800; letter-spacing: 0.25em; text-align: center; margin: 0; }
+    .seated { display: flex; flex-direction: column; gap: 6px; }
+    .seated div { display: flex; align-items: center; gap: 8px; }
+
+    .hud { display: flex; justify-content: space-between; gap: 8px; font-weight: 700; font-variant-numeric: tabular-nums; font-size: 0.95rem; }
+    .hud span { white-space: nowrap; }
+    #arena {
+      display: block; width: min(100%, calc(100svh - 360px)); min-width: 240px; aspect-ratio: 1; align-self: center;
+      border-radius: 6px; border: 3px solid var(--arena-edge); background: #111113; touch-action: none; image-rendering: pixelated;
+    }
+    .controls { display: flex; justify-content: space-between; align-items: center; gap: 16px; user-select: none; -webkit-user-select: none; touch-action: none; }
+    .pad { position: relative; width: 150px; height: 150px; flex: none; touch-action: none; border-radius: 50%; background: var(--soft); }
+    .pad i {
+      position: absolute; width: 48px; height: 48px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line);
+      display: grid; place-items: center; font-style: normal; font-size: 1.1rem; color: var(--muted); pointer-events: none;
+    }
+    .pad i.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .pad [data-d="0"] { left: 51px; top: 4px; }
+    .pad [data-d="1"] { right: 4px; top: 51px; }
+    .pad [data-d="2"] { left: 51px; bottom: 4px; }
+    .pad [data-d="3"] { left: 4px; top: 51px; }
+    .fire {
+      width: 104px; height: 104px; border-radius: 50%; flex: none; font-size: 1.05rem; letter-spacing: 0.05em; touch-action: none;
+      box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.18);
+    }
+    .fire.on { transform: scale(0.95); box-shadow: none; }
+    .over { align-items: center; text-align: center; }
+    .over h2 { font-size: 1.3rem; }
+    .over .save { align-self: stretch; }
+    .hint { text-align: center; font-size: 0.9rem; color: var(--muted); min-height: 1.3em; }
+    .rules { font-size: 0.9rem; color: var(--muted); }
+    .rules li { margin: 2px 0; }
+    .rules summary { cursor: pointer; font-weight: 600; color: var(--text); }
+    /* Back to the games list; hidden while in a room or a game (use Leave there). */
+    .home-link {
+      align-self: flex-start; display: inline-flex; align-items: center; gap: 2px; margin: -6px 0 -6px -6px; padding: 6px;
+      color: var(--muted); font-size: 0.9rem; font-weight: 600; text-decoration: none; border-radius: 8px;
+    }
+    .home-link:active { opacity: 0.6; }
+    main:has(#home[hidden]) .home-link { display: none; }
+  </style>
+</head>
+<body>
+  <main>
+    <a class="home-link" href="../games/">‹ All games</a>
+    <div class="title-row">
+      <h1><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1" y="2" width="4" height="12" rx="1" fill="#555"/><rect x="11" y="2" width="4" height="12" rx="1" fill="#555"/><rect x="4" y="4" width="8" height="9" rx="1.5" fill="var(--p0)"/><rect x="7" y="0" width="2" height="7" fill="#777"/><circle cx="8" cy="9" r="2.4" fill="#a87d0a"/></svg>Tanks</h1>
+      <button class="trophy" id="trophy" aria-label="Top 10 leaderboard" aria-haspopup="dialog">🏆</button>
+    </div>
+
+    <section id="home">
+      <div class="card">
+        <label class="name-row"><span>Your name</span>
+          <input id="my-name" maxlength="12" autocomplete="nickname" spellcheck="false" placeholder="For the team and the Top 10">
+        </label>
+      </div>
+      <div class="card">
+        <h2>Solo</h2>
+        <p class="muted">Hold off the waves alone. Works offline.</p>
+        <button id="local">Play solo</button>
+      </div>
+      <div class="card">
+        <h2>Play friends online</h2>
+        <p class="muted">Create a room for 2–4 players and send the code or link. Start once everyone's in.</p>
+        <button id="create">Create room</button>
+      </div>
+      <div class="card">
+        <h2>Join a room</h2>
+        <form class="join" id="join-form" autocomplete="off">
+          <input id="join-code" maxlength="4" autocapitalize="characters" spellcheck="false" placeholder="CODE" aria-label="Room code">
+          <button id="join" type="submit">Join</button>
+        </form>
+        <p class="error" id="home-error" role="alert"></p>
+      </div>
+      <details class="card rules">
+        <summary>How to play</summary>
+        <ul>
+          <li>Enemy tanks roll in from the top. Keep them away from the eagle at the bottom: if it's hit, the game is over.</li>
+          <li>Drive with the pad (or arrow keys / WASD) and tap Fire (or Space). One shell at a time.</li>
+          <li>Shells break bricks; steel and water stop you. You can hide under trees.</li>
+          <li>Your team shares its spare lives. Clearing a wave earns one more.</li>
+          <li>Grey tanks are steady, light ones fast, bronze ones shoot fast shells, and dark armoured ones take four hits.</li>
+          <li>Online, the game carries on if someone leaves; they can rejoin with the code.</li>
+        </ul>
+      </details>
+    </section>
+
+    <section id="game" hidden>
+      <div class="bar">
+        <div class="players" id="players"></div>
+        <div class="code" id="room-label"></div>
+      </div>
+
+      <div class="card" id="waiting" hidden>
+        <p class="muted" style="text-align: center">Send this code to your friends</p>
+        <p class="bigcode" id="waiting-code"></p>
+        <div class="row">
+          <button id="share">Share link</button>
+          <button class="secondary" id="copy">Copy code</button>
+        </div>
+        <div class="seated" id="seated"></div>
+        <button id="start-btn" hidden>Start</button>
+        <p class="muted" id="waiting-note" style="text-align: center; font-size: 0.9rem"></p>
+      </div>
+
+      <div id="play" hidden>
+        <div class="hud"><span id="hud-wave"></span><span id="hud-lives"></span><span id="hud-left"></span></div>
+        <canvas id="arena" aria-label="Battlefield"></canvas>
+        <p class="hint" id="hint"></p>
+        <div class="controls" id="controls">
+          <div class="pad" id="pad" aria-label="Drive"><i data-d="0">▲</i><i data-d="1">▶</i><i data-d="2">▼</i><i data-d="3">◀</i></div>
+          <button class="fire" id="fire" aria-label="Fire">FIRE</button>
+        </div>
+      </div>
+
+      <div class="card over" id="over" hidden>
+        <h2 id="over-title"></h2>
+        <p class="muted" id="over-text"></p>
+        <form class="save" id="save-form" autocomplete="off">
+          <input id="save-name" maxlength="12" placeholder="Your name" aria-label="Name for the leaderboard" enterkeyhint="done">
+          <button id="save-btn" type="submit">Save</button>
+        </form>
+        <p class="hint" id="save-msg"></p>
+        <button id="rematch">Play again</button>
+      </div>
+
+      <div class="row">
+        <button class="secondary" id="leave">Leave</button>
+      </div>
+    </section>
+  </main>
+
+  <script type="module">
+    import * as rooms from "../shared/rooms.js";
+    import { topTen } from "../shared/leaderboard.js";
+
+    const GAME = "tanks";
+    // ---------- the battlefield ----------
+    // Distances are in units: a tile is 8 units, the field 13×13 tiles (104 units). The map is kept in cells of
+    // 4 units (half a tile, 26×26), the size of one brick block. Tanks are one tile; directions are 0 up,
+    // 1 right, 2 down, 3 left.
+    const U = 104, N = 26, CELL = 4, TANK = 8;
+    const DIRS = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+    const EMPTY = 0, BRICK = 1, STEEL = 2, WATER = 3, TREES = 4, BASE = 5;
+    const PLAYER_SPEED = 20, SHELL_SPEED = 80;
+    // Enemy kinds: 0 steady, 1 fast, 2 fast shells, 3 armoured (four hits).
+    const KINDS = [
+      { speed: 12, shell: 60, hp: 1, colour: "#a9adb5" },
+      { speed: 22, shell: 60, hp: 1, colour: "#d9dce2" },
+      { speed: 14, shell: 100, hp: 1, colour: "#c08a5a" },
+      { speed: 11, shell: 60, hp: 4, colour: "#6f7484" },
+    ];
+    const PLAYER_SPAWNS = [[32, 96], [64, 96], [16, 96], [80, 96]];
+    const ENEMY_SPAWNS = [[0, 0], [48, 0], [96, 0]];
+    const BASE_X = 48, BASE_Y = 96;
+    // # brick, @ steel, ~ water, % trees, E the eagle. Waves cycle through these.
+    const LAYOUTS = [
+      [
+        ".............",
+        ".#.#.#.#.#.#.",
+        ".#.#.#.#.#.#.",
+        ".#.#.#@#.#.#.",
+        ".#.#.....#.#.",
+        ".....#.#.....",
+        "@.##.....##.@",
+        ".....#.#.....",
+        ".#.#.###.#.#.",
+        ".#.#.#.#.#.#.",
+        ".#.#.....#.#.",
+        ".#.#.###.#.#.",
+        ".....#E#.....",
+      ],
+      [
+        ".............",
+        "..#..@.@..#..",
+        ".###.....###.",
+        "..#..###..#..",
+        ".....#.#.....",
+        "%%%.......%%%",
+        "~~~.#####.~~~",
+        "%%%.......%%%",
+        "..@..#.#..@..",
+        ".###.....###.",
+        "..#..#.#..#..",
+        ".....###.....",
+        ".....#E#.....",
+      ],
+      [
+        ".............",
+        ".@.#.#.#.#.@.",
+        ".#.........#.",
+        ".#.##%%%##.#.",
+        "...#%%%%%#...",
+        ".@.#.....#.@.",
+        "...#.@.@.#...",
+        ".%%.......%%.",
+        ".%%.#####.%%.",
+        ".....#.#.....",
+        ".#.#.....#.#.",
+        ".#.#.###.#.#.",
+        ".....#E#.....",
+      ],
+    ];
+    const TILE_KIND = { "#": BRICK, "@": STEEL, "~": WATER, "%": TREES, E: BASE };
+    const LAYOUT_CELLS = LAYOUTS.map((rows) => {
+      const a = new Uint8Array(N * N);
+      rows.forEach((row, ty) => [...row].forEach((ch, tx) => {
+        for (let k = 0; k < 4; k++) a[(ty * 2 + (k >> 1)) * N + tx * 2 + (k & 1)] = TILE_KIND[ch] || EMPTY;
+      }));
+      return a;
+    });
+    const layoutFor = (wave) => LAYOUT_CELLS[(wave - 1) % LAYOUT_CELLS.length];
+    const freshBricks = (wave) => Uint8Array.from(layoutFor(wave), (t) => (t === BRICK ? 1 : 0));
+
+    // The bricks still standing, 6 cells per character (113 characters), kept in the room's state.
+    const B64 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_";
+    function encBricks(b) {
+      let s = "";
+      for (let i = 0; i < N * N; i += 6) { let v = 0; for (let k = 0; k < 6; k++) if (b[i + k]) v |= 1 << k; s += B64[v]; }
+      return s;
+    }
+    function decBricks(s, wave) {
+      const lay = layoutFor(wave), b = new Uint8Array(N * N);
+      for (let i = 0; i < N * N; i++) { const v = B64.indexOf(s?.[(i / 6) | 0] ?? ""); b[i] = lay[i] === BRICK && v >= 0 && (v >> (i % 6)) & 1 ? 1 : 0; }
+      return b;
+    }
+
+    // Difficulty: enemies per wave, how many at once, and which kinds, by wave and team size.
+    const waveSize = (wave, players) => Math.round((6 + 2 * Math.min(wave, 7)) * (1 + 0.35 * (players - 1)));
+    const fieldCap = (players) => 3 + players;
+    const startLives = (players) => (players === 1 ? 3 : 2 + players);
+    function pickKind(wave) {
+      const w = [Math.max(1, 6 - wave), wave >= 2 ? 0.6 * wave : 0, wave >= 3 ? 0.4 * wave : 0, wave >= 4 ? 0.4 * wave : 0];
+      let r = Math.random() * w.reduce((a, b) => a + b, 0);
+      for (let k = 0; k < w.length; k++) { r -= w[k]; if (r < 0) return k; }
+      return 0;
+    }
+
+    // ---------- game state ----------
+    let seat = null;      // { backend, code, seat }, or null when playing solo
+    let leaveRoom = null; // stops watching the room
+    let live = null;      // rooms.joinLive: everyone's fast updates
+    let room = null;      // the room (solo: a plain object in the same shape)
+    let solo = false;
+    let lead = false;     // this device runs the enemies
+    let round = -1;       // the round on screen
+    let wave = 1;
+    let layout = layoutFor(1);
+    let bricks = freshBricks(1);
+    let mapDirty = true;      // the ground needs redrawing
+    let bricksDirty = false;  // the lead broke bricks the room doesn't have yet
+    let pendingBricks = [];   // bricks this player broke that the lead hasn't confirmed yet: { cell, until }
+    let me = null;            // own tank
+    let enemies = new Map();  // id → enemy (the lead's own, or as last reported by the lead)
+    let shells = new Map();   // enemy shells, id → shell
+    let gone = new Map();     // enemy shells this device saw hit something: id → until
+    let others = {};          // other players by seat: { x, y, d, alive, moving, shield, sx, sy, at, shell }
+    let header = null;        // { wave, toSpawn, lives, kills, acks: { seat: { seq, deaths, grants } } }
+    let lastSnap = null;      // the latest update from the lead
+    let lastSnapT = 0;
+    let events = [];          // this player's hits not yet confirmed by the lead: { seq, k, a, at }
+    let seq = 0;
+    let effects = [];         // explosions: { x, y, at, big }
+    let banner = null;        // { text, until }
+    let spawnIn = 0, spawnAt = 0, nextEnemy = 0, nextShell = 0, lastBrickWrite = 0, overAt = 0;
+    let baseAlive = true;
+    let predictedKills = new Map(); // enemies this player believes it killed: id → until
+    let players = 1;
+
+    const $ = (id) => document.getElementById(id);
+    const mySeat = () => (solo ? 0 : seat.seat);
+    const esc = (t) => String(t).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+    const label = (s) => (solo ? "You" : s === mySeat() ? "You" : esc(rooms.nameOf(room, s)));
+    const nowMs = () => Date.now();
+
+    // ---------- map and movement ----------
+    const cellAt = (x, y) => (x < 0 || y < 0 || x >= U || y >= U ? -1 : Math.floor(y / CELL) * N + Math.floor(x / CELL));
+    function solidForTank(i) {
+      const t = layout[i];
+      return (t === BRICK && bricks[i]) || t === STEEL || t === WATER || t === BASE;
+    }
+    function rectBlocked(x, y) {
+      if (x < 0 || y < 0 || x > U - TANK || y > U - TANK) return true;
+      for (let cy = Math.floor(y / CELL); cy <= Math.floor((y + TANK - 0.001) / CELL); cy++) {
+        for (let cx = Math.floor(x / CELL); cx <= Math.floor((x + TANK - 0.001) / CELL); cx++) if (solidForTank(cy * N + cx)) return true;
+      }
+      return false;
+    }
+    const overlap = (ax, ay, aw, bx, by, bw) => ax < bx + bw && bx < ax + aw && ay < by + bw && by < ay + aw;
+    // Moves a tank up to dist units in its direction, stopping at walls and at the given tanks (except ones it
+    // already overlaps, so tanks that spawned on top of each other can drive apart). Returns how far it went.
+    function drive(t, dist, blockers) {
+      const [dx, dy] = DIRS[t.d];
+      const stuck = blockers.filter((b) => overlap(t.x, t.y, TANK, b.x, b.y, TANK));
+      let went = 0;
+      while (went < dist - 1e-6) {
+        const step = Math.min(0.5, dist - went), nx = t.x + dx * step, ny = t.y + dy * step;
+        if (rectBlocked(nx, ny) || blockers.some((b) => !stuck.includes(b) && overlap(nx, ny, TANK, b.x, b.y, TANK))) break;
+        t.x = nx; t.y = ny; went += step;
+      }
+      return went;
+    }
+    // Turning onto the other axis lines the tank up on the half-tile grid, so it fits through one-tile gaps.
+    function turn(t, d) {
+      if (t.d === d) return;
+      if ((t.d & 1) !== (d & 1)) {
+        const nx = d & 1 ? t.x : Math.round(t.x / CELL) * CELL, ny = d & 1 ? Math.round(t.y / CELL) * CELL : t.y;
+        if (!rectBlocked(nx, ny)) { t.x = nx; t.y = ny; }
+      }
+      t.d = d;
+    }
+
+    // Moves a shell; returns what it hit: null, "out", { cells, base } (the map), or { tank } (one of targets).
+    function flyShell(s, dt, targets) {
+      const [dx, dy] = DIRS[s.d];
+      let left = s.speed * dt;
+      while (left > 0) {
+        const step = Math.min(1, left); left -= step;
+        s.x += dx * step; s.y += dy * step;
+        if (s.x < 0 || s.y < 0 || s.x >= U || s.y >= U) return "out";
+        // The leading edge and a 4-unit band across it: up to two cells, like a tank's width of bricks.
+        const tipX = s.x + dx, tipY = s.y + dy;
+        const cells = new Set();
+        for (const o of [-2, 2]) { const c = cellAt(dx ? tipX : s.x + o, dy ? tipY : s.y + o); if (c >= 0) cells.add(c); }
+        const hit = [...cells].filter((c) => (layout[c] === BRICK && bricks[c]) || layout[c] === STEEL || layout[c] === BASE);
+        if (hit.length) return { cells: hit.filter((c) => layout[c] === BRICK), base: hit.some((c) => layout[c] === BASE) };
+        for (const t of targets) if (overlap(s.x - 1, s.y - 1, 2, t.x, t.y, TANK)) return { tank: t };
+      }
+      return null;
+    }
+    const shellFrom = (t, speed) => ({ x: t.x + 4 + DIRS[t.d][0] * 4, y: t.y + 4 + DIRS[t.d][1] * 4, d: t.d, speed });
+
+    function breakBricks(cells) {
+      for (const c of cells) if (bricks[c]) { bricks[c] = 0; mapDirty = bricksDirty = true; }
+    }
+    const boom = (x, y, big = false) => effects.push({ x, y, at: nowMs(), big });
+
+    // ---------- live updates ----------
+    // Each player's live text (at most 256 characters, numbers in base 36, positions in half units):
+    //   tank: x2 y2 d1 flags1 deaths2 | shell: id1 x2 y2 d1 | events: seq2 kind1 arg2…
+    // and from the lead also
+    //   | wave2 toSpawn2 lives2 kills2 then per seat: seat1 seq2 deaths2 grants2 | enemies: id2 kind1 x2 y2 d1 hp1…
+    //   | enemy shells: id1 x2 y2 (d + 4 if fast)1…
+    // Events are this player's hits (e = an enemy id, b = a brick cell), repeated until the lead confirms them.
+    const e36 = (n, w) => { const m = 36 ** w; return ((((Math.round(n) % m) + m) % m).toString(36)).padStart(w, "0"); };
+    const d36 = (s) => parseInt(s, 36) || 0;
+    const pos = (v) => e36(Math.max(0, Math.min(U, v)) * 2, 2);
+    const unpos = (s) => d36(s) / 2;
+    const newer = (a, b) => b === undefined || ((a - b + 1296) % 1296) - 1 < 647;
+    const chunks = (s, n) => Array.from({ length: Math.floor((s || "").length / n) }, (_, i) => s.slice(i * n, i * n + n));
+
+    function encodeMine() {
+      const m = me;
+      let s = pos(m.x) + pos(m.y) + m.d + e36((m.alive ? 1 : 0) | (m.moving ? 2 : 0) | (m.shield > 0 ? 4 : 0), 1) + e36(m.deaths, 2);
+      s += "|" + (m.shell ? e36(m.shell.id, 1) + pos(m.shell.x) + pos(m.shell.y) + m.shell.d : "");
+      s += "|" + events.slice(-8).map((e) => e36(e.seq, 2) + e.k + e36(e.a, 2)).join("");
+      if (lead && header) {
+        s += "|" + e36(header.wave, 2) + e36(header.toSpawn, 2) + e36(header.lives, 2) + e36(header.kills, 2) +
+          Object.entries(header.acks).map(([st, a]) => st + e36(a.seq ?? 0, 2) + e36(a.deaths, 2) + e36(a.grants, 2)).join("");
+        s += "|" + [...enemies.values()].slice(0, 7).map((e) => e36(e.id, 2) + e.kind + pos(e.x) + pos(e.y) + e.d + e36(e.hp | (e.moving ? 8 : 0), 1)).join("");
+        s += "|" + [...shells.values()].slice(0, 7).map((b) => e36(b.id, 1) + pos(b.x) + pos(b.y) + e36(b.d + (b.speed > 80 ? 4 : 0), 1)).join("");
+      }
+      return s;
+    }
+    function decodeSlot(text) {
+      const [t = "", sh = "", ev = "", hd, en, eb] = text.split("|");
+      const out = {
+        tank: { x: unpos(t.slice(0, 2)), y: unpos(t.slice(2, 4)), d: d36(t[4]) & 3, alive: !!(d36(t[5]) & 1), moving: !!(d36(t[5]) & 2), shield: !!(d36(t[5]) & 4), deaths: d36(t.slice(6, 8)) },
+        shell: sh.length >= 6 ? { id: d36(sh[0]), x: unpos(sh.slice(1, 3)), y: unpos(sh.slice(3, 5)), d: d36(sh[5]) & 3 } : null,
+        events: chunks(ev, 5).map((c) => ({ seq: d36(c.slice(0, 2)), k: c[2], a: d36(c.slice(3, 5)) })),
+      };
+      if (hd !== undefined) {
+        const acks = {};
+        for (const c of chunks(hd.slice(8), 7)) acks[c[0]] = { seq: d36(c.slice(1, 3)), deaths: d36(c.slice(3, 5)), grants: d36(c.slice(5, 7)) };
+        out.header = { wave: d36(hd.slice(0, 2)), toSpawn: d36(hd.slice(2, 4)), lives: d36(hd.slice(4, 6)), kills: d36(hd.slice(6, 8)), acks };
+        out.enemies = chunks(en, 9).map((c) => ({ id: d36(c.slice(0, 2)), kind: d36(c[2]) & 3, x: unpos(c.slice(3, 5)), y: unpos(c.slice(5, 7)), d: d36(c[7]) & 3, hp: d36(c[8]) & 7, moving: !!(d36(c[8]) & 8) }));
+        out.shells = chunks(eb, 6).map((c) => ({ id: d36(c[0]), x: unpos(c.slice(1, 3)), y: unpos(c.slice(3, 5)), d: d36(c[5]) & 3, speed: d36(c[5]) & 4 ? KINDS[2].shell : KINDS[0].shell }));
+      }
+      return out;
+    }
+
+    // Reads everyone else's latest updates: their tanks and shells, and (from the lead) the enemies.
+    function readLive(now, dt) {
+      const slots = live ? live.slots() : {};
+      for (const [k, v] of Object.entries(slots)) {
+        const s = Number(k);
+        let o = others[s];
+        const fresh = now - v.at < 5000;
+        if (!o) o = others[s] = { x: 0, y: 0, d: 0, alive: false, shield: false, moving: false, sx: 0, sy: 0, at: 0, t: -1, shell: null, deaths: 0 };
+        o.present = fresh;
+        if (o.t !== v.t) {
+          o.t = v.t;
+          const slot = decodeSlot(v.d);
+          const wasAlive = o.alive;
+          Object.assign(o, { d: slot.tank.d, alive: slot.tank.alive, moving: slot.tank.moving, shield: slot.tank.shield, deaths: slot.tank.deaths, sx: slot.tank.x, sy: slot.tank.y, at: v.at, events: slot.events });
+          if (!o.seen || !wasAlive) { o.x = o.sx; o.y = o.sy; }
+          if (wasAlive && !o.alive) boom(o.x + 4, o.y + 4, true);
+          o.seen = true;
+          if (slot.shell && (!o.shell || o.shell.id !== slot.shell.id)) o.shell = { ...slot.shell, speed: SHELL_SPEED, at: v.at, sx: slot.shell.x, sy: slot.shell.y };
+          if (!slot.shell) o.shell = null;
+          if (s === room.turn && slot.header && !lead) applySnap(slot, v.at);
+          if (s === room.turn && slot.header) { lastSnap = slot; lastSnapT = v.at; }
+        }
+      }
+      // Smooth the other tanks towards where they were, plus how far they've driven since.
+      for (const [k, o] of Object.entries(others)) {
+        if (!slots[k]) { o.present = false; continue; }
+        const age = Math.min(0.35, (now - o.at) / 1000);
+        let tx = o.sx, ty = o.sy;
+        if (o.moving) { tx += DIRS[o.d][0] * PLAYER_SPEED * age; ty += DIRS[o.d][1] * PLAYER_SPEED * age; }
+        follow(o, tx, ty, dt);
+        if (o.shell && !o.shell.done) {
+          const sAge = (now - o.shell.at) / 1000;
+          const probe = { x: o.shell.sx, y: o.shell.sy, d: o.shell.d, speed: SHELL_SPEED };
+          const hit = flyShell(probe, sAge, []);
+          o.shell.x = probe.x; o.shell.y = probe.y;
+          if (hit) o.shell.done = true;
+        }
+      }
+    }
+    function follow(o, tx, ty, dt) {
+      if (Math.hypot(tx - o.x, ty - o.y) > 12) { o.x = tx; o.y = ty; return; }
+      const k = Math.min(1, dt * 14);
+      o.x += (tx - o.x) * k; o.y += (ty - o.y) * k;
+    }
+
+    // An update from the lead (when this device isn't the lead): the enemies, their shells and the team's lives.
+    function applySnap(snap, at) {
+      if (snap.header.wave !== wave) return;
+      header = snap.header;
+      const seen = new Set();
+      for (const e of snap.enemies) {
+        seen.add(e.id);
+        let d = enemies.get(e.id);
+        if (!d) { d = { ...e }; enemies.set(e.id, d); }
+        Object.assign(d, { kind: e.kind, d: e.d, hp: e.hp, moving: e.moving, sx: e.x, sy: e.y, at });
+      }
+      for (const [id, e] of enemies) if (!seen.has(id)) { enemies.delete(id); boom(e.x + 4, e.y + 4, true); }
+      const sSeen = new Set();
+      for (const b of snap.shells) {
+        sSeen.add(b.id);
+        if (gone.has(b.id)) continue;
+        const cur = shells.get(b.id);
+        if (cur && cur.d === b.d) Object.assign(cur, { sx: b.x, sy: b.y, at });
+        else shells.set(b.id, { ...b, sx: b.x, sy: b.y, at });
+      }
+      for (const id of shells.keys()) if (!sSeen.has(id)) shells.delete(id);
+      // Hits the lead has counted no longer need repeating.
+      const ack = header.acks[mySeat()];
+      if (ack) events = events.filter((e) => newer(e.seq, ack.seq) && e.seq !== ack.seq);
+    }
+
+    // Followers move the enemies and their shells between the lead's updates.
+    function followEnemies(now, dt) {
+      for (const e of enemies.values()) {
+        const age = Math.min(0.35, (now - e.at) / 1000);
+        let tx = e.sx, ty = e.sy;
+        if (e.moving) { tx += DIRS[e.d][0] * KINDS[e.kind].speed * age; ty += DIRS[e.d][1] * KINDS[e.kind].speed * age; }
+        follow(e, tx, ty, dt);
+      }
+      for (const [id, b] of shells) {
+        const probe = { x: b.sx, y: b.sy, d: b.d, speed: b.speed };
+        const hit = flyShell(probe, (now - b.at) / 1000, []);
+        b.x = probe.x; b.y = probe.y;
+        if (hit) { shells.delete(id); gone.set(id, now + 2000); if (hit.cells?.length || hit.base) boom(b.x, b.y); }
+      }
+    }
+
+    // ---------- the lead: enemies, waves, lives ----------
+    function becomeLead() {
+      if (lastSnap && lastSnap.header.wave === wave) {
+        header = structuredClone(lastSnap.header);
+      }
+      if (!header || header.wave !== wave) header = { wave, toSpawn: waveSize(wave, players), lives: startLives(players), kills: 0, acks: {} };
+      for (const e of enemies.values()) { e.turnIn = Math.random(); e.shellId = null; }
+      for (const b of shells.values()) b.owner = null;
+      nextEnemy = Math.max(0, ...[...enemies.keys()].map((k) => k + 1));
+      spawnIn = Math.max(spawnIn, 1);
+    }
+
+    function newWave(n) {
+      wave = n;
+      layout = layoutFor(n);
+      bricks = freshBricks(n);
+      mapDirty = true;
+      pendingBricks = [];
+      enemies.clear(); shells.clear(); gone.clear(); predictedKills.clear();
+      if (me) {
+        me.shell = null;
+        if (me.alive) Object.assign(me, spawnPoint(), { d: 0, shield: 2.5 });
+      }
+      banner = { text: `Wave ${n}`, until: nowMs() + 2000 };
+      spawnIn = 2.5;
+    }
+    function spawnPoint() {
+      const [x, y] = PLAYER_SPAWNS[mySeat() % 4];
+      return { x, y };
+    }
+
+    // Applies one player's update on the lead: their hits, and lives for their deaths.
+    function settle(st, deaths, evs) {
+      const ack = (header.acks[st] ??= { seq: undefined, deaths: 0, grants: 0 });
+      for (const e of evs || []) {
+        if (ack.seq !== undefined && !newer(e.seq, ack.seq)) continue;
+        if (ack.seq !== undefined && e.seq === ack.seq) continue;
+        if (e.k === "e") damage(e.a);
+        if (e.k === "b") breakBricks([e.a]);
+        ack.seq = e.seq;
+      }
+      if (deaths < ack.deaths) ack.deaths = ack.grants = deaths; // they rejoined
+      ack.deaths = Math.max(ack.deaths, deaths);
+      // A player who's down gets back in for one of the team's lives, as soon as there is one.
+      while (ack.grants < ack.deaths && header.lives > 0) { header.lives--; ack.grants++; }
+    }
+    function damage(id) {
+      const e = enemies.get(id);
+      if (!e) return;
+      e.hp--; e.flash = nowMs();
+      if (e.hp <= 0) { enemies.delete(id); header.kills++; boom(e.x + 4, e.y + 4, true); }
+    }
+
+    function leadStep(now, dt) {
+      // Everyone's hits and deaths
+      settle(String(mySeat()), me.deaths, []);
+      for (const [k, o] of Object.entries(others)) if (o.events) { settle(k, o.deaths, o.events); o.events = null; }
+      const blockersFor = (t) => [...enemies.values(), ...(me.alive ? [me] : []), ...Object.values(others).filter((o) => o.present && o.alive)].filter((b) => b !== t);
+      // New enemies
+      spawnIn -= dt;
+      if (header.toSpawn > 0 && enemies.size < fieldCap(players) && spawnIn <= 0) {
+        const [x, y] = ENEMY_SPAWNS[spawnAt % ENEMY_SPAWNS.length];
+        const blocked = blockersFor(null).some((b) => overlap(x, y, TANK, b.x, b.y, TANK));
+        spawnAt++;
+        if (!blocked) {
+          const kind = pickKind(wave);
+          const id = nextEnemy++ % 1296;
+          enemies.set(id, { id, kind, x, y, d: 2, hp: KINDS[kind].hp, moving: true, turnIn: 1 + Math.random() * 2, shellId: null });
+          header.toSpawn--;
+          spawnIn = Math.max(1, 2.6 - 0.12 * Math.min(wave, 10)) / (1 + 0.25 * (players - 1));
+        } else spawnIn = 0.4;
+      }
+      // Enemy moves: roll on, turn now and then (often towards the eagle or a player), shoot at random.
+      for (const e of enemies.values()) {
+        const k = KINDS[e.kind];
+        const want = k.speed * dt;
+        const went = drive(e, want, blockersFor(e));
+        e.moving = went > 0;
+        e.turnIn -= dt;
+        const stuck = went < want * 0.5;
+        if (stuck && !e.shellId && Math.random() < 0.08) fireEnemy(e);
+        if (e.turnIn <= 0 || (stuck && Math.random() < 0.15)) {
+          const targets = [{ x: BASE_X, y: BASE_Y }, ...(me.alive ? [me] : []), ...Object.values(others).filter((o) => o.present && o.alive)];
+          const t = targets[Math.floor(Math.random() * targets.length)];
+          const r = Math.random();
+          turn(e, r < 0.35 ? 2 : r < 0.65 ? (t.x > e.x ? 1 : 3) : r < 0.8 ? (t.y > e.y ? 2 : 0) : Math.floor(Math.random() * 4));
+          e.turnIn = 0.6 + Math.random() * 2;
+        }
+        if (!e.shellId && Math.random() < dt * 0.8) fireEnemy(e);
+      }
+      // Enemy shells
+      const tanks = [...(me.alive ? [me] : []), ...Object.values(others).filter((o) => o.present && o.alive && !o.shield)];
+      for (const [id, b] of shells) {
+        const hit = flyShell(b, dt, tanks);
+        if (!hit) continue;
+        shells.delete(id);
+        const owner = b.owner != null && enemies.get(b.owner);
+        if (owner && owner.shellId === id) owner.shellId = null;
+        if (hit.cells?.length) { breakBricks(hit.cells); boom(b.x, b.y); }
+        if (hit.base && baseAlive) { baseAlive = false; mapDirty = bricksDirty = true; boom(BASE_X + 4, BASE_Y + 4, true); }
+        if (hit.tank === me) hitMe();
+      }
+      for (const e of enemies.values()) if (e.shellId != null && !shells.has(e.shellId)) e.shellId = null;
+      // The wave is cleared once nobody's left to come: a bonus life, and on to the next.
+      if (header.toSpawn <= 0 && enemies.size === 0 && baseAlive && !overAt) {
+        const n = wave + 1;
+        const lives = Math.min(header.lives + 1, 35);
+        const acks = header.acks;
+        newWave(n);
+        header = { wave: n, toSpawn: waveSize(n, players), lives, kills: header.kills, acks };
+        writeRoom({ "state/wave": n, "state/bricks": encBricks(bricks) });
+        lastBrickWrite = now; bricksDirty = false;
+      }
+      // Game over: the eagle fell, or every player is down with no lives left.
+      const down = (dead, st) => dead && header.lives === 0 && (header.acks[st]?.grants ?? 0) < (header.acks[st]?.deaths ?? 0);
+      const team = [[!me.alive, String(mySeat())], ...Object.entries(others).filter(([, o]) => o.present).map(([k, o]) => [!o.alive, k])];
+      if (!overAt && (!baseAlive || team.every(([dead, st]) => down(dead, st)))) overAt = now + 1500;
+      if (overAt && now >= overAt && room.status === "playing") {
+        overAt = -1;
+        finish();
+      }
+      // Broken bricks go to the room a few times a second.
+      if (bricksDirty && now - lastBrickWrite > 300 && !solo) {
+        lastBrickWrite = now; bricksDirty = false;
+        writeRoom({ "state/bricks": encBricks(bricks), "state/base": baseAlive ? 1 : 0 });
+      }
+    }
+    function fireEnemy(e) {
+      const id = nextShell++ % 36;
+      if (shells.has(id)) return;
+      shells.set(id, { id, ...shellFrom(e, KINDS[e.kind].shell), owner: e.id });
+      e.shellId = id;
+    }
+
+    function writeRoom(fields) {
+      if (solo) return;
+      seat.backend.update(seat.code, fields).catch((err) => console.warn("room write refused", err?.message));
+    }
+    function finish() {
+      const result = Math.max(0, wave - 1);
+      if (solo) {
+        room.status = "done"; room.state.result = result; room.state.base = baseAlive ? 1 : 0;
+        onRoomChanged();
+        return;
+      }
+      writeRoom({ status: "done", "state/result": result, "state/base": baseAlive ? 1 : 0, "state/bricks": encBricks(bricks) });
+    }
+
+    // ---------- own tank ----------
+    let heldDir = null, firing = false;
+    const keysDown = [];
+    function hitMe() {
+      if (!me.alive || me.shield > 0) return;
+      me.alive = false;
+      me.deaths++;
+      me.shell = null;
+      me.respawnAt = nowMs() + 1600;
+      boom(me.x + 4, me.y + 4, true);
+      if (navigator.vibrate) try { navigator.vibrate(120); } catch {}
+    }
+    function myGrants() {
+      const a = header?.acks?.[mySeat()];
+      return a ? a.grants : 0;
+    }
+    function stepMe(now, dt) {
+      if (!me.alive) {
+        if (now >= me.respawnAt && myGrants() >= me.deaths && baseAlive) {
+          Object.assign(me, spawnPoint(), { d: 0, alive: true, shield: 2.5 });
+        }
+        return;
+      }
+      me.shield = Math.max(0, me.shield - dt);
+      me.fireIn = Math.max(0, (me.fireIn || 0) - dt);
+      const blockers = [...enemies.values(), ...Object.values(others).filter((o) => o.present && o.alive)];
+      if (heldDir !== null) {
+        turn(me, heldDir);
+        me.moving = drive(me, PLAYER_SPEED * dt, blockers) > 0;
+      } else me.moving = false;
+      if (firing && !me.shell && me.fireIn <= 0) {
+        me.shell = { id: (me.shellCount = ((me.shellCount || 0) + 1) % 36), ...shellFrom(me, SHELL_SPEED) };
+        me.fireIn = 0.2;
+      }
+      // Enemy shells that reach this tank: this device decides, from what it shows.
+      if (!lead) {
+        for (const [id, b] of shells) {
+          if (overlap(b.x - 1, b.y - 1, 2, me.x, me.y, TANK)) { shells.delete(id); gone.set(id, now + 2000); hitMe(); if (!me.alive) break; }
+        }
+      }
+    }
+    function stepMyShell(now, dt) {
+      const s = me.shell;
+      if (!s) return;
+      const targets = [...enemies.values()].filter((e) => !predictedKills.has(e.id));
+      const hit = flyShell(s, dt, targets);
+      if (!hit) return;
+      me.shell = null;
+      if (hit === "out") return;
+      if (hit.cells?.length) {
+        boom(s.x, s.y);
+        if (lead) breakBricks(hit.cells);
+        else for (const c of hit.cells) { if (bricks[c]) { bricks[c] = 0; mapDirty = true; } pendingBricks.push({ cell: c, until: now + 3000 }); report("b", c); }
+      } else if (hit.cells) boom(s.x, s.y);
+      if (hit.tank) {
+        const e = hit.tank;
+        boom(s.x, s.y);
+        if (lead) damage(e.id);
+        else {
+          report("e", e.id);
+          e.flash = now;
+          e.hits = (e.hits || 0) + 1;
+          if (e.hits >= e.hp) predictedKills.set(e.id, now + 1500);
+        }
+      }
+    }
+    function report(k, a) {
+      seq = (seq + 1) % 1296;
+      events.push({ seq, k, a, at: nowMs() });
+      if (events.length > 8) events.shift();
+    }
+
+    // ---------- the main loop ----------
+    let last = 0, raf = 0;
+    function frame(t) {
+      raf = requestAnimationFrame(frame);
+      const dt = Math.min(0.05, (t - (last || t)) / 1000);
+      last = t;
+      if (!room || !me) return;
+      const now = nowMs();
+      const playing = room.status === "playing";
+      if (playing && !(solo && document.hidden)) {
+        const nowLead = solo || (live && live.isLead());
+        if (nowLead && !lead) { lead = true; becomeLead(); }
+        if (!nowLead && lead) lead = false;
+        readLive(now, dt);
+        stepMe(now, dt);
+        stepMyShell(now, dt);
+        if (lead) leadStep(now, dt); else followEnemies(now, dt);
+        for (const [id, until] of predictedKills) if (now > until) predictedKills.delete(id);
+        for (const [id, until] of gone) if (now > until) gone.delete(id);
+        events = events.filter((e) => now - e.at < 4000);
+        if (live) live.send(encodeMine());
+      }
+      draw(now);
+      hud();
+    }
+
+    // ---------- drawing ----------
+    const canvas = $("arena");
+    const ctx = canvas.getContext("2d");
+    let px = 1; // canvas pixels per unit
+    const ground = document.createElement("canvas");
+    const gctx = ground.getContext("2d");
+    function resize() {
+      const css = canvas.getBoundingClientRect().width || 300;
+      const size = Math.round(css * Math.min(devicePixelRatio || 1, 3));
+      if (canvas.width !== size) { canvas.width = canvas.height = ground.width = ground.height = size; mapDirty = true; }
+      px = size / U;
+    }
+    new ResizeObserver(resize).observe(canvas);
+
+    function drawGround() {
+      const g = gctx, s = px;
+      g.clearRect(0, 0, ground.width, ground.height);
+      g.fillStyle = "#111113"; g.fillRect(0, 0, ground.width, ground.height);
+      for (let i = 0; i < N * N; i++) {
+        const x = (i % N) * CELL * s, y = Math.floor(i / N) * CELL * s, w = CELL * s;
+        const t = layout[i];
+        if (t === BRICK && bricks[i]) {
+          g.fillStyle = "#9c4a1e"; g.fillRect(x, y, w, w);
+          g.fillStyle = "#c46a2f"; g.fillRect(x, y, w - s * 0.4, w / 2 - s * 0.4); g.fillRect(x, y + w / 2, w / 2 - s * 0.4, w / 2 - s * 0.4); g.fillRect(x + w / 2, y + w / 2, w / 2, w / 2 - s * 0.4);
+        } else if (t === STEEL) {
+          g.fillStyle = "#7d848b"; g.fillRect(x, y, w, w);
+          g.fillStyle = "#c9ced3"; g.fillRect(x + w * 0.22, y + w * 0.22, w * 0.56, w * 0.56);
+        } else if (t === WATER) {
+          g.fillStyle = "#2457a8"; g.fillRect(x, y, w, w);
+          g.fillStyle = "#4f86d9"; g.fillRect(x + w * 0.15, y + w * 0.3, w * 0.4, s * 0.5); g.fillRect(x + w * 0.45, y + w * 0.7, w * 0.4, s * 0.5);
+        }
+      }
+      // The eagle, on its 2×2 cells.
+      const bx = BASE_X * s, by = BASE_Y * s, bw = TANK * s;
+      if (baseAlive) {
+        g.fillStyle = "#d8d8dc";
+        g.beginPath(); g.moveTo(bx + bw * 0.5, by + bw * 0.12); g.lineTo(bx + bw * 0.92, by + bw * 0.5); g.lineTo(bx + bw * 0.62, by + bw * 0.5);
+        g.lineTo(bx + bw * 0.62, by + bw * 0.9); g.lineTo(bx + bw * 0.38, by + bw * 0.9); g.lineTo(bx + bw * 0.38, by + bw * 0.5); g.lineTo(bx + bw * 0.08, by + bw * 0.5); g.closePath(); g.fill();
+        g.fillStyle = "#e0a019"; g.beginPath(); g.arc(bx + bw * 0.5, by + bw * 0.38, bw * 0.1, 0, 7); g.fill();
+      } else {
+        g.fillStyle = "#3a3a3e"; g.fillRect(bx + bw * 0.1, by + bw * 0.45, bw * 0.8, bw * 0.45);
+        g.strokeStyle = "#777"; g.lineWidth = s * 0.6; g.beginPath(); g.moveTo(bx + bw * 0.2, by + bw * 0.2); g.lineTo(bx + bw * 0.8, by + bw * 0.85); g.moveTo(bx + bw * 0.8, by + bw * 0.2); g.lineTo(bx + bw * 0.2, by + bw * 0.85); g.stroke();
+      }
+      mapDirty = false;
+    }
+
+    function drawTank(x, y, d, colour, opts = {}) {
+      const s = px;
+      ctx.save();
+      ctx.translate((x + 4) * s, (y + 4) * s);
+      ctx.rotate(d * Math.PI / 2);
+      if (opts.blink) ctx.globalAlpha = 0.45;
+      ctx.fillStyle = "#2c2c30";
+      ctx.fillRect(-4 * s, -4 * s, 2.2 * s, 8 * s); ctx.fillRect(1.8 * s, -4 * s, 2.2 * s, 8 * s);
+      ctx.fillStyle = "#56565c";
+      const off = ((opts.track || 0) % 2) * s;
+      for (let k = -4; k < 4; k += 2) { ctx.fillRect(-4 * s, (k + 0.3) * s + off * 0.5, 2.2 * s, 0.6 * s); ctx.fillRect(1.8 * s, (k + 0.3) * s + off * 0.5, 2.2 * s, 0.6 * s); }
+      ctx.fillStyle = opts.flash ? "#ffffff" : colour;
+      ctx.fillRect(-2.4 * s, -3 * s, 4.8 * s, 6.4 * s);
+      ctx.fillStyle = "rgba(0,0,0,0.28)";
+      ctx.beginPath(); ctx.arc(0, 0.5 * s, 1.8 * s, 0, 7); ctx.fill();
+      ctx.fillStyle = opts.flash ? "#ffffff" : colour;
+      ctx.beginPath(); ctx.arc(0, 0.5 * s, 1.35 * s, 0, 7); ctx.fill();
+      ctx.fillStyle = "#3a3a40";
+      ctx.fillRect(-0.55 * s, -4.6 * s, 1.1 * s, 4.4 * s);
+      ctx.restore();
+      if (opts.shield) {
+        ctx.strokeStyle = `rgba(255,255,255,${0.5 + 0.4 * Math.sin(nowMs() / 60)})`; ctx.lineWidth = s * 0.5;
+        ctx.strokeRect((x - 0.6) * s, (y - 0.6) * s, (TANK + 1.2) * s, (TANK + 1.2) * s);
+      }
+    }
+    const seatColour = (s) => getComputedStyle(document.documentElement).getPropertyValue(`--p${s % 4}`).trim() || "#e8b730";
+    let colours = [0, 1, 2, 3].map(seatColour);
+    matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { colours = [0, 1, 2, 3].map(seatColour); });
+
+    function drawShell(x, y) {
+      ctx.fillStyle = "#f4f4f4";
+      ctx.fillRect((x - 0.9) * px, (y - 0.9) * px, 1.8 * px, 1.8 * px);
+    }
+
+    function draw(now) {
+      if (mapDirty) drawGround();
+      ctx.drawImage(ground, 0, 0);
+      if (room.status === "waiting") return;
+      // Tanks
+      for (const e of enemies.values()) {
+        if (predictedKills.has(e.id)) continue;
+        const k = KINDS[e.kind];
+        const colour = e.kind === 3 ? ["#6f7484", "#c75b5b", "#b9a04a", "#7f9d6a", "#6f7484"][Math.max(0, Math.min(4, e.hp))] : k.colour;
+        drawTank(e.x, e.y, e.d, colour, { flash: e.flash && now - e.flash < 90, track: (e.x + e.y) });
+      }
+      for (const [k, o] of Object.entries(others)) if (o.present && o.alive) drawTank(o.x, o.y, o.d, colours[k % 4], { shield: o.shield, track: o.x + o.y });
+      if (me.alive) drawTank(me.x, me.y, me.d, colours[mySeat() % 4], { shield: me.shield > 0, track: me.x + me.y });
+      // Shells
+      for (const b of shells.values()) drawShell(b.x, b.y);
+      for (const o of Object.values(others)) if (o.present && o.shell && !o.shell.done) drawShell(o.shell.x, o.shell.y);
+      if (me.shell) drawShell(me.shell.x, me.shell.y);
+      // Trees on top
+      ctx.fillStyle = "#2f7a34";
+      for (let i = 0; i < N * N; i++) {
+        if (layout[i] !== TREES) continue;
+        const x = (i % N) * CELL * px, y = Math.floor(i / N) * CELL * px, w = CELL * px;
+        ctx.globalAlpha = 0.93;
+        ctx.fillStyle = "#2f7a34"; ctx.fillRect(x, y, w, w);
+        ctx.fillStyle = "#4ea152";
+        ctx.beginPath(); ctx.arc(x + w * 0.3, y + w * 0.3, w * 0.22, 0, 7); ctx.arc(x + w * 0.72, y + w * 0.6, w * 0.24, 0, 7); ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+      // Explosions
+      effects = effects.filter((f) => now - f.at < 450);
+      for (const f of effects) {
+        const p = (now - f.at) / 450, r = (f.big ? 7 : 3) * (0.4 + p) * px;
+        ctx.globalAlpha = 1 - p;
+        ctx.fillStyle = "#ffb13b"; ctx.beginPath(); ctx.arc(f.x * px, f.y * px, r, 0, 7); ctx.fill();
+        ctx.fillStyle = "#fff3c4"; ctx.beginPath(); ctx.arc(f.x * px, f.y * px, r * 0.5, 0, 7); ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+      // Banner
+      const text = banner && now < banner.until ? banner.text : room.status === "done" ? "GAME OVER" : null;
+      if (text) {
+        ctx.font = `800 ${Math.round(9 * px)}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillStyle = "rgba(0,0,0,0.55)"; ctx.fillText(text, 52.5 * px, 46.5 * px);
+        ctx.fillStyle = room.status === "done" ? "#ff6a5f" : "#ffffff"; ctx.fillText(text, 52 * px, 46 * px);
+      }
+    }
+
+    let hudText = "";
+    function hud() {
+      if (!header || room.status === "waiting") return;
+      const left = header.toSpawn + enemies.size;
+      const t = `${wave}|${header.lives}|${left}|${me.alive}|${myGrants() >= me.deaths}`;
+      if (t === hudText) return;
+      hudText = t;
+      $("hud-wave").textContent = `Wave ${wave}`;
+      $("hud-lives").textContent = `❤ ${header.lives} spare`;
+      $("hud-left").textContent = `Enemies ${left}`;
+      $("hint").textContent = me.alive ? "" : myGrants() >= me.deaths ? "Back in a moment…" : "Out of lives: hold on, clearing a wave brings you back.";
+      renderPlayers();
+    }
+
+    // ---------- rooms and screens ----------
+    function setBusy(b) { for (const id of ["create", "join", "local"]) $(id).disabled = b; }
+
+    function resetRound() {
+      round = room.round ?? 0;
+      players = solo ? 1 : Math.max(1, rooms.playerCount(room));
+      wave = room.state?.wave || 1;
+      layout = layoutFor(wave);
+      bricks = room.state?.bricks ? decBricks(room.state.bricks, wave) : freshBricks(wave);
+      baseAlive = room.state?.base !== 0;
+      mapDirty = true;
+      pendingBricks = [];
+      enemies = new Map(); shells = new Map(); gone = new Map(); predictedKills = new Map();
+      for (const o of Object.values(others)) { o.shell = null; o.events = null; }
+      events = []; seq = 0; effects = []; overAt = 0; spawnIn = 2.5; spawnAt = 0; nextEnemy = 0;
+      header = { wave, toSpawn: waveSize(wave, players), lives: startLives(players), kills: 0, acks: {} };
+      lastSnap = null;
+      lead = false;
+      me = { ...spawnPoint(), d: 0, alive: true, moving: false, shield: 2.5, deaths: 0, shell: null, respawnAt: 0 };
+      banner = { text: `Wave ${wave}`, until: nowMs() + 2000 };
+      hudText = "";
+      saved = false;
+    }
+
+    // The room changed (or, solo, the game ended).
+    function onRoomChanged() {
+      const r = room;
+      const waiting = r.status === "waiting";
+      $("waiting").hidden = !waiting;
+      $("play").hidden = waiting;
+      if (waiting) { renderLobby(); renderPlayers(); return; }
+      if (r.round !== round || !me) resetRound();
+      // A new wave, or bricks broken: the lead's own map is the true one while it leads.
+      if (!lead && r.status === "playing") {
+        if ((r.state?.wave || 1) !== wave) newWave(r.state.wave);
+        if (r.state?.bricks) {
+          const now = nowMs();
+          bricks = decBricks(r.state.bricks, wave);
+          pendingBricks = pendingBricks.filter((p) => p.until > now);
+          for (const p of pendingBricks) bricks[p.cell] = 0;
+          mapDirty = true;
+        }
+        if (r.state?.base === 0 && baseAlive) { baseAlive = false; mapDirty = true; }
+      }
+      if (r.status === "done" && !lead) {
+        if (r.state?.base === 0) baseAlive = false;
+        if (r.state?.bricks) bricks = decBricks(r.state.bricks, wave);
+        mapDirty = true;
+      }
+      renderOver();
+      renderPlayers();
+    }
+
+    function renderPlayers() {
+      if (!room) return;
+      $("room-label").innerHTML = solo ? "Solo" : `Room <b>${seat.code}</b>`;
+      if (solo) { $("players").innerHTML = ""; return; }
+      const seats = rooms.seatList(room);
+      $("players").innerHTML = seats.map((uid, s) => {
+        if (!uid) return "";
+        const isMe = s === mySeat();
+        const o = others[s];
+        const down = room.status === "playing" && (isMe ? !me?.alive : o && !o.alive);
+        return `<span class="chip${room.status === "playing" && room.turn === s ? " lead" : ""}${down ? " out" : ""}" style="--pc: var(--p${s % 4})"><span class="disc"></span>${label(s)}` +
+          `<span class="dot${rooms.isOnline(room, s) ? " on" : ""}"></span></span>`;
+      }).join("");
+    }
+
+    function renderLobby() {
+      const r = room, seats = rooms.seatList(r), count = rooms.playerCount(r), host = mySeat() === 0;
+      $("waiting-code").textContent = seat.code;
+      $("seated").innerHTML = seats.map((uid, s) => uid ? `<div><span class="chip" style="--pc: var(--p${s % 4})"><span class="disc"></span>${label(s)}${s === mySeat() && rooms.nameOf(r, s) !== `P${s + 1}` ? ` (${esc(rooms.nameOf(r, s))})` : ""}${s === 0 ? " (host)" : ""}</span></div>` : "").join("");
+      $("start-btn").hidden = !host;
+      $("start-btn").disabled = count < 2;
+      $("start-btn").textContent = count < 2 ? "Waiting for a friend…" : `Start with ${count} players`;
+      $("waiting-note").textContent = host ? `${count} of ${r.seats} here. Start when everyone's in.` : `${count} of ${r.seats} here. The host starts the game.`;
+    }
+
+    let saved = false;
+    function renderOver() {
+      const done = room.status === "done";
+      $("over").hidden = !done;
+      $("controls").hidden = done;
+      if (!done) return;
+      const n = room.state?.result ?? 0;
+      $("over-title").textContent = room.state?.base === 0 ? "The eagle fell" : "Out of tanks";
+      $("over-text").textContent = n ? `Your team cleared ${n} wave${n === 1 ? "" : "s"}.` : "No waves cleared this time.";
+      $("save-form").hidden = !n || saved;
+      $("save-btn").textContent = `Save ${n}`;
+      if (!$("save-name").value) $("save-name").value = rooms.cleanName(rooms.myName());
+      if (solo) { $("rematch").disabled = false; $("rematch").textContent = "Play again"; return; }
+      const seats = rooms.seatList(room);
+      const ready = rooms.wantsAgain(room, mySeat());
+      const waitingOn = seats.flatMap((u, s) => (u && s !== mySeat() && rooms.isOnline(room, s) && !rooms.wantsAgain(room, s) ? [label(s)] : []));
+      $("rematch").disabled = ready;
+      $("rematch").textContent = ready ? `Waiting for ${waitingOn.join(", ") || "others"}…` : "Play again";
+    }
+
+    const freshState = (wave = 1) => ({ wave, bricks: encBricks(freshBricks(wave)), base: 1 });
+
+    function enterGame() {
+      $("home").hidden = true;
+      $("game").hidden = false;
+      setBusy(false);
+      round = -1; me = null; others = {}; lead = false;
+      if (!raf) { last = 0; raf = requestAnimationFrame(frame); }
+      requestAnimationFrame(resize);
+    }
+    function startSolo() {
+      solo = true; seat = null;
+      room = { status: "playing", round: 0, turn: 0, state: freshState() };
+      enterGame();
+      onRoomChanged();
+    }
+    function startOnline(s) {
+      solo = false; seat = s;
+      enterGame();
+      leaveRoom = rooms.enter(s, (value) => { room = value; onRoomChanged(); }, showHome);
+      live = rooms.joinLive(s);
+    }
+    function showHome(error = "") {
+      if (live) live.stop();
+      if (leaveRoom) leaveRoom();
+      live = leaveRoom = null;
+      cancelAnimationFrame(raf); raf = 0;
+      seat = room = me = null; solo = false;
+      $("game").hidden = true;
+      $("home").hidden = false;
+      $("home-error").textContent = error;
+      setBusy(false);
+    }
+
+    async function createRoom() {
+      setBusy(true);
+      $("home-error").textContent = "";
+      await rooms.setMyName($("my-name").value);
+      try {
+        startOnline(await rooms.createRoom(GAME, { seats: 4, min: 2, auto: false, live: true, liveHz: 6, makeRoom: () => ({ turn: 0, state: freshState() }) }));
+      } catch (err) {
+        console.error(err);
+        showHome(err instanceof rooms.RoomError ? err.message : "Couldn't create a room. Check your connection and try again.");
+      }
+    }
+    async function joinRoom(code) {
+      setBusy(true);
+      $("home-error").textContent = "";
+      await rooms.setMyName($("my-name").value);
+      try {
+        startOnline(await rooms.joinRoom(GAME, code));
+      } catch (err) {
+        console.error(err);
+        showHome(err instanceof rooms.RoomError ? err.message : "Couldn't join. Check your connection and try again.");
+      }
+    }
+    async function startMatch() {
+      $("start-btn").disabled = true;
+      try {
+        await rooms.startGame(seat, (r) => ({ ...r, turn: 0, state: freshState() }));
+      } catch (err) {
+        console.error(err);
+        $("waiting-note").textContent = err instanceof rooms.RoomError ? err.message : "Couldn't start. Try again.";
+        $("start-btn").disabled = false;
+      }
+    }
+    async function rematch() {
+      if (solo) { room = { status: "playing", round: room.round + 1, turn: 0, state: freshState() }; onRoomChanged(); return; }
+      $("rematch").disabled = true;
+      try {
+        await rooms.playAgain(seat, (cur, r) => ({ ...cur, round: r, status: "playing", turn: mySeat(), state: freshState() }));
+      } catch (err) { console.error(err); $("rematch").disabled = false; }
+    }
+
+    // ---------- leaderboard ----------
+    // Waves cleared, best first. A score is a whole number of waves, saved by each player for their team's game.
+    const fmt = (n) => `${n} wave${Number(n) === 1 ? "" : "s"}`;
+    const sheet = topTen({ game: GAME, rooms: async () => rooms, button: $("trophy"), format: fmt });
+    const validScore = (n) => Number.isInteger(n) && n >= 1 && n <= 999;
+    $("save-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const n = room?.state?.result;
+      const name = rooms.cleanName($("save-name").value);
+      if (!rooms.NAME_RE.test(name)) { $("save-msg").textContent = "Pick a name of up to 12 letters, numbers or spaces."; return; }
+      if (!validScore(n)) { $("save-msg").textContent = "Nothing to save."; return; }
+      $("save-btn").disabled = true;
+      $("save-msg").textContent = "Saving…";
+      try {
+        await rooms.saveScore(GAME, name, n, { order: "high" });
+        saved = true;
+        sheet.stale();
+        $("save-msg").textContent = `Saved ${fmt(n)} as ${name}. Tap 🏆 to see the Top 10.`;
+        renderOver();
+      } catch (err) {
+        console.error(err);
+        $("save-msg").textContent = err instanceof rooms.RoomError ? err.message : "Couldn't save: no connection?";
+      } finally { $("save-btn").disabled = false; }
+    });
+
+    // ---------- controls ----------
+    const pad = $("pad"), padKeys = [...pad.querySelectorAll("i")];
+    let padPointer = null;
+    function padDir(e) {
+      const r = pad.getBoundingClientRect();
+      const dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+      if (Math.hypot(dx, dy) < 14) return null;
+      return Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 1 : 3) : (dy > 0 ? 2 : 0);
+    }
+    function setDir(d) {
+      heldDir = d;
+      for (const k of padKeys) k.classList.toggle("on", Number(k.dataset.d) === d);
+    }
+    pad.addEventListener("pointerdown", (e) => { padPointer = e.pointerId; pad.setPointerCapture(e.pointerId); setDir(padDir(e)); e.preventDefault(); });
+    pad.addEventListener("pointermove", (e) => { if (e.pointerId === padPointer) setDir(padDir(e)); });
+    for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) pad.addEventListener(ev, (e) => { if (e.pointerId === padPointer) { padPointer = null; setDir(keysDown.length ? keysDown[keysDown.length - 1] : null); } });
+    const fire = $("fire");
+    const setFire = (on) => { firing = on; fire.classList.toggle("on", on); };
+    fire.addEventListener("pointerdown", (e) => { fire.setPointerCapture(e.pointerId); setFire(true); e.preventDefault(); });
+    for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) fire.addEventListener(ev, () => setFire(false));
+    for (const el of [pad, fire, canvas]) el.addEventListener("contextmenu", (e) => e.preventDefault());
+    const KEYS = { ArrowUp: 0, KeyW: 0, ArrowRight: 1, KeyD: 1, ArrowDown: 2, KeyS: 2, ArrowLeft: 3, KeyA: 3 };
+    addEventListener("keydown", (e) => {
+      if (!me || e.target.closest?.("input")) return;
+      if (e.code in KEYS) {
+        const d = KEYS[e.code];
+        if (!keysDown.includes(d)) keysDown.push(d);
+        setDir(d); e.preventDefault();
+      } else if (e.code === "Space" || e.code === "KeyJ") { setFire(true); e.preventDefault(); }
+    });
+    addEventListener("keyup", (e) => {
+      if (e.code in KEYS) {
+        const i = keysDown.indexOf(KEYS[e.code]); if (i >= 0) keysDown.splice(i, 1);
+        if (padPointer === null) setDir(keysDown.length ? keysDown[keysDown.length - 1] : null);
+      } else if (e.code === "Space" || e.code === "KeyJ") setFire(false);
+    });
+    addEventListener("blur", () => { keysDown.length = 0; setDir(null); setFire(false); });
+
+    // ---------- wiring ----------
+    $("my-name").value = rooms.myName();
+    $("my-name").addEventListener("change", () => { $("my-name").value = rooms.cleanName($("my-name").value); });
+    $("local").addEventListener("click", () => { rooms.setMyName($("my-name").value); startSolo(); });
+    $("create").addEventListener("click", createRoom);
+    $("join-form").addEventListener("submit", (e) => { e.preventDefault(); joinRoom($("join-code").value); });
+    $("join-code").addEventListener("input", () => {
+      $("join-code").value = $("join-code").value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+      $("home-error").textContent = "";
+    });
+    $("start-btn").addEventListener("click", startMatch);
+    $("rematch").addEventListener("click", rematch);
+    $("leave").addEventListener("click", async () => {
+      if (solo || !seat) return showHome();
+      $("leave").disabled = true;
+      const s = seat;
+      if (live) { live.stop(); live = null; }
+      await rooms.quit(s);
+      $("leave").disabled = false;
+      showHome();
+    });
+    $("share").addEventListener("click", async () => {
+      if ((await rooms.share(seat.code, "Tanks")) === "copied") $("share").textContent = "Link copied";
+    });
+    $("copy").addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(seat.code); $("copy").textContent = "Copied"; } catch { prompt("Room code:", seat.code); }
+      setTimeout(() => ($("copy").textContent = "Copy code"), 1500);
+    });
+
+    // Opening a shared link (?room=CODE) joins straight away.
+    const linked = rooms.roomFromUrl();
+    if (linked) { $("join-code").value = linked.toUpperCase(); joinRoom(linked); }
+
+    // Hooks for automated tests.
+    window.__tanks = {
+      rooms, encodeMine, decodeSlot,
+      get room() { return room; }, get seat() { return seat; }, get lead() { return lead; }, get me() { return me; },
+      get wave() { return wave; }, get header() { return header; }, get enemies() { return [...enemies.values()]; },
+      get others() { return others; }, get bricks() { return bricks; },
+      hold: (d) => setDir(d), fire: (on) => setFire(on), report,
+      clearWave: () => { if (!lead) return false; enemies.clear(); header.toSpawn = 0; return true; },
+      dropBase: () => { if (!lead) return false; baseAlive = false; mapDirty = bricksDirty = true; return true; },
+    };
+  </script>
+</body>
+</html>
