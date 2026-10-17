@@ -92,7 +92,17 @@ secret goal) goes in private data: one string per seat, ≤ 512 chars, readable 
 - Leaderboards are generic: a name (1–12 letters, numbers, spaces), any number as the score, at most one save
   every 5 seconds. **What a valid score is belongs in your game** (2048 checks it's even and possible, for example).
 
-## Real-time games (`live: true`)
+## Real-time games on the game server (preferred)
+
+For games where everyone plays at once, run the game on the game server (`worker/`, see `worker/README.md`) rather
+than on a player's phone: no phone is in charge, so a player switching apps or losing signal only affects their own
+tank. The room and lobby work as usual on Firebase; once it's playing, connect with `shared/server.js`
+(`server.connect(seat, room, { onState, onStatus })`, `send(msg)`, `close()`), and write the game's rules as a
+module in `worker/src/games/<name>.js` (listed in `worker/src/games.js`). That module is part of the game's PR (the
+one exception to "only `projects/<name>/`"). Test it with `tests/e2e/<name>.cjs`: `tests/e2e.cjs` runs the server
+locally. Keep the page's own solo mode working without the server.
+
+## Real-time games without the server (`live: true`)
 
 For games where everyone plays at once (a co-op tank game, say). The room works as usual (lobby, names, Play again),
 but the fast-changing parts go through `joinLive`, kept apart from the room so updates don't resend it:

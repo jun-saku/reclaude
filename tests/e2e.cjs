@@ -2,7 +2,8 @@
 // Each browser context is a separate anonymous player. Firebase's CDN files are served from the npm
 // package (same files, same version), so no internet access is needed.
 // One file per game (or engine feature) in e2e/<name>.cjs; this file serves _site and runs them.
-// Run: node scripts/build.mjs && cd tests && npm install && npm run e2e   (needs Java and Playwright with Chromium)
+// Run: node scripts/build.mjs && cd tests && npm install && npm run e2e   (needs Java and Playwright with Chromium; the
+// game server's tests also need `cd worker && npm ci`, and this file starts that server locally)
 // Only some: E2E=wall-race,engine npm run e2e   (names are file names in e2e/; CI picks them from what a PR changed,
 // see pick-e2e.mjs)
 const { chromium } = (() => {
@@ -27,8 +28,28 @@ const server = http.createServer((req, res) => {
   res.writeHead(200, { 'content-type': TYPES[path.extname(f)] || 'application/octet-stream' });
   fs.createReadStream(f).pipe(res);
 });
+// The game server (worker/), run locally against the emulator, for the games that use it. It forgets an empty room's
+// game after 4 seconds here (10 minutes when live), so the tests can check that too.
+function startGameServer() {
+  const dir = path.join(__dirname, '..', 'worker');
+  if (!fs.existsSync(path.join(dir, 'node_modules', '.bin', 'wrangler'))) {
+    console.log('(no game server: run `cd worker && npm ci` for the tests that need it)');
+    return Promise.resolve(null);
+  }
+  const proc = require('child_process').spawn(path.join(dir, 'node_modules', '.bin', 'wrangler'),
+    ['dev', '--var', 'EMULATOR:1', '--var', 'KEEP_MS:4000', '--port', '8787', '--ip', '127.0.0.1', '--log-level', 'warn'], { cwd: dir, stdio: ['ignore', 'pipe', 'pipe'] });
+  proc.stderr.on('data', (d) => process.stderr.write(`[game server] ${d}`));
+  return new Promise((resolve) => {
+    const start = Date.now();
+    const poll = () => http.get('http://127.0.0.1:8787/', () => resolve(proc)).on('error', () => {
+      if (Date.now() - start > 60000) { console.log('(the game server did not start)'); resolve(proc); } else setTimeout(poll, 300);
+    });
+    poll();
+  });
+}
 (async () => {
   await new Promise((r) => server.listen(PORT, r));
+  const gameServer = await startGameServer();
   const b = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined }); const out = process.env.SCREENSHOTS || require('os').tmpdir();
   const errs = [];
   const ctxs = [];
@@ -57,5 +78,6 @@ const server = http.createServer((req, res) => {
   console.log('\nFAILS:', fails);
   await b.close();
   server.close();
+  if (gameServer) gameServer.kill();
   process.exit(fails ? 1 : 0);
 })();

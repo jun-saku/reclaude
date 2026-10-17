@@ -1,0 +1,17 @@
+# The game server for real-time online games: one Durable Object per game room. See README.md.
+# Deployed from main by .github/workflows/pages.yml (job "worker"); run locally with `npm run dev`.
+name = "reclaude-games"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+# Reached at play.reclaude.junsaku.dev: a custom domain added once in the Cloudflare dashboard (Workers & Pages →
+# reclaude-games → Settings → Domains & Routes), so the deploy token needs only "Workers Scripts: Edit".
+workers_dev = false
+
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "GameRoom"
+
+# The free plan runs only SQLite-backed Durable Objects.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["GameRoom"]

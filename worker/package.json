@@ -1,0 +1,13 @@
+{
+  "name": "reclaude-games",
+  "private": true,
+  "type": "module",
+  "description": "The game server for real-time online games (Cloudflare Worker + Durable Objects). See README.md.",
+  "scripts": {
+    "dev": "wrangler dev --var EMULATOR:1 --port 8787 --ip 127.0.0.1",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "4.151.1"
+  }
+}
