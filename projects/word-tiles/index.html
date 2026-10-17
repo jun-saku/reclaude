@@ -1,0 +1,905 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#161618" media="(prefers-color-scheme: dark)">
+  <title>Word Tiles</title>
+  <meta name="description" content="Build crossing words on a 15×15 board with letter tiles, online with friends or on one phone.">
+  <style>
+    :root {
+      --bg: #f7f6f3;
+      --panel: #ffffff;
+      --soft: #ebe7df;
+      --line: #e1ddd5;
+      --text: #1d1d1f;
+      --muted: #6b6b70;
+      --accent: #c2571a;
+      --danger: #cf3f3f;
+      --good: #2f9a5c;
+      --square: #e7e1d3;
+      --tw: #d9604f;
+      --dw: #eba59a;
+      --tl: #4f86c6;
+      --dl: #a9c8e8;
+      --tile: #f6e7c4;
+      --tile-edge: #d8c08d;
+      --tile-text: #2b2620;
+      color-scheme: light;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #161618;
+        --panel: #1f1f22;
+        --soft: #2c2c31;
+        --line: #333338;
+        --text: #ececef;
+        --muted: #9a9aa2;
+        --accent: #f08a4b;
+        --danger: #e05a5a;
+        --good: #3fb874;
+        --square: #2a2a2e;
+        --tw: #a8463a;
+        --dw: #7a4943;
+        --tl: #2f5f96;
+        --dl: #36506c;
+        --tile: #e9d5a8;
+        --tile-edge: #b49a63;
+        --tile-text: #231f19;
+        color-scheme: dark;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      justify-content: center;
+      -webkit-tap-highlight-color: transparent;
+    }
+    main {
+      width: 100%;
+      max-width: 560px;
+      padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    section { display: flex; flex-direction: column; gap: 12px; }
+    section[hidden] { display: none; }
+    h1 { margin: 0; font-size: clamp(1.8rem, 9vw, 2.4rem); line-height: 1.05; font-weight: 800; letter-spacing: -0.02em; }
+    h2 { margin: 0; font-size: 1.05rem; }
+    p { margin: 0; }
+    .muted { color: var(--muted); }
+    button {
+      font: inherit; font-weight: 650; font-size: 0.95rem; padding: 10px 14px; border-radius: 12px; border: 0;
+      background: var(--accent); color: #fff; cursor: pointer; touch-action: manipulation; white-space: nowrap;
+    }
+    button.secondary { background: var(--soft); color: var(--text); }
+    button:disabled { opacity: 0.45; cursor: default; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+    .card[hidden] { display: none; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .row > button { flex: 1; }
+    .row[hidden] { display: none; }
+    .join { display: flex; gap: 10px; }
+    .join input {
+      flex: 1; min-width: 0; font: inherit; font-size: 1.3rem; letter-spacing: 0.3em; text-transform: uppercase; text-align: center;
+      padding: 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--text);
+    }
+    .error { color: var(--danger); font-size: 0.95rem; }
+    .error:empty { display: none; }
+    .seg { display: flex; background: var(--soft); border-radius: 12px; padding: 4px; gap: 4px; flex: 1; }
+    .seg button { flex: 1; background: transparent; color: var(--text); padding: 8px 6px; }
+    .seg button[aria-pressed="true"] { background: var(--panel); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+    .name-row { display: flex; align-items: center; gap: 10px; font-weight: 650; }
+    .name-row span { white-space: nowrap; }
+    .name-row input {
+      flex: 1; min-width: 0; font: inherit; font-weight: 500; padding: 10px 12px; border-radius: 12px;
+      border: 1px solid var(--line); background: var(--bg); color: var(--text);
+    }
+    .rules { font-size: 0.9rem; color: var(--muted); }
+    .rules summary { font-weight: 650; color: var(--text); cursor: pointer; }
+    .rules ul { margin: 8px 0 0; padding-left: 1.2em; }
+
+    /* ---------- game ---------- */
+    .bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .players { display: flex; gap: 6px; flex-wrap: wrap; }
+    .chip {
+      display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px;
+      background: var(--soft); font-size: 0.85rem; font-weight: 600; border: 2px solid transparent;
+    }
+    .chip.turn { border-color: var(--accent); }
+    .chip b { font-variant-numeric: tabular-nums; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); opacity: 0.4; }
+    .dot.on { background: var(--good); opacity: 1; }
+    .code { font-size: 0.85rem; color: var(--muted); }
+    .code b { font-size: 1.05rem; letter-spacing: 0.15em; color: var(--text); }
+    .bigcode { font-size: 2.6rem; font-weight: 800; letter-spacing: 0.25em; text-align: center; }
+    .seated { display: flex; flex-direction: column; gap: 6px; }
+    .status { text-align: center; font-weight: 700; font-size: 1.05rem; }
+    .hint { text-align: center; font-size: 0.9rem; color: var(--muted); min-height: 1.3em; }
+    .hint.bad { color: var(--danger); }
+    .hint.good { color: var(--good); font-weight: 650; }
+
+    .board-wrap { position: relative; aspect-ratio: 1; overflow: auto; border-radius: 12px; background: var(--line); -webkit-overflow-scrolling: touch; }
+    .board {
+      width: 100%; aspect-ratio: 1; display: grid; grid-template-columns: repeat(15, minmax(0, 1fr)); gap: 1px; padding: 1px;
+      container-type: inline-size;
+    }
+    .board.zoom { width: 210%; }
+    .sq {
+      position: relative; padding: 0; border-radius: 2px; background: var(--square); color: var(--muted);
+      font-size: 2.2cqi; font-weight: 700; display: grid; place-items: center; min-width: 0; line-height: 1;
+    }
+    .sq.tw { background: var(--tw); color: #fff; }
+    .sq.dw, .sq.star { background: var(--dw); color: #fff; }
+    .sq.tl { background: var(--tl); color: #fff; }
+    .sq.dl { background: var(--dl); color: #fff; }
+    .sq.star { font-size: 4cqi; }
+    .sq.tile, .rack .tile {
+      background: var(--tile); color: var(--tile-text); box-shadow: inset 0 -2px 0 var(--tile-edge); border-radius: 3px;
+      font-size: 4.4cqi; font-weight: 800;
+    }
+    .sq.tile sub, .rack .tile sub { position: absolute; right: 8%; bottom: 4%; font-size: 0.45em; font-weight: 700; }
+    .sq.tile.blank, .rack .tile.blank { color: var(--accent); }
+    .sq.tile.new { box-shadow: inset 0 0 0 2px var(--accent); }
+    .sq.tile.last { box-shadow: inset 0 -2px 0 var(--tile-edge), 0 0 0 2px var(--good); z-index: 1; }
+    .sq.target { outline: 2px dashed var(--accent); outline-offset: -2px; }
+
+    .rack {
+      display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; padding: 8px; border-radius: 14px; background: var(--soft);
+      container-type: inline-size; min-height: 64px;
+    }
+    .rack .tile {
+      position: relative; aspect-ratio: 1; padding: 0; font-size: 7cqi; border-radius: 8px; box-shadow: inset 0 -3px 0 var(--tile-edge);
+    }
+    .rack .tile.sel { transform: translateY(-4px); box-shadow: inset 0 -3px 0 var(--tile-edge), 0 0 0 3px var(--accent); }
+    .rack .tile.swap { opacity: 0.45; box-shadow: inset 0 0 0 3px var(--danger); }
+    .rack .tile.gone { visibility: hidden; }
+    .rack.hidden-rack .tile { visibility: hidden; }
+    .rack[hidden] { display: none; }
+
+    .overlay {
+      position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 24px;
+      background: rgba(0, 0, 0, 0.45);
+    }
+    .overlay[hidden] { display: none; }
+    .overlay .card { width: min(100%, 360px); text-align: center; }
+    .letters { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+    .letters button { padding: 8px 0; background: var(--tile); color: var(--tile-text); font-weight: 800; }
+    .scores { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+    .scores li { display: flex; justify-content: space-between; padding: 6px 10px; border-radius: 10px; background: var(--soft); font-variant-numeric: tabular-nums; }
+
+    .home-link {
+      align-self: flex-start; display: inline-flex; align-items: center; gap: 2px; margin: -6px 0 -6px -6px; padding: 6px;
+      color: var(--muted); font-size: 0.9rem; font-weight: 600; text-decoration: none; border-radius: 8px;
+    }
+    .home-link:active { opacity: 0.6; }
+    main:has(#home[hidden]) .home-link { display: none; }
+  </style>
+</head>
+<body>
+  <main>
+    <a class="home-link" href="../games/">‹ All games</a>
+    <h1>Word Tiles</h1>
+
+    <section id="home">
+      <p class="muted">Take turns building crossing words on the board. Every word must be real, and premium squares multiply your points.</p>
+      <div class="card">
+        <label class="name-row"><span>Your name</span>
+          <input id="my-name" maxlength="16" autocomplete="nickname" spellcheck="false" placeholder="So friends know it's you">
+        </label>
+      </div>
+      <div class="card">
+        <h2>Play friends online</h2>
+        <p class="muted">Create a room for 2–4 players and send the code or link. You start the game once everyone's in.</p>
+        <button id="create">Create room</button>
+        <form class="join" id="join-form" autocomplete="off">
+          <input id="join-code" maxlength="4" autocapitalize="characters" spellcheck="false" placeholder="CODE" aria-label="Room code">
+          <button id="join" type="submit">Join</button>
+        </form>
+        <p class="error" id="home-error" role="alert"></p>
+      </div>
+      <div class="card">
+        <h2>Same phone</h2>
+        <p class="muted">Pass the phone around. Each rack stays hidden until its player taps.</p>
+        <div class="name-row"><span>Players</span>
+          <div class="seg" id="mode" role="group" aria-label="Players">
+            <button type="button" data-n="2" aria-pressed="true">2</button>
+            <button type="button" data-n="3" aria-pressed="false">3</button>
+            <button type="button" data-n="4" aria-pressed="false">4</button>
+          </div>
+        </div>
+        <button class="secondary" id="local">Play here</button>
+      </div>
+      <details class="card rules">
+        <summary>How to play</summary>
+        <ul>
+          <li>Tap a tile on your rack, then tap a square to put it there. Tap a placed tile to take it back. 🔍 zooms the board.</li>
+          <li>Each turn, place tiles in one line (across or down) with no gaps. The first word must cover the ★ in the middle; after that, every word must touch the tiles already there.</li>
+          <li>Every word you make, including the ones crossing your line, must be a real word. You score them all.</li>
+          <li>Light and dark blue squares triple or double a letter; pink and red ones double or triple the whole word. Using all 7 tiles in one turn earns 50 extra points.</li>
+          <li>The blank tile can be any letter and scores 0. Instead of playing, you can swap tiles (while 7 or more are in the bag) or pass.</li>
+          <li>The game ends when someone uses their last tile with the bag empty, or after 6 turns in a row without points. Tiles left on your rack count against you, and go to whoever went out.</li>
+        </ul>
+      </details>
+    </section>
+
+    <section id="game" hidden>
+      <div class="bar">
+        <div class="players" id="players"></div>
+        <div class="code" id="room-label"></div>
+      </div>
+
+      <div class="card" id="waiting" hidden>
+        <p class="muted" style="text-align: center">Send this code to your friends</p>
+        <p class="bigcode" id="waiting-code"></p>
+        <div class="row">
+          <button id="share">Share link</button>
+          <button class="secondary" id="copy">Copy code</button>
+        </div>
+        <div class="seated" id="seated"></div>
+        <p class="muted" id="waiting-note" style="text-align: center; font-size: 0.9rem"></p>
+        <button id="start-btn" hidden>Start</button>
+      </div>
+
+      <div id="play" hidden>
+        <p class="status" id="status" aria-live="polite"></p>
+        <p class="hint" id="last"></p>
+        <div class="board-wrap" id="board-wrap"><div class="board" id="board" role="grid" aria-label="Board"></div></div>
+        <p class="hint" id="hint" aria-live="polite"></p>
+        <div class="rack" id="rack" aria-label="Your tiles"></div>
+        <div class="row" id="actions">
+          <button id="play-btn">Play</button>
+          <button class="secondary" id="recall">Recall</button>
+          <button class="secondary" id="zoom" aria-pressed="false" aria-label="Zoom the board">🔍</button>
+        </div>
+        <div class="row" id="actions2">
+          <button class="secondary" id="shuffle">Shuffle</button>
+          <button class="secondary" id="swap">Swap</button>
+          <button class="secondary" id="pass">Pass</button>
+        </div>
+        <div class="row" id="swap-actions" hidden>
+          <button id="swap-go">Swap</button>
+          <button class="secondary" id="swap-cancel">Cancel</button>
+        </div>
+        <div class="card" id="final" hidden>
+          <ol class="scores" id="final-scores"></ol>
+        </div>
+      </div>
+
+      <div class="row">
+        <button id="rematch" hidden>Play again</button>
+        <button class="secondary" id="leave">Leave</button>
+      </div>
+      <p class="hint" id="bag"></p>
+    </section>
+  </main>
+
+  <div class="overlay" id="picker" hidden>
+    <div class="card">
+      <h2>Which letter is the blank?</h2>
+      <div class="letters" id="letters"></div>
+      <button class="secondary" id="picker-cancel">Cancel</button>
+    </div>
+  </div>
+  <div class="overlay" id="cover" hidden>
+    <div class="card">
+      <h2 id="cover-title"></h2>
+      <p class="muted" id="cover-text"></p>
+      <button id="cover-go">Show my tiles</button>
+    </div>
+  </div>
+
+  <script type="module">
+    import * as rooms from "../shared/rooms.js";
+
+    const GAME = "word-tiles";
+    const N = 15, CELLS = N * N, CENTER = 7 * N + 7, RACK = 7, BINGO = 50, MAX_ZEROS = 6;
+    // The standard tile set: 100 tiles, "?" is a blank.
+    const COUNTS = { A: 9, B: 2, C: 2, D: 4, E: 12, F: 2, G: 3, H: 2, I: 9, J: 1, K: 1, L: 4, M: 2, N: 6, O: 8, P: 2, Q: 1, R: 6, S: 4, T: 6, U: 4, V: 2, W: 2, X: 1, Y: 2, Z: 1, "?": 2 };
+    const VALUES = { A: 1, B: 3, C: 3, D: 2, E: 1, F: 4, G: 2, H: 4, I: 1, J: 8, K: 5, L: 1, M: 3, N: 1, O: 1, P: 3, Q: 10, R: 1, S: 1, T: 1, U: 1, V: 4, W: 4, X: 8, Y: 4, Z: 10, "?": 0 };
+    const ALL = Object.entries(COUNTS).map(([l, n]) => l.repeat(n)).join("");
+    // Premium squares, one quarter mirrored: T triple word, D double word, t triple letter, d double letter, * start.
+    const TOP = ["T..d...T", ".D...t..", "..D...d.", "d..D...d", "....D...", ".t...t..", "..d...d.", "T..d...*"];
+    const PREMIUM = Array.from({ length: CELLS }, (_, i) => {
+      const r = Math.floor(i / N), c = i % N;
+      return TOP[Math.min(r, 14 - r)][Math.min(c, 14 - c)];
+    });
+    const PREMIUM_CLASS = { T: "tw", D: "dw", t: "tl", d: "dl", "*": "star" };
+    const PREMIUM_LABEL = { T: "TW", D: "DW", t: "TL", d: "DL", "*": "★" };
+
+    // ---------- dictionary ----------
+    // words.txt: one lowercase word per line, sorted (the public-domain ENABLE list plus the common 2-letter words).
+    let words = null;
+    function lowerBound(s) {
+      let lo = 0, hi = words.length;
+      while (lo < hi) { const mid = (lo + hi) >> 1; if (words[mid] < s) lo = mid + 1; else hi = mid; }
+      return lo;
+    }
+    const isWord = (w) => !!words && words[lowerBound(w)] === w;
+    const hasPrefix = (p) => { const i = lowerBound(p); return i < words.length && words[i].startsWith(p); };
+    const wordsReady = fetch("./words.txt").then((r) => { if (!r.ok) throw new Error(r.status); return r.text(); })
+      .then((t) => { words = t.split("\n").map((w) => w.trim()).filter(Boolean); render(); })
+      .catch((err) => { console.error(err); $("home-error").textContent = "Couldn't load the word list. Reload the page to try again."; });
+
+    // ---------- board and scoring ----------
+    // board: 225 characters, "." empty, A–Z a tile, a–z a blank played as that letter.
+    const EMPTY = ".".repeat(CELLS);
+    const letterAt = (b, i) => (b[i] === "." ? "" : b[i].toUpperCase());
+    const valueAt = (b, i) => (b[i] === "." || b[i] !== b[i].toUpperCase() ? 0 : VALUES[b[i]]);
+    const rackValue = (rack) => [...rack].reduce((s, l) => s + VALUES[l], 0);
+
+    // Checks a move (placed: [{ i, ch }] where ch is the board character) and scores it.
+    // Returns { ok: true, score, words: [{ word, score }] } or { ok: false, why }.
+    function judge(board, placed) {
+      if (!placed.length) return { ok: false, why: "" };
+      const b = [...board];
+      for (const p of placed) { if (b[p.i] !== ".") return { ok: false, why: "That square is taken." }; b[p.i] = p.ch; }
+      const rows = new Set(placed.map((p) => Math.floor(p.i / N))), cols = new Set(placed.map((p) => p.i % N));
+      if (rows.size > 1 && cols.size > 1) return { ok: false, why: "Put your tiles in one line, across or down." };
+      const first = board === EMPTY;
+      // Direction of the main word: along the line, or for a single tile whichever way makes a word.
+      const runOf = (i, step) => {
+        const across = step === 1;
+        let s = i;
+        while (true) { const n = s - step; if (n < 0 || (across && Math.floor(n / N) !== Math.floor(s / N)) || b[n] === ".") break; s = n; }
+        const cells = [];
+        for (let k = s; k < CELLS && b[k] !== "." && (!across || Math.floor(k / N) === Math.floor(s / N)); k += step) cells.push(k);
+        return cells;
+      };
+      let step = rows.size === 1 && placed.length > 1 ? 1 : cols.size === 1 && placed.length > 1 ? N : 0;
+      if (!step) step = runOf(placed[0].i, 1).length > 1 ? 1 : N;
+      const main = runOf(placed[0].i, step);
+      if (!placed.every((p) => main.includes(p.i))) return { ok: false, why: "Leave no gaps between your tiles." };
+      if (main.length < 2) return { ok: false, why: first ? "The first word needs at least 2 letters." : "Make a word of 2 or more letters." };
+      if (first) {
+        if (!placed.some((p) => p.i === CENTER)) return { ok: false, why: "The first word must cover the ★ in the middle." };
+      } else {
+        const touches = main.some((i) => board[i] !== ".") || placed.some((p) => {
+          const r = Math.floor(p.i / N), c = p.i % N;
+          return [[r - 1, c], [r + 1, c], [r, c - 1], [r, c + 1]].some(([rr, cc]) => rr >= 0 && rr < N && cc >= 0 && cc < N && board[rr * N + cc] !== ".");
+        });
+        if (!touches) return { ok: false, why: "Your word must join the tiles already on the board." };
+      }
+      const fresh = new Set(placed.map((p) => p.i));
+      const scoreRun = (cells) => {
+        let sum = 0, mult = 1;
+        for (const i of cells) {
+          let v = valueAt(b, i);
+          if (fresh.has(i)) {
+            const p = PREMIUM[i];
+            if (p === "d") v *= 2; else if (p === "t") v *= 3; else if (p === "D" || p === "*") mult *= 2; else if (p === "T") mult *= 3;
+          }
+          sum += v;
+        }
+        return { word: cells.map((i) => letterAt(b, i)).join(""), score: sum * mult };
+      };
+      const found = [scoreRun(main)];
+      for (const p of placed) {
+        const cross = runOf(p.i, step === 1 ? N : 1);
+        if (cross.length > 1) found.push(scoreRun(cross));
+      }
+      const bad = found.filter((w) => !isWord(w.word.toLowerCase()));
+      if (!words) return { ok: false, why: "Loading the word list…" };
+      if (bad.length) return { ok: false, why: `Not ${bad.length === 1 ? "a word" : "words"}: ${bad.map((w) => w.word).join(", ")}` };
+      const score = found.reduce((s, w) => s + w.score, 0) + (placed.length === RACK ? BINGO : 0);
+      return { ok: true, score, words: found, bingo: placed.length === RACK };
+    }
+
+    // ---------- room shape ----------
+    // board: above. state: { bag: tiles left, in draw order; n: moves so far; sc, rc, rv: "1,2,…" per seat (score,
+    // tiles on the rack, their total value); mv: { s0: "n|used|drawn" } the tiles each seat last used and drew
+    // (the deal is move 0), so a rack can be worked out again if saving it failed; zeros: scoreless turns in a row;
+    // lm: "seat|kind|detail|points|cells" the last move, for everyone to see }.
+    // Private per seat: "<round>:<n>:<rack>", the rack after move n.
+    const shuffle = (list) => { const a = [...list]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+    const shuffled = (s) => shuffle(s).join("");
+    const nums = (s, n) => { const a = String(s || "").split(",").map(Number); return Array.from({ length: n }, (_, i) => a[i] || 0); };
+    const seatedOf = (r) => rooms.seatList(r).flatMap((u, s) => (u ? [s] : []));
+    function parse(r) {
+      const s = r.state || {};
+      return {
+        bag: s.bag === "-" ? "" : s.bag || "", n: s.n || 0, sc: nums(s.sc, r.seats), rc: nums(s.rc, r.seats), rv: nums(s.rv, r.seats),
+        mv: { ...(s.mv || {}) }, zeros: s.zeros || 0, lm: s.lm || "-",
+      };
+    }
+    const pack = (st) => ({ bag: st.bag || "-", n: st.n, sc: st.sc.join(","), rc: st.rc.join(","), rv: st.rv.join(","), mv: st.mv, zeros: st.zeros, lm: st.lm || "-" });
+    function deal(room, round) {
+      const seated = seatedOf(room);
+      let bag = shuffled(ALL);
+      const st = { bag: "", n: 0, sc: Array(room.seats).fill(0), rc: Array(room.seats).fill(0), rv: Array(room.seats).fill(0), mv: {}, zeros: 0, lm: "-" };
+      for (const s of seated) {
+        const rack = bag.slice(0, RACK);
+        bag = bag.slice(RACK);
+        st.mv[rooms.seatKey(s)] = `0||${rack}`;
+        st.rc[s] = rack.length;
+        st.rv[s] = rackValue(rack);
+      }
+      st.bag = bag;
+      return Object.assign(room, {
+        board: EMPTY, round, turn: seated[round % seated.length], status: "playing", winner: null, left: null, state: pack(st),
+      });
+    }
+    // Takes `used` off a rack and adds `drawn` (letters, "?" for a blank).
+    function applyMove(rack, used, drawn) {
+      const a = [...rack];
+      for (const l of used) { const k = a.indexOf(l); if (k >= 0) a.splice(k, 1); }
+      return a.join("") + drawn;
+    }
+    // The end of the game: tiles left on a rack count against it, and go to whoever went out.
+    function finish(cur, st, out) {
+      const seated = seatedOf(cur);
+      let bonus = 0;
+      for (const s of seated) { if (s !== out) { st.sc[s] -= st.rv[s]; bonus += st.rv[s]; } }
+      if (out != null) st.sc[out] += bonus;
+      const best = Math.max(...seated.map((s) => st.sc[s]));
+      const top = seated.filter((s) => st.sc[s] === best);
+      cur.status = "done";
+      cur.winner = top.length === 1 ? top[0] : "draw";
+    }
+
+    // ---------- state ----------
+    let seat = null;     // { backend, code, seat } (seat is "local" on one phone)
+    let leave = null, unwatchRack = null;
+    let room = null;
+    let priv = null;     // this player's saved rack: { round, n, rack }, or null
+    let privLoaded = false;
+    const localRacks = {}; // one phone: the same, per seat
+    let rack = "";       // the current player's rack, in display order
+    let order = [];      // indices into rack, in the order shown (shuffle changes it)
+    let placed = [];     // [{ i, k, ch }]: board square, rack index, board character
+    let sel = null;      // selected rack index
+    let swapping = null; // Set of rack indices to swap, while choosing
+    let pendingBlank = null; // a square waiting for the blank's letter
+    let revealed = "";   // one phone: whose rack has been shown, for which move
+    let busy = false;
+    let saving = false;
+    let mode = 2;
+    let warn = "";
+
+    const $ = (id) => document.getElementById(id);
+    const local = () => seat?.seat === "local";
+    const me = () => (local() ? room.turn : seat.seat);
+    const esc = (t) => String(t).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+    const label = (s) => (local() ? `Player ${s + 1}` : s === seat.seat ? "You" : esc(rooms.nameOf(room, s)));
+    const nameOf = (s) => (local() ? `Player ${s + 1}` : rooms.nameOf(room, s));
+    const plain = (s) => (!local() && s === seat.seat ? "You" : nameOf(s)); // for textContent
+    const myTurn = () => room?.status === "playing" && room.turn === me() && rackKnown();
+
+    // ---------- racks ----------
+    // A seat's rack after the latest move: the saved one, plus that seat's last move if the save missed it.
+    function rackFor(s, saved) {
+      const m = String(parse(room).mv[rooms.seatKey(s)] || "").split("|");
+      const base = saved && saved.round === room.round ? saved : { round: room.round, n: -1, rack: "" };
+      if (m.length === 3 && Number(m[0]) > base.n) return { round: room.round, n: Number(m[0]), rack: applyMove(base.rack, m[1], m[2]), changed: true };
+      return { ...base, changed: false };
+    }
+    function rackKnown() { return local() || (privLoaded && !!room); }
+    function syncRack() {
+      if (!room || room.status === "waiting" || !room.state?.mv) return;
+      let r;
+      if (local()) {
+        for (const s of seatedOf(room)) localRacks[s] = rackFor(s, localRacks[s]);
+        r = localRacks[room.turn];
+      } else {
+        if (!privLoaded) return;
+        r = rackFor(seat.seat, priv);
+        if (r.changed && !saving) {
+          saving = true;
+          seat.backend.setPrivate(seat.code, seat.seat, `${r.round}:${r.n}:${r.rack}`).catch(console.error).finally(() => { saving = false; });
+        }
+      }
+      if (r.rack !== rack || order.length !== r.rack.length) {
+        // Keep the player's own arrangement when only the tiles' order would change.
+        const sameTiles = [...r.rack].sort().join("") === [...rack].sort().join("");
+        if (!sameTiles || order.length !== r.rack.length) { rack = r.rack; order = [...r.rack].map((_, k) => k); }
+        placed = [];
+        sel = null;
+        swapping = null;
+      }
+    }
+    function onPrivate(value) {
+      privLoaded = true;
+      const m = typeof value === "string" ? value.match(/^(\d+):(-?\d+):([A-Z?]*)$/) : null;
+      priv = m ? { round: Number(m[1]), n: Number(m[2]), rack: m[3] } : null;
+      syncRack();
+      render();
+    }
+
+    // ---------- home / rooms ----------
+    function setBusy(b) { for (const id of ["create", "join", "local"]) $(id).disabled = b; }
+    function showHome(error = "") {
+      leave?.(); unwatchRack?.();
+      leave = unwatchRack = null;
+      seat = room = priv = null;
+      privLoaded = false;
+      rack = ""; order = []; placed = []; sel = null; swapping = null; revealed = "";
+      $("game").hidden = true;
+      $("home").hidden = false;
+      $("home-error").textContent = error;
+      setBusy(false);
+    }
+    function start(s) {
+      seat = s;
+      for (const k of Object.keys(localRacks)) delete localRacks[k];
+      $("home").hidden = true;
+      $("game").hidden = false;
+      setBusy(false);
+      leave = rooms.enter(s, (value) => { room = value; syncRack(); render(); }, showHome);
+      if (!local()) unwatchRack = s.backend.watchPrivate(s.code, s.seat, onPrivate);
+    }
+    async function createRoom() {
+      setBusy(true);
+      $("home-error").textContent = "";
+      await rooms.setMyName($("my-name").value);
+      try { start(await rooms.createRoom(GAME, { seats: 4, min: 2, auto: false, makeRoom: () => ({ board: EMPTY, round: 0, turn: 0 }) })); }
+      catch (err) { console.error(err); showHome(err instanceof rooms.RoomError ? err.message : "Couldn't create a room. Check your connection and try again."); }
+    }
+    async function joinRoom(code) {
+      setBusy(true);
+      $("home-error").textContent = "";
+      await rooms.setMyName($("my-name").value);
+      try { start(await rooms.joinRoom(GAME, code)); }
+      catch (err) { console.error(err); showHome(err instanceof rooms.RoomError ? err.message : "Couldn't join. Check your connection and try again."); }
+    }
+    function playLocal() {
+      const n = mode;
+      start(rooms.localRoom(GAME, n, () => deal({ seats: n, players: Object.fromEntries(Array.from({ length: n }, (_, i) => [rooms.seatKey(i), "local"])) }, 0)));
+    }
+
+    // ---------- moves ----------
+    const placedChars = () => placed.map((p) => ({ i: p.i, ch: p.ch }));
+    const usedLetters = () => placed.map((p) => rack[p.k]).join("");
+
+    async function commit(change) {
+      if (busy || !myTurn()) return false;
+      const mover = me(), round = room.round, n0 = parse(room).n, myRack = rack;
+      busy = true;
+      warn = "";
+      try {
+        const r = await seat.backend.transact(seat.code, (cur) => {
+          if (!cur || cur.status !== "playing" || cur.turn !== mover || cur.round !== round) return undefined;
+          const st = parse(cur);
+          if (st.n !== n0) return undefined;
+          if (!local() && rooms.seatOf(cur, seat.backend.uid) !== mover) return undefined;
+          const out = change(cur, st, myRack);
+          if (!out) return undefined;
+          st.n += 1;
+          if (out.used !== undefined) {
+            const left = applyMove(myRack, out.used, out.drawn);
+            st.mv[rooms.seatKey(mover)] = `${st.n}|${out.used}|${out.drawn}`;
+            st.rc[mover] = left.length;
+            st.rv[mover] = rackValue(left);
+          }
+          st.zeros = out.points > 0 ? 0 : st.zeros + 1;
+          if (out.points) st.sc[mover] += out.points;
+          if (st.rc[mover] === 0 && !st.bag) finish(cur, st, mover);
+          else if (st.zeros >= MAX_ZEROS) finish(cur, st, null);
+          else cur.turn = rooms.nextSeat(cur, mover);
+          cur.state = pack(st);
+          return cur;
+        });
+        if (!r.committed) { warn = "That didn't go through. Try again."; return false; }
+        return true;
+      } catch (err) {
+        console.error(err);
+        warn = "That didn't go through. Check your connection and try again.";
+        return false;
+      } finally { busy = false; render(); }
+    }
+
+    async function play() {
+      const res = judge(room.board, placedChars());
+      if (!res.ok) { warn = res.why || "Put some tiles on the board first."; return render(); }
+      const pc = placedChars(), used = usedLetters(), mover = me();
+      await commit((cur, st) => {
+        const again = judge(cur.board, pc);
+        if (!again.ok) return null;
+        const b = [...cur.board];
+        for (const p of pc) b[p.i] = p.ch;
+        cur.board = b.join("");
+        const drawn = st.bag.slice(0, pc.length);
+        st.bag = st.bag.slice(pc.length);
+        st.lm = `${mover}|play|${again.words.map((w) => w.word).join(" ")}|${again.score}|${pc.map((p) => p.i).join(",")}`;
+        return { used, drawn, points: again.score };
+      });
+    }
+    async function pass() {
+      const mover = me();
+      if (!confirm("Pass this turn?")) return;
+      await commit((cur, st) => { st.lm = `${mover}|pass|-|0|-`; return { points: 0 }; });
+    }
+    async function swap() {
+      const pick = [...swapping].map((k) => rack[k]).join("");
+      if (!pick) { warn = "Tap the tiles you want to swap."; return render(); }
+      const mover = me();
+      const ok = await commit((cur, st) => {
+        if (st.bag.length < RACK) return null;
+        const drawn = st.bag.slice(0, pick.length);
+        st.bag = shuffled(st.bag.slice(pick.length) + pick);
+        st.lm = `${mover}|swap|${pick.length}|0|-`;
+        return { used: pick, drawn, points: 0 };
+      });
+      if (ok) swapping = null;
+    }
+    async function rematch() {
+      if (!room || room.status !== "done") return;
+      try { await rooms.playAgain(seat, (cur, round) => deal(cur, round)); }
+      catch (err) { console.error(err); warn = "Couldn't start a new game. Try again."; render(); }
+    }
+    async function startGame() {
+      $("start-btn").disabled = true;
+      try { await rooms.startGame(seat, (cur) => deal(cur, cur.round)); }
+      catch (err) { $("waiting-note").textContent = err instanceof rooms.RoomError ? err.message : "Couldn't start. Try again."; }
+      finally { $("start-btn").disabled = false; }
+    }
+
+    // ---------- placing tiles ----------
+    function tapSquare(i) {
+      if (!myTurn() || swapping || coverShown()) return;
+      const at = placed.findIndex((p) => p.i === i);
+      if (at >= 0) { placed.splice(at, 1); warn = ""; return render(); }
+      if (room.board[i] !== "." || sel === null) return;
+      if (rack[sel] === "?") { pendingBlank = { i, k: sel }; $("picker").hidden = false; return; }
+      put(i, sel, rack[sel]);
+    }
+    function put(i, k, ch) {
+      placed.push({ i, k, ch });
+      warn = "";
+      // Select the next unused tile in rack order, so a word can be laid down tap by tap.
+      sel = order.find((kk) => !placed.some((p) => p.k === kk)) ?? null;
+      render();
+    }
+    function tapRack(k) {
+      if (!myTurn() || coverShown()) return;
+      if (swapping) { swapping.has(k) ? swapping.delete(k) : swapping.add(k); return render(); }
+      if (placed.some((p) => p.k === k)) return;
+      sel = sel === k ? null : k;
+      render();
+    }
+
+    // ---------- rendering ----------
+    const boardEl = $("board");
+    boardEl.innerHTML = Array.from({ length: CELLS }, (_, i) => `<button class="sq" data-i="${i}" role="gridcell"></button>`).join("");
+    const sqEls = [...boardEl.children];
+    $("letters").innerHTML = [..."ABCDEFGHIJKLMNOPQRSTUVWXYZ"].map((l) => `<button data-l="${l}">${l}</button>`).join("");
+
+    const coverKey = () => `${room.round}:${parse(room).n}:${room.turn}`;
+    const coverShown = () => local() && room?.status === "playing" && revealed !== coverKey();
+
+    function render() {
+      if (!room || !seat) return;
+      const r = room;
+      const playing = r.status === "playing", done = r.status === "done", waiting = r.status === "waiting";
+      const st = waiting ? null : parse(r);
+      const seats = rooms.seatList(r);
+
+      $("room-label").innerHTML = local() ? "Same phone" : `Room <b>${seat.code}</b>`;
+      $("players").innerHTML = seats.map((uid, s) => uid ? `<span class="chip${playing && r.turn === s ? " turn" : ""}">${label(s)}` +
+        (st ? ` <b>${st.sc[s]}</b>` : "") + (local() ? "" : `<span class="dot${rooms.isOnline(r, s) ? " on" : ""}"></span>`) + "</span>" : "").join("");
+
+      $("waiting").hidden = !waiting;
+      $("play").hidden = waiting;
+      if (waiting) {
+        $("waiting-code").textContent = seat.code;
+        const count = rooms.playerCount(r), host = r.host === seat.backend.uid;
+        $("seated").innerHTML = seats.map((uid, s) => uid ? `<div><span class="chip">${label(s)}${s === seat.seat && rooms.nameOf(r, s) !== `P${s + 1}` ? ` (${esc(rooms.nameOf(r, s))})` : ""}${s === 0 ? " (host)" : ""}</span></div>` : "").join("");
+        $("start-btn").hidden = !host;
+        $("start-btn").disabled = count < 2;
+        $("waiting-note").textContent = `${count} of ${r.seats} here. ` + (host ? (count < 2 ? "Waiting for a friend to join…" : "Start when everyone's in.") : "Waiting for the host to start…");
+        $("rematch").hidden = true;
+        $("bag").textContent = "";
+        return;
+      }
+
+      // Board
+      const lm = st.lm.split("|");
+      const lastCells = new Set(lm[1] === "play" ? lm[4].split(",").map(Number) : []);
+      const mine = new Map(placed.map((p) => [p.i, p]));
+      const canPut = myTurn() && !swapping && sel !== null && !coverShown();
+      sqEls.forEach((el, i) => {
+        const p = mine.get(i);
+        const ch = p ? p.ch : r.board[i];
+        let cls = "sq", html = "";
+        if (ch !== ".") {
+          const blank = ch !== ch.toUpperCase();
+          cls += " tile" + (blank ? " blank" : "") + (p ? " new" : lastCells.has(i) ? " last" : "");
+          html = `${ch.toUpperCase()}${blank ? "" : `<sub>${VALUES[ch]}</sub>`}`;
+        } else {
+          const pr = PREMIUM[i];
+          if (pr !== ".") { cls += " " + PREMIUM_CLASS[pr]; html = PREMIUM_LABEL[pr]; }
+          if (canPut) cls += " target";
+        }
+        if (el.className !== cls) el.className = cls;
+        if (el.innerHTML !== html) el.innerHTML = html;
+      });
+
+      // Rack
+      const hideRack = coverShown() || (!local() && !rackKnown());
+      $("rack").classList.toggle("hidden-rack", hideRack);
+      $("rack").innerHTML = order.map((k) => {
+        const l = rack[k];
+        const cls = "tile" + (l === "?" ? " blank" : "") + (placed.some((p) => p.k === k) ? " gone" : "") + (sel === k ? " sel" : "") + (swapping?.has(k) ? " swap" : "");
+        return `<button class="${cls}" data-k="${k}" aria-label="${l === "?" ? "Blank" : l}">${l === "?" ? "" : l}${l === "?" ? "" : `<sub>${VALUES[l]}</sub>`}</button>`;
+      }).join("");
+
+      // Status, last move, preview
+      const turnName = label(r.turn);
+      let status = "";
+      if (playing) status = myTurn() ? (local() ? `${turnName}'s turn` : "Your turn") : `${turnName}'s turn${local() || rooms.isOnline(r, r.turn) ? "…" : " (away)"}`;
+      else if (typeof r.left === "number") status = r.left === seat.seat ? "You left this game" : `${label(r.left)} left. ${r.winner === "draw" ? "Game over" : r.winner === seat.seat ? "You win 🎉" : `${label(r.winner)} wins`}`;
+      else status = r.winner === "draw" ? "It's a draw!" : !local() && r.winner === seat.seat ? "You win! 🎉" : `${label(r.winner)} wins! 🎉`;
+      $("status").innerHTML = status;
+      let last = "";
+      if (lm.length >= 4) {
+        const who = plain(Number(lm[0]));
+        if (lm[1] === "play") last = `${who} played ${lm[2].split(" ").join(", ")} for ${lm[3]}`;
+        else if (lm[1] === "swap") last = `${who} swapped ${lm[2]} tile${lm[2] === "1" ? "" : "s"}`;
+        else if (lm[1] === "pass") last = `${who} passed`;
+      }
+      $("last").textContent = last;
+
+      let hint = warn, kind = warn ? "bad" : "";
+      if (!hint && myTurn()) {
+        if (swapping) hint = swapping.size ? `Swap ${swapping.size} tile${swapping.size === 1 ? "" : "s"}?` : "Tap the tiles to swap.";
+        else if (placed.length) {
+          const res = judge(r.board, placedChars());
+          if (res.ok) { hint = `${res.words.map((w) => w.word).join(", ")}: ${res.score} points${res.bingo ? " (all 7 tiles: +50!)" : ""}`; kind = "good"; }
+          else { hint = res.why; kind = "bad"; }
+        } else hint = r.board === EMPTY ? "Make the first word across the ★." : sel === null ? "Tap a tile, then a square." : "Tap a square to place it.";
+      }
+      $("hint").textContent = hint;
+      $("hint").className = "hint" + (kind ? " " + kind : "");
+
+      const can = myTurn() && !busy && !coverShown();
+      $("actions").hidden = $("actions2").hidden = !playing || !!swapping;
+      $("swap-actions").hidden = !playing || !swapping;
+      $("play-btn").disabled = !can || !placed.length;
+      $("recall").disabled = !can || !placed.length;
+      $("shuffle").disabled = !rack.length || coverShown();
+      $("pass").disabled = !can;
+      $("swap").disabled = !can || st.bag.length < RACK;
+      $("swap-go").disabled = !can || !swapping?.size;
+      $("rack").hidden = done;
+      $("bag").textContent = playing ? `${st.bag.length} tile${st.bag.length === 1 ? "" : "s"} in the bag` : "";
+
+      // Final scores
+      $("final").hidden = !done;
+      if (done) {
+        const rows = seatedOf(r).sort((a, b) => st.sc[b] - st.sc[a]);
+        $("final-scores").innerHTML = rows.map((s) => `<li><span>${label(s)}${r.winner === s ? " 🏆" : ""}</span><b>${st.sc[s]}</b></li>`).join("");
+      }
+      $("rematch").hidden = !done || (!local() && typeof r.left === "number" && r.left !== seat.seat && !rooms.isOnline(r, r.left));
+      if (done) {
+        const ready = local() ? [] : seatedOf(r).filter((s) => rooms.wantsAgain(r, s));
+        const others = local() ? [] : seatedOf(r).filter((s) => s !== seat.seat && rooms.isOnline(r, s) && !rooms.wantsAgain(r, s));
+        $("rematch").disabled = ready.includes(seat.seat);
+        $("rematch").innerHTML = ready.includes(seat.seat) ? `Waiting for ${others.map(label).join(", ") || "others"}…`
+          : ready.length ? `Play again (${ready.map(label).join(", ")} ready)` : "Play again";
+      }
+
+      // One phone: hide the rack until its player is holding the phone.
+      $("cover").hidden = !coverShown();
+      if (coverShown()) {
+        $("cover-title").textContent = `Pass the phone to ${nameOf(r.turn)}`;
+        $("cover-text").textContent = last ? `${last}.` : "Keep your tiles hidden from the others.";
+      }
+    }
+
+    // ---------- wiring ----------
+    boardEl.addEventListener("click", (e) => { const el = e.target.closest(".sq"); if (el) tapSquare(Number(el.dataset.i)); });
+    $("rack").addEventListener("click", (e) => { const el = e.target.closest(".tile"); if (el) tapRack(Number(el.dataset.k)); });
+    $("letters").addEventListener("click", (e) => {
+      const l = e.target.closest("button")?.dataset.l;
+      if (!l || !pendingBlank) return;
+      const { i, k } = pendingBlank;
+      pendingBlank = null;
+      $("picker").hidden = true;
+      put(i, k, l.toLowerCase());
+    });
+    $("picker-cancel").addEventListener("click", () => { pendingBlank = null; $("picker").hidden = true; });
+    $("cover-go").addEventListener("click", () => { revealed = coverKey(); render(); });
+    $("play-btn").addEventListener("click", play);
+    $("recall").addEventListener("click", () => { placed = []; warn = ""; sel = null; render(); });
+    $("shuffle").addEventListener("click", () => { order = shuffle(order); render(); });
+    $("pass").addEventListener("click", pass);
+    $("swap").addEventListener("click", () => { placed = []; sel = null; swapping = new Set(); warn = ""; render(); });
+    $("swap-cancel").addEventListener("click", () => { swapping = null; warn = ""; render(); });
+    $("swap-go").addEventListener("click", swap);
+    $("zoom").addEventListener("click", () => {
+      const on = !boardEl.classList.contains("zoom");
+      boardEl.classList.toggle("zoom", on);
+      $("zoom").setAttribute("aria-pressed", String(on));
+      const wrap = $("board-wrap");
+      // Centre on the tiles being placed, or the middle of the board.
+      const focus = placed.length ? placed[placed.length - 1].i : CENTER;
+      const el = sqEls[focus];
+      if (on) { wrap.scrollLeft = el.offsetLeft - wrap.clientWidth / 2 + el.offsetWidth / 2; wrap.scrollTop = el.offsetTop - wrap.clientHeight / 2 + el.offsetHeight / 2; }
+    });
+    for (const b of document.querySelectorAll("#mode button")) {
+      b.addEventListener("click", () => {
+        mode = Number(b.dataset.n);
+        for (const o of document.querySelectorAll("#mode button")) o.setAttribute("aria-pressed", String(o === b));
+      });
+    }
+    $("create").addEventListener("click", createRoom);
+    $("join-form").addEventListener("submit", (e) => { e.preventDefault(); joinRoom($("join-code").value); });
+    $("join-code").addEventListener("input", () => {
+      $("join-code").value = $("join-code").value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+      $("home-error").textContent = "";
+    });
+    $("my-name").value = rooms.myName();
+    $("my-name").addEventListener("change", () => { $("my-name").value = rooms.cleanRoomName($("my-name").value); });
+    $("local").addEventListener("click", playLocal);
+    $("start-btn").addEventListener("click", startGame);
+    $("rematch").addEventListener("click", rematch);
+    $("leave").addEventListener("click", async () => {
+      if (!seat || !room) return showHome();
+      const s = seat;
+      const others = local() ? 0 : seatedOf(room).filter((i) => i !== seat.seat && rooms.isOnline(room, i)).length;
+      if (room.status === "playing" && others && !confirm(rooms.playerCount(room) === 2 ? "Leave the game? Your friend wins this round." : "Leave the game? It ends in a draw for everyone.")) return;
+      if (room.status === "playing" && local() && !confirm("Leave this game?")) return;
+      $("leave").disabled = true;
+      await rooms.quit(s);
+      $("leave").disabled = false;
+      showHome();
+    });
+    $("share").addEventListener("click", async () => {
+      if ((await rooms.share(seat.code, "Word Tiles")) === "copied") $("share").textContent = "Link copied";
+    });
+    $("copy").addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(seat.code); $("copy").textContent = "Copied"; } catch { prompt("Room code:", seat.code); }
+      setTimeout(() => ($("copy").textContent = "Copy code"), 1500);
+    });
+
+    // Opening a shared link (?room=CODE) joins straight away.
+    const linked = rooms.roomFromUrl();
+    if (linked) { $("join-code").value = linked.toUpperCase(); joinRoom(linked); }
+
+    // Hooks for automated tests.
+    // findWord(): a word the current rack can make on its own (no blanks), longest first.
+    function findWord() {
+      const letters = [...rack].filter((l) => l !== "?");
+      let best = "";
+      const used = Array(letters.length).fill(false);
+      const dfs = (w) => {
+        if (w.length >= 2 && w.length > best.length && isWord(w)) best = w;
+        for (let k = 0; k < letters.length; k++) {
+          if (used[k]) continue;
+          const nw = w + letters[k].toLowerCase();
+          if (!hasPrefix(nw)) continue;
+          used[k] = true; dfs(nw); used[k] = false;
+        }
+      };
+      dfs("");
+      return best.toUpperCase();
+    }
+    window.__wt = {
+      rooms, judge, deal, applyMove, findWord, wordsReady, isWord,
+      get room() { return room; }, get rack() { return rack; }, get seat() { return seat; },
+      // Places `word` from the rack starting at (row, col), across or down, skipping squares already filled.
+      place(word, row, col, down = false) {
+        placed = []; sel = null;
+        const free = [...rack].map((_, k) => k);
+        let i = row * N + col;
+        for (const l of word) {
+          while (room.board[i] !== ".") i += down ? N : 1;
+          const k = free.find((kk) => rack[kk] === l) ?? free.find((kk) => rack[kk] === "?");
+          if (k === undefined) return false;
+          free.splice(free.indexOf(k), 1);
+          placed.push({ i, k, ch: rack[k] === "?" ? l.toLowerCase() : l });
+          i += down ? N : 1;
+        }
+        render();
+        return true;
+      },
+      reveal() { if (room) { revealed = coverKey(); render(); } },
+    };
+  </script>
+</body>
+</html>

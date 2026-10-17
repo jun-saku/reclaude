@@ -8,6 +8,7 @@ toys) built by Claude from a phone, each published at its own link.
 
 ## Projects
 
+- [Word Tiles](https://reclaude.junsaku.dev/word-tiles/): build crossing words on a 15×15 board with letter tiles, premium squares and a 172k-word list, 2–4 players online with a room code or on one phone
 - [Word Grid](https://reclaude.junsaku.dev/word-grid/): swipe across touching letters to find words in 3 minutes, with a daily board for everyone, a random board any time, Top 10s for both, and online rooms for 2–6 players on the same board
 - [Chain Reaction](https://reclaude.junsaku.dev/chain-reaction/): add orbs to your cells until they burst into their neighbours and take them over, 2–6 players online with a room code or on one phone
 - [Wall Race](https://reclaude.junsaku.dev/wall-race/): race your pawn to the far side or drop walls to block the others (Quoridor-style), 2–4 players online with a room code or 2 on one phone
