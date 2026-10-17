@@ -1,0 +1,1066 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#161618" media="(prefers-color-scheme: dark)">
+  <title>Word Grid</title>
+  <meta name="description" content="Swipe across touching letters to find words before the timer runs out.">
+  <style>
+    :root {
+      --bg: #f7f6f3;
+      --text: #1d1d1f;
+      --muted: #6b6b70;
+      --board: #ded7cb;
+      --panel: #ffffff;
+      --tile: #fffdf8;
+      --tile-text: #2b2620;
+      --accent: #c2571a;
+      --good: #2f9a5c;
+      --warn: #d9a21b;
+      --bad: #cf3f3f;
+      color-scheme: light;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #161618;
+        --text: #ececef;
+        --muted: #9a9aa2;
+        --board: #2a2a2e;
+        --panel: #1f1f22;
+        --tile: #3b3a40;
+        --tile-text: #f3efe8;
+        --accent: #f08a4b;
+        --good: #3fb874;
+        --warn: #e0b23a;
+        --bad: #e05a5a;
+        color-scheme: dark;
+      }
+    }
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      justify-content: center;
+      overscroll-behavior: none;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .game {
+      width: 100%;
+      max-width: 480px;
+      padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    section { display: flex; flex-direction: column; gap: 14px; }
+    section[hidden] { display: none; }
+    h1 { margin: 0; font-size: clamp(2rem, 10vw, 2.6rem); line-height: 1; font-weight: 800; letter-spacing: -0.02em; }
+    h2 { margin: 0; font-size: 1.6rem; }
+    h3 { margin: 4px 0 0; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+    p { margin: 0; }
+    .lead { color: var(--muted); line-height: 1.4; }
+    .hint { color: var(--muted); font-size: 0.9rem; line-height: 1.4; }
+    .hint:empty { display: none; }
+
+    button {
+      font: inherit;
+      font-weight: 600;
+      font-size: 0.95rem;
+      padding: 9px 16px;
+      border-radius: 10px;
+      border: 0;
+      background: var(--accent);
+      color: #fff;
+      cursor: pointer;
+      touch-action: manipulation;
+      white-space: nowrap;
+    }
+    button.secondary { background: var(--board); color: var(--text); }
+    button:disabled { opacity: 0.45; cursor: default; }
+    button.big { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 14px 16px; border-radius: 14px; font-size: 1.1rem; text-align: left; white-space: normal; }
+    button.big small { font-size: 0.82rem; font-weight: 500; opacity: 0.85; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .row button { flex: 1; }
+    .row[hidden] { display: none; }
+
+    .rules { margin: 0; padding-left: 1.2em; color: var(--muted); font-size: 0.9rem; line-height: 1.5; }
+
+    /* ---------- play ---------- */
+    .bar { display: flex; gap: 8px; align-items: stretch; }
+    .stat {
+      flex: 1;
+      padding: 6px 8px;
+      border-radius: 10px;
+      background: var(--board);
+      text-align: center;
+      line-height: 1.15;
+    }
+    .stat span { display: block; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+    .stat b { font-size: 1.2rem; font-variant-numeric: tabular-nums; }
+    .stat.low b { color: var(--bad); }
+    .word {
+      height: 2.2rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+    .word.good { color: var(--good); }
+    .word.warn { color: var(--warn); }
+    .word.bad { color: var(--bad); }
+    .word small { font-size: 0.9rem; font-weight: 600; letter-spacing: 0; margin-left: 8px; }
+
+    .board {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1;
+      padding: 1.5%;
+      border-radius: 16px;
+      background: var(--board);
+      touch-action: none;
+      container-type: inline-size;
+    }
+    .cells { position: relative; z-index: 1; width: 100%; height: 100%; display: grid; grid-template-columns: repeat(5, 1fr); grid-template-rows: repeat(5, 1fr); }
+    .cell { padding: 6%; }
+    .tile {
+      width: 100%;
+      height: 100%;
+      display: grid;
+      place-items: center;
+      border-radius: 18%;
+      background: var(--tile);
+      color: var(--tile-text);
+      font-weight: 800;
+      font-size: 9cqi;
+      box-shadow: 0 2px 0 rgba(0, 0, 0, 0.12);
+      transition: background 80ms, color 80ms, transform 80ms;
+    }
+    .tile.qu { font-size: 7cqi; }
+    .on .tile { background: var(--accent); color: #fff; transform: scale(0.94); }
+    .board.good .on .tile { background: var(--good); }
+    .board.warn .on .tile { background: var(--warn); }
+    .board.bad .on .tile { background: var(--bad); }
+    .trail { position: absolute; inset: 1.5%; width: 97%; height: 97%; pointer-events: none; overflow: visible; }
+    .trail polyline { fill: none; stroke: var(--accent); stroke-width: 0.2; stroke-linecap: round; stroke-linejoin: round; }
+    .board.good .trail polyline { stroke: var(--good); }
+    .board.warn .trail polyline { stroke: var(--warn); }
+    .board.bad .trail polyline { stroke: var(--bad); }
+    .board.small .tile { font-size: 8cqi; }
+    .board.small .tile.qu { font-size: 6cqi; }
+    @media (prefers-reduced-motion: reduce) { .tile { transition: none; } }
+
+    .words { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 6px; }
+    .words li {
+      padding: 4px 9px;
+      border-radius: 999px;
+      background: var(--board);
+      font-size: 0.9rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+    .words li sup { font-size: 0.65rem; color: var(--muted); margin-left: 2px; }
+    .words.missed li { background: transparent; box-shadow: inset 0 0 0 1px var(--board); color: var(--muted); cursor: pointer; }
+    .words li.pick { background: var(--accent); color: #fff; box-shadow: none; }
+    .words li.pick sup { color: inherit; }
+
+    /* ---------- results ---------- */
+    .summary { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+    .summary b { font-size: 2.4rem; line-height: 1; font-variant-numeric: tabular-nums; }
+    .save { display: flex; gap: 8px; }
+    .save[hidden] { display: none; }
+    .save input {
+      flex: 1;
+      min-width: 0;
+      font: inherit;
+      padding: 9px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--board);
+      background: var(--panel);
+      color: var(--text);
+    }
+    .save-box { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 14px; background: var(--panel); }
+    .save-box[hidden] { display: none; }
+
+    /* ---------- online rooms ---------- */
+    .card { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 14px; background: var(--panel); }
+    .card[hidden] { display: none; }
+    .name-row { display: flex; align-items: center; gap: 10px; font-weight: 650; }
+    .name-row span { white-space: nowrap; }
+    .name-row input, .join input {
+      flex: 1; min-width: 0; font: inherit; padding: 9px 12px; border-radius: 10px;
+      border: 1px solid var(--board); background: var(--bg); color: var(--text);
+    }
+    .join { display: flex; gap: 8px; }
+    .join input { font-size: 1.15rem; letter-spacing: 0.3em; text-transform: uppercase; text-align: center; }
+    .error { color: var(--bad); font-size: 0.9rem; }
+    .error:empty { display: none; }
+    .topline { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .topline:empty, .players:empty { display: none; }
+    .players { display: flex; gap: 6px; flex-wrap: wrap; }
+    .chip {
+      display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px;
+      background: var(--board); font-size: 0.85rem; font-weight: 600;
+    }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); opacity: 0.4; }
+    .dot.on { background: var(--good); opacity: 1; }
+    .code { font-size: 0.85rem; color: var(--muted); }
+    .code b { font-size: 1.05rem; letter-spacing: 0.15em; color: var(--text); }
+    .bigcode { font-size: 2.6rem; font-weight: 800; letter-spacing: 0.25em; text-align: center; }
+    .center { text-align: center; }
+    .standings { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+    .standings li {
+      display: grid; grid-template-columns: 1.6em 1fr auto; gap: 8px; align-items: baseline;
+      padding: 8px 10px; border-radius: 10px; background: var(--panel); font-variant-numeric: tabular-nums;
+    }
+    .standings li.me { box-shadow: inset 0 0 0 2px var(--accent); }
+    .standings .rank { color: var(--muted); font-size: 0.85rem; }
+    .standings .who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+    .standings .pts { font-weight: 700; }
+    .standings .pts small { font-weight: 500; color: var(--muted); }
+
+    /* Back to the games list; hidden while in a room or a game (use Leave there). */
+    .home-link {
+      align-self: flex-start; display: inline-flex; align-items: center; gap: 2px; margin: -6px 0 -6px -6px; padding: 6px;
+      color: var(--muted); font-size: 0.9rem; font-weight: 600; text-decoration: none; border-radius: 8px;
+    }
+    .home-link:active { opacity: 0.6; }
+    main:has(#home[hidden]) .home-link { display: none; }
+  </style>
+</head>
+<body>
+  <main class="game">
+    <a class="home-link" href="../games/">‹ All games</a>
+    <h1>Word Grid</h1>
+
+    <section id="home">
+      <p class="lead">Swipe across touching letters to make words. You have 3 minutes per board.</p>
+      <button class="big" id="daily" disabled>Daily board<small id="daily-sub">Loading words…</small></button>
+      <button class="big secondary" id="random" disabled>Random board<small id="random-sub">Loading words…</small></button>
+      <p class="hint" id="load-msg" role="status"></p>
+      <div class="card">
+        <h3>Play friends online</h3>
+        <p class="hint">2–6 players get the same letters at the same time. The highest score wins.</p>
+        <label class="name-row"><span>Your name</span>
+          <input id="my-name" maxlength="16" autocomplete="nickname" spellcheck="false" placeholder="So friends know it's you">
+        </label>
+        <button id="create" disabled>Create room</button>
+        <form class="join" id="join-form" autocomplete="off">
+          <input id="join-code" maxlength="4" autocapitalize="characters" spellcheck="false" placeholder="CODE" aria-label="Room code">
+          <button id="join" type="submit" disabled>Join</button>
+        </form>
+        <p class="error" id="home-error" role="alert"></p>
+      </div>
+      <div class="row">
+        <button class="secondary" id="top-daily">📅 Today's Top 10</button>
+        <button class="secondary" id="top-all">🏆 All-time Top 10</button>
+      </div>
+      <h3>How to play</h3>
+      <ul class="rules">
+        <li>Drag through letters that touch, including diagonally. Lift your finger to play the word.</li>
+        <li>Words need 3 or more letters, and each letter can be used once per word. <b>Qu</b> counts as two letters.</li>
+        <li>Points: 3–4 letters 1, 5 letters 2, 6 letters 3, 7 letters 5, 8 or more 11.</li>
+        <li>The daily board is the same for everyone and changes at midnight UTC. You get one go.</li>
+        <li>Online, everyone plays the same board at once. When time's up, the scores come in and the highest wins.</li>
+      </ul>
+    </section>
+
+    <section id="lobby" hidden>
+      <div class="topline"><div class="players" id="lobby-players"></div><div class="code" id="lobby-code"></div></div>
+      <div class="card">
+        <p class="hint center">Send this code to your friends</p>
+        <p class="bigcode" id="waiting-code"></p>
+        <div class="row">
+          <button id="share">Share link</button>
+          <button class="secondary" id="copy">Copy code</button>
+        </div>
+        <p class="hint center" id="waiting-note"></p>
+        <button id="start-btn" hidden>Start</button>
+      </div>
+      <button class="secondary" id="lobby-leave">Leave</button>
+    </section>
+
+    <section id="play" hidden>
+      <div class="topline"><div class="players" id="play-players"></div><div class="code" id="play-code"></div></div>
+      <div class="bar">
+        <div class="stat" id="time-box"><span>Time</span><b id="time">3:00</b></div>
+        <div class="stat"><span>Score</span><b id="score">0</b></div>
+        <div class="stat"><span>Words</span><b id="count">0</b></div>
+        <button class="secondary" id="end">End</button>
+      </div>
+      <div class="word" id="word" aria-live="polite"></div>
+      <div class="board" id="board" role="application" aria-label="Letter grid. Drag across letters, or type a word and press Enter.">
+        <div class="cells" id="cells"></div>
+        <svg class="trail" viewBox="0 0 5 5" aria-hidden="true"><polyline id="trail"></polyline></svg>
+      </div>
+      <ul class="words" id="found"></ul>
+    </section>
+
+    <section id="result" hidden>
+      <h2 id="r-title"></h2>
+      <div class="summary"><b id="r-score">0</b><span class="hint" id="r-text"></span></div>
+      <div class="save-box" id="save-box" hidden>
+        <p class="hint" id="save-label"></p>
+        <form class="save" id="save-form" autocomplete="off">
+          <input id="save-name" maxlength="12" placeholder="Your name" aria-label="Name for the leaderboard" enterkeyhint="done">
+          <button id="save-btn" type="submit">Save</button>
+        </form>
+      </div>
+      <p class="hint" id="save-msg" role="status"></p>
+      <div class="row" id="solo-actions">
+        <button id="again">New board</button>
+        <button class="secondary" id="r-top">🏆 Top 10</button>
+        <button class="secondary" id="menu">Menu</button>
+      </div>
+      <div id="standings" hidden>
+        <ol class="standings" id="st-list"></ol>
+      </div>
+      <p class="hint" id="room-hint"></p>
+      <div class="row" id="room-actions" hidden>
+        <button id="rematch">Play again</button>
+        <button class="secondary" id="room-leave">Leave</button>
+      </div>
+      <div class="board small" id="r-board" aria-label="The board. Tap a word below to see where it is.">
+        <div class="cells" id="r-cells"></div>
+        <svg class="trail" viewBox="0 0 5 5" aria-hidden="true"><polyline id="r-trail"></polyline></svg>
+      </div>
+      <h3 id="r-found-title">Your words</h3>
+      <ul class="words missed" id="r-found"></ul>
+      <h3 id="r-missed-title">Missed</h3>
+      <ul class="words missed" id="r-missed"></ul>
+    </section>
+  </main>
+
+  <script type="module">
+    import * as rooms from "../shared/rooms.js";
+
+    const SIZE = 5;
+    const N = SIZE * SIZE;
+    const SECS = 180;
+    const MIN_LEN = 3;
+    const GAME_ID = "word-grid";
+    const KEY = "reclaude-word-grid";
+    const NAME_KEY = "reclaude-word-grid-name";
+    // The 25 letter dice of the classic 5×5 game; each round shuffles them and rolls each one.
+    const DICE = [
+      "aaafrs", "aaeeee", "aafirs", "adennn", "aeeeem", "aeegmu", "aegmnn", "afirsy", "bjkqxz", "ccenst",
+      "ceiilt", "ceilpt", "ceipst", "ddhnot", "dhhlor", "dhlnor", "dhlnor", "eiiitt", "emottt", "ensssu",
+      "fiprsy", "gorrvw", "iprrry", "nootuw", "ooottu",
+    ];
+    const points = (w) => (w.length < MIN_LEN ? 0 : w.length <= 4 ? 1 : w.length === 5 ? 2 : w.length === 6 ? 3 : w.length === 7 ? 5 : 11);
+    const total = (list) => list.reduce((s, w) => s + points(w), 0);
+    const $ = (id) => document.getElementById(id);
+    const show = (name) => { for (const s of ["home", "lobby", "play", "result"]) $(s).hidden = s !== name; scrollTo(0, 0); };
+
+    // ---------- dictionary ----------
+    // words.txt: one lowercase word per line, sorted, 3+ letters (the public-domain ENABLE list).
+    let words = null;
+    function lowerBound(s) {
+      let lo = 0, hi = words.length;
+      while (lo < hi) { const mid = (lo + hi) >> 1; if (words[mid] < s) lo = mid + 1; else hi = mid; }
+      return lo;
+    }
+    const hasPrefix = (p) => { const i = lowerBound(p); return i < words.length && words[i].startsWith(p); };
+    const isWord = (w) => words[lowerBound(w)] === w;
+
+    async function loadWords() {
+      $("load-msg").textContent = "";
+      try {
+        const res = await fetch("./words.txt");
+        if (!res.ok) throw new Error(res.status);
+        words = (await res.text()).split("\n").map((w) => w.trim()).filter(Boolean);
+        renderHome();
+      } catch (err) {
+        console.error(err);
+        $("load-msg").textContent = "Couldn't load the word list. Check your connection and reload the page.";
+      }
+    }
+
+    // ---------- boards ----------
+    const neighbours = Array.from({ length: N }, (_, i) => {
+      const r = Math.floor(i / SIZE), c = i % SIZE, out = [];
+      for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+        const rr = r + dr, cc = c + dc;
+        if ((dr || dc) && rr >= 0 && rr < SIZE && cc >= 0 && cc < SIZE) out.push(rr * SIZE + cc);
+      }
+      return out;
+    });
+
+    // Every dictionary word on the board.
+    function solve(letters) {
+      const found = new Set();
+      const used = new Array(N).fill(false);
+      const dfs = (i, prefix) => {
+        const w = prefix + letters[i];
+        if (!hasPrefix(w)) return;
+        if (w.length >= MIN_LEN && isWord(w)) found.add(w);
+        used[i] = true;
+        for (const n of neighbours[i]) if (!used[n]) dfs(n, w);
+        used[i] = false;
+      };
+      for (let i = 0; i < N; i++) dfs(i, "");
+      return found;
+    }
+
+    // The cells that spell `word`, or null if it isn't on the board.
+    function findPath(letters, word) {
+      const used = new Array(N).fill(false);
+      const path = [];
+      const dfs = (i, rest) => {
+        if (used[i] || !rest.startsWith(letters[i])) return false;
+        used[i] = true;
+        path.push(i);
+        rest = rest.slice(letters[i].length);
+        if (!rest || neighbours[i].some((n) => dfs(n, rest))) return true;
+        path.pop();
+        used[i] = false;
+        return false;
+      };
+      for (let i = 0; i < N; i++) if (dfs(i, word)) return path;
+      return null;
+    }
+
+    function hash(s) {
+      let h = 2166136261;
+      for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+      return h >>> 0;
+    }
+    function rng(seed) {
+      return () => {
+        seed = (seed + 0x6d2b79f5) | 0;
+        let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+    // Shuffles and rolls the dice; re-rolls (up to 20 times) a board with fewer than 60 words.
+    function makeBoard(seed) {
+      const rand = rng(seed);
+      for (let tries = 0; ; tries++) {
+        const dice = DICE.slice();
+        for (let i = dice.length - 1; i > 0; i--) {
+          const j = Math.floor(rand() * (i + 1));
+          [dice[i], dice[j]] = [dice[j], dice[i]];
+        }
+        const letters = dice.map((d) => { const f = d[Math.floor(rand() * 6)]; return f === "q" ? "qu" : f; });
+        if (tries >= 20 || solve(letters).size >= 60) return letters;
+      }
+    }
+
+    const today = () => new Date().toISOString().slice(0, 10); // the daily board changes at midnight UTC
+    const dailySeed = (date) => hash(`${GAME_ID} ${date}`);
+    const dailyId = (date) => `${GAME_ID}-${date.replaceAll("-", "")}`;
+    const dateLabel = (date) => new Date(`${date}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+
+    // ---------- storage ----------
+    // { game: the round in progress, daily: today's finished round, last: the latest finished round, best }
+    let store = {};
+    try { store = JSON.parse(localStorage.getItem(KEY)) || {}; } catch {}
+    const save = () => { try { localStorage.setItem(KEY, JSON.stringify(store)); } catch {} };
+
+    // ---------- home ----------
+    function renderHome() {
+      const ready = !!words;
+      for (const id of ["daily", "random", "create", "join"]) $(id).disabled = !ready;
+      if (!ready) return;
+      const d = store.daily?.date === today() ? store.daily : null;
+      $("daily").firstChild.textContent = d ? `Daily board: ${total(d.found)} points` : "Daily board";
+      $("daily-sub").textContent = d ? "See your words. A new board comes at midnight UTC." : `${dateLabel(today())}: the same letters for everyone. One go.`;
+      $("random-sub").textContent = store.best ? `Fresh letters every time. Your best: ${store.best}` : "Fresh letters every time. Play as often as you like.";
+    }
+    $("daily").addEventListener("click", () => {
+      const date = today();
+      if (store.daily?.date === date) showResult({ mode: "daily", ...store.daily });
+      else start({ mode: "daily", date, letters: makeBoard(dailySeed(date)) });
+    });
+    $("random").addEventListener("click", startRandom);
+    function startRandom() { start({ mode: "random", letters: makeBoard((Math.random() * 2 ** 32) >>> 0) }); }
+
+    // ---------- play ----------
+    let game = null;      // { mode, date?, letters, endsAt, found: [] }
+    let answers = null;   // Set of every word on the current board
+    let path = [];        // cells under the finger (or typed)
+    let typed = null;     // a word typed on a keyboard, while typing
+    let dragId = null;
+    let flash = null;     // { kind, timer } after a word is played
+    let ticker = null;
+
+    function buildCells(el, letters) {
+      el.replaceChildren(...letters.map((l) => {
+        const cell = document.createElement("div");
+        cell.className = "cell";
+        const tile = document.createElement("div");
+        tile.className = "tile" + (l === "qu" ? " qu" : "");
+        tile.textContent = l === "qu" ? "Qu" : l.toUpperCase();
+        cell.append(tile);
+        return cell;
+      }));
+    }
+    function drawPath(cellsEl, trailEl, cells, kind, boardEl) {
+      [...cellsEl.children].forEach((c, i) => c.classList.toggle("on", cells.includes(i)));
+      trailEl.setAttribute("points", cells.map((i) => `${(i % SIZE) + 0.5},${Math.floor(i / SIZE) + 0.5}`).join(" "));
+      boardEl.classList.remove("good", "warn", "bad");
+      if (kind) boardEl.classList.add(kind);
+    }
+
+    function start(g) {
+      clearFlash();
+      game = { ...g, endsAt: g.endsAt || Date.now() + SECS * 1000, found: g.found || [] };
+      answers = solve(game.letters);
+      store.game = game;
+      save();
+      path = [];
+      typed = null;
+      buildCells($("cells"), game.letters);
+      $("end").textContent = game.mode === "room" ? "Leave" : "End";
+      if (game.mode !== "room") { $("play-players").replaceChildren(); $("play-code").replaceChildren(); }
+      show("play");
+      renderPlay();
+      clearInterval(ticker);
+      ticker = setInterval(tick, 250);
+      tick();
+    }
+
+    function tick() {
+      if (!game) return;
+      const left = Math.max(0, Math.ceil((game.endsAt - Date.now()) / 1000));
+      $("time").textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
+      $("time-box").classList.toggle("low", left <= 10);
+      if (left <= 0) finish();
+    }
+
+    const wordOf = (cells) => cells.map((i) => game.letters[i]).join("");
+    const judge = (w) => (w.length < MIN_LEN ? "" : game.found.includes(w) ? "warn" : answers.has(w) ? "good" : "");
+
+    function renderPlay() {
+      if (!game) return;
+      $("score").textContent = total(game.found);
+      $("count").textContent = game.found.length;
+      if (!flash) {
+        const w = typed ?? wordOf(path);
+        $("word").className = "word " + judge(w);
+        $("word").textContent = w.toUpperCase();
+        drawPath($("cells"), $("trail"), path, typed !== null && !path.length && typed ? "bad" : judge(w), $("board"));
+      }
+      const list = $("found");
+      list.replaceChildren(...game.found.slice().reverse().map((w) => chip(w)));
+    }
+
+    function chip(w) {
+      const li = document.createElement("li");
+      li.textContent = w;
+      const sup = document.createElement("sup");
+      sup.textContent = points(w);
+      li.append(sup);
+      return li;
+    }
+
+    function clearFlash() { if (flash) { clearTimeout(flash.timer); flash = null; } }
+
+    // Plays the word on `cells` (or a typed word) and shows how it went for a moment.
+    function play(w, cells) {
+      path = [];
+      typed = null;
+      if (!game || !w) return renderPlay();
+      let kind, text;
+      if (w.length < MIN_LEN) [kind, text] = ["bad", "Too short"];
+      else if (!cells) [kind, text] = ["bad", "Not on the board"];
+      else if (game.found.includes(w)) [kind, text] = ["warn", "Already found"];
+      else if (!answers.has(w)) [kind, text] = ["bad", "Not a word"];
+      else {
+        game.found.push(w);
+        save();
+        [kind, text] = ["good", `+${points(w)}`];
+        navigator.vibrate?.(15);
+      }
+      clearFlash();
+      $("word").className = "word " + kind;
+      $("word").textContent = w.toUpperCase();
+      const small = document.createElement("small");
+      small.textContent = text;
+      $("word").append(small);
+      drawPath($("cells"), $("trail"), cells || [], kind, $("board"));
+      flash = { timer: setTimeout(() => { flash = null; renderPlay(); }, 650) };
+      renderPlay();
+    }
+
+    // Touch and mouse: drag through the letters. A cell counts only near its centre, so diagonals are easy.
+    const boardEl = $("board");
+    function cellAt(x, y) {
+      const r = $("cells").getBoundingClientRect();
+      const size = r.width / SIZE;
+      const fx = (x - r.left) / size, fy = (y - r.top) / size;
+      const c = Math.floor(fx), row = Math.floor(fy);
+      if (c < 0 || c >= SIZE || row < 0 || row >= SIZE) return -1;
+      const dx = fx - c - 0.5, dy = fy - row - 0.5;
+      return dx * dx + dy * dy <= 0.42 * 0.42 ? row * SIZE + c : -1;
+    }
+    function extend(x, y) {
+      const i = cellAt(x, y);
+      if (i < 0) return false;
+      const last = path[path.length - 1];
+      if (!path.length) path = [i];
+      else if (i === last) return false;
+      else if (path.length > 1 && path[path.length - 2] === i) path.pop();
+      else if (!path.includes(i) && neighbours[last].includes(i)) path.push(i);
+      else return false;
+      return true;
+    }
+    boardEl.addEventListener("pointerdown", (e) => {
+      if (!game || dragId !== null) return;
+      e.preventDefault();
+      boardEl.setPointerCapture?.(e.pointerId);
+      dragId = e.pointerId;
+      clearFlash();
+      path = [];
+      typed = null;
+      extend(e.clientX, e.clientY);
+      renderPlay();
+    });
+    boardEl.addEventListener("pointermove", (e) => {
+      if (e.pointerId !== dragId) return;
+      let changed = false;
+      for (const p of e.getCoalescedEvents?.() || [e]) changed = extend(p.clientX, p.clientY) || changed;
+      if (changed) renderPlay();
+    });
+    boardEl.addEventListener("pointerup", (e) => {
+      if (e.pointerId !== dragId) return;
+      dragId = null;
+      const cells = path;
+      play(wordOf(cells), cells);
+    });
+    boardEl.addEventListener("pointercancel", (e) => {
+      if (e.pointerId !== dragId) return;
+      dragId = null;
+      path = [];
+      renderPlay();
+    });
+
+    // Keyboard: type a word, Enter plays it, Backspace and Escape fix it.
+    document.addEventListener("keydown", (e) => {
+      if (!game || dragId !== null || e.metaKey || e.ctrlKey || e.altKey || e.target.closest("input")) return;
+      if (/^[a-z]$/i.test(e.key)) typed = (typed || "") + e.key.toLowerCase();
+      else if (e.key === "Backspace") typed = typed ? typed.slice(0, -1) : null;
+      else if (e.key === "Escape") typed = null;
+      else if (e.key === "Enter" && typed) { e.preventDefault(); const w = typed; return play(w, findPath(game.letters, w)); }
+      else return;
+      e.preventDefault();
+      clearFlash();
+      path = typed ? findPath(game.letters, typed) || [] : [];
+      renderPlay();
+    });
+
+    $("end").addEventListener("click", () => {
+      if (!game) return;
+      if (game.mode === "room") return leaveRoomNow();
+      const msg = game.mode === "daily" ? "End today's board now? You only get one go." : "End this board now?";
+      if (confirm(msg)) finish();
+    });
+
+    function finish() {
+      if (!game) return;
+      clearInterval(ticker);
+      clearFlash();
+      const g = game;
+      game = null;
+      dragId = null;
+      const r = { mode: g.mode, date: g.date, letters: g.letters, found: g.found, saved: false };
+      store.game = null;
+      if (g.mode === "room") {
+        store.roomLast = { ...r, key: g.key, endsAt: g.endsAt };
+        save();
+        showResult(store.roomLast);
+        return handIn();
+      }
+      if (g.mode === "daily") store.daily = r;
+      else store.best = Math.max(store.best || 0, total(g.found));
+      store.last = r;
+      save();
+      showResult(r);
+    }
+
+    // ---------- results ----------
+    let shown = null; // the round on the results screen
+    function showResult(r) {
+      shown = r;
+      const all = [...solve(r.letters)];
+      const missed = all.filter((w) => !r.found.includes(w)).sort((a, b) => b.length - a.length || (a < b ? -1 : 1));
+      const score = total(r.found);
+      $("r-title").textContent = r.mode === "daily" ? `Daily board, ${dateLabel(r.date)}` : "Time's up!";
+      $("r-score").textContent = score;
+      $("r-text").textContent = `points · ${r.found.length} of ${all.length} words found`;
+      $("again").textContent = r.mode === "daily" ? "Random board" : "New board";
+      $("save-label").textContent = r.mode === "daily" ? `Add your score to the Top 10 for ${dateLabel(r.date)}:` : "Add your score to the all-time Top 10:";
+      $("save-msg").textContent = "";
+      if (!$("save-name").value) { try { $("save-name").value = localStorage.getItem(NAME_KEY) || ""; } catch {} }
+      $("save-btn").textContent = `Save ${score}`;
+      $("save-box").hidden = !(score > 0 && !r.saved) || r.mode === "room";
+      $("solo-actions").hidden = r.mode === "room";
+      $("standings").hidden = $("room-actions").hidden = r.mode !== "room";
+      $("room-hint").textContent = "";
+      if (r.mode === "room") renderStandings();
+      buildCells($("r-cells"), r.letters);
+      pick(null);
+      $("r-found-title").textContent = r.found.length ? `Your words (${r.found.length})` : "You didn't find any words";
+      $("r-found").replaceChildren(...r.found.slice().sort((a, b) => b.length - a.length || (a < b ? -1 : 1)).map(chip));
+      $("r-missed-title").textContent = missed.length ? `Missed (${missed.length})` : "You found every word!";
+      $("r-missed").replaceChildren(...missed.map(chip));
+      show("result");
+    }
+
+    // Tap a word on the results screen to see where it is on the board.
+    function pick(li) {
+      for (const el of document.querySelectorAll("#result .words li")) el.classList.toggle("pick", el === li);
+      const cells = li ? findPath(shown.letters, li.firstChild.textContent) || [] : [];
+      drawPath($("r-cells"), $("r-trail"), cells, "", $("r-board"));
+    }
+    for (const id of ["r-found", "r-missed"]) {
+      $(id).addEventListener("click", (e) => {
+        const li = e.target.closest("li");
+        if (li) pick(li.classList.contains("pick") ? null : li);
+      });
+    }
+
+    $("again").addEventListener("click", startRandom);
+    $("menu").addEventListener("click", () => { renderHome(); show("home"); });
+    $("r-top").addEventListener("click", () => openTop(shown?.mode === "daily" ? shown.date : null));
+
+    // ---------- online rooms ----------
+    // Everyone plays the same board at the same time, each on their own clock. The room engine only lets the
+    // player whose turn it is write, so the results are handed in one by one when time's up: on your turn you
+    // add your words to state.res and pass the turn on; once the turn comes round to someone who has handed
+    // in, that write also ends the game with the highest score as the winner (a tie is a draw). A player who
+    // doesn't hand in (left, or offline) is skipped by the turn timer once the others are done.
+    // board: the 25 dice faces, comma-separated. state: { round, res: { s0: "words found" … } }.
+    const ROOM_SEATS = 6;
+    const TURN_SECS = 20;  // how long the others wait for a player to hand in before skipping them
+    const GRACE_MS = 15000; // and never before this long after their own clock ran out
+    let seat = null;       // { backend, code, seat }
+    let room = null;
+    let leaveRoom = null;
+    let busy = false;
+
+    const esc = (t) => String(t).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+    const label = (s) => (s === seat?.seat ? "You" : esc(rooms.nameOf(room, s)));
+    const roundKey = () => `${seat.code}:${room.round}`;
+    const seated = (r) => rooms.seatList(r).flatMap((uid, s) => (uid ? [s] : []));
+    const resOf = (r, s) => r.state?.res?.[rooms.seatKey(s)];
+    const wordsIn = (str) => (str || "").split(" ").filter((w) => /^[a-z]+$/.test(w));
+    // A player's score: only distinct words that really are on the board count.
+    const solved = new Map();
+    function scoreOf(letters, list) {
+      const key = letters.join();
+      if (!solved.has(key)) solved.set(key, solve(letters));
+      const all = solved.get(key);
+      return total([...new Set(list)].filter((w) => all.has(w)));
+    }
+    function newRound(cur, round) {
+      return Object.assign(cur, {
+        board: makeBoard((Math.random() * 2 ** 32) >>> 0).join(","), round, turn: seated(cur)[0],
+        winner: null, left: null, state: { round, res: {} }, status: "playing",
+      });
+    }
+
+    function goHome(error = "") {
+      leaveRoom?.();
+      leaveRoom = null;
+      seat = room = null;
+      if (game?.mode === "room") { clearInterval(ticker); clearFlash(); game = null; store.game = null; save(); }
+      renderHome();
+      show("home");
+      $("home-error").textContent = error;
+      busy = false;
+    }
+
+    function enterRoom(s) {
+      seat = s;
+      room = null;
+      leaveRoom = rooms.enter(s, onRoom, goHome);
+    }
+
+    async function createRoom() {
+      if (busy || !words) return;
+      busy = true;
+      $("home-error").textContent = "";
+      await rooms.setMyName($("my-name").value);
+      try {
+        enterRoom(await rooms.createRoom(GAME_ID, { seats: ROOM_SEATS, min: 2, auto: false, turnSecs: TURN_SECS }));
+      } catch (err) {
+        console.error(err);
+        goHome(err instanceof rooms.RoomError ? err.message : "Couldn't create a room. Check your connection and try again.");
+      }
+    }
+    async function joinRoom(code) {
+      if (busy || !words) return;
+      busy = true;
+      $("home-error").textContent = "";
+      await rooms.setMyName($("my-name").value);
+      try {
+        enterRoom(await rooms.joinRoom(GAME_ID, code));
+      } catch (err) {
+        console.error(err);
+        goHome(err instanceof rooms.RoomError ? err.message : "Couldn't join. Check your connection and try again.");
+      }
+    }
+
+    function onRoom(value) {
+      room = value;
+      busy = false;
+      if (room.status === "waiting") { renderLobby(); return show("lobby"); }
+      const key = roundKey();
+      const mine = store.roomLast?.key === key ? store.roomLast : null;
+      if (room.status === "playing" && !mine && !resOf(room, seat.seat)) {
+        // Playing this round: carry on (or after a reload, pick the clock and words back up).
+        if (game?.key !== key) {
+          const saved = store.game?.key === key ? store.game : null;
+          start({ mode: "room", key, letters: room.board.split(","), endsAt: saved?.endsAt, found: saved?.found });
+        }
+        return renderPlayers();
+      }
+      // Time's up for this player: the results screen, filled in as everyone hands in.
+      if (shown?.key !== key) {
+        // (Skipped while still playing, e.g. back after a long reload: the words found so far still show.)
+        const found = game?.key === key ? game.found : wordsIn(resOf(room, seat.seat));
+        if (game) { clearInterval(ticker); clearFlash(); game = null; store.game = null; save(); }
+        showResult(mine || { mode: "room", key, letters: room.board.split(","), found, endsAt: 0 });
+      } else renderStandings();
+      handIn();
+    }
+
+    function renderPlayers() {
+      const html = seated(room).map((s) => `<span class="chip">${label(s)}<span class="dot${rooms.isOnline(room, s) ? " on" : ""}"></span></span>`).join("");
+      const code = `Room <b>${seat.code}</b>`;
+      for (const id of ["lobby-players", "play-players"]) $(id).innerHTML = html;
+      $("lobby-code").innerHTML = $("play-code").innerHTML = code;
+    }
+
+    function renderLobby() {
+      renderPlayers();
+      $("waiting-code").textContent = seat.code;
+      const count = rooms.playerCount(room);
+      const host = room.host === seat.backend.uid;
+      $("start-btn").hidden = !host;
+      $("start-btn").disabled = count < 2;
+      $("waiting-note").textContent = `${count} of ${room.seats} here. ` +
+        (host ? (count < 2 ? "Waiting for a friend to join…" : "Start when everyone's in.") : "Waiting for the host to start…");
+    }
+
+    // On this player's turn, once their own clock has run out: hand in their words, and end the game if
+    // everyone else already has.
+    async function handIn() {
+      if (busy || !room || room.status !== "playing") return;
+      const me = seat.seat, round = room.round, key = roundKey(), uid = seat.backend.uid;
+      const mine = store.roomLast?.key === key ? store.roomLast : null;
+      if (room.turn !== me || (!mine && !resOf(room, me))) return skipIfStuck();
+      busy = true;
+      try {
+        await seat.backend.transact(seat.code, (cur) => {
+          if (!cur || cur.status !== "playing" || cur.round !== round || cur.turn !== me || rooms.seatOf(cur, uid) !== me) return undefined;
+          const res = { ...(cur.state?.res || {}) };
+          const had = rooms.seatKey(me) in res;
+          if (!had) res[rooms.seatKey(me)] = mine.found.join(" ") || ".";
+          cur.state = { ...cur.state, res };
+          const next = rooms.nextSeat(cur, me);
+          if (!had && next !== me && !resOf(cur, next)) { cur.turn = next; return cur; }
+          const letters = cur.board.split(",");
+          const scores = seated(cur).filter((s) => resOf(cur, s)).map((s) => [s, scoreOf(letters, wordsIn(resOf(cur, s)))]);
+          const best = Math.max(...scores.map(([, p]) => p));
+          const top = scores.filter(([, p]) => p === best);
+          cur.status = "done";
+          cur.winner = top.length === 1 && best > 0 ? top[0][0] : "draw";
+          return cur;
+        });
+      } catch (err) {
+        console.error(err);
+        $("room-hint").textContent = "Couldn't hand in your words. Trying again…";
+      } finally { busy = false; }
+    }
+
+    // Someone else is holding things up: once this player is done, and that player has had their time, skip them.
+    function skipIfStuck() {
+      const mine = store.roomLast?.key === roundKey() ? store.roomLast : null;
+      if (!mine || room.turn === seat.seat || Date.now() < (mine.endsAt || 0) + GRACE_MS) return;
+      if (rooms.turnLeft(room) === 0) rooms.skipTurn(seat, room);
+    }
+    setInterval(() => { if (room?.status === "playing" && !game) { renderStandings(); handIn(); } }, 1000);
+
+    function renderStandings() {
+      if (!room || !shown || shown.mode !== "room") return;
+      const letters = room.board.split(",");
+      const done = room.status === "done";
+      const rows = seated(room).map((s) => {
+        const res = resOf(room, s);
+        const list = wordsIn(res);
+        const finished = !!res || (s === seat.seat && store.roomLast?.key === roundKey());
+        return { s, in: finished, score: res ? scoreOf(letters, list) : -1, n: list.length };
+      });
+      if (done) rows.sort((a, b) => b.score - a.score);
+      $("st-list").innerHTML = rows.map((r, i) => `<li class="${r.s === seat.seat ? "me" : ""}"><span class="rank">${done && r.in ? `${i + 1}.` : ""}</span>` +
+        `<span class="who">${label(r.s)}${done && room.winner === r.s ? " 🏆" : ""}</span><span class="pts">` +
+        (!r.in ? `<small>${done ? "didn't hand in" : room.turn === r.s ? "handing in…" : "playing…"}</small>`
+          : done ? `${r.score} <small>· ${r.n} word${r.n === 1 ? "" : "s"}</small>` : "<small>✓ done</small>") + "</span></li>").join("");
+      const waitingOn = rows.filter((r) => !r.in).length;
+      $("r-title").textContent = !done ? "Time's up!" : typeof room.left === "number" ? "Game over"
+        : room.winner === "draw" ? "It's a draw!" : room.winner === seat.seat ? "You win! 🎉" : `${rooms.nameOf(room, room.winner)} wins!`;
+      $("rematch").hidden = !done;
+      if (!done) {
+        $("room-hint").textContent = `Waiting for ${waitingOn} more player${waitingOn === 1 ? "" : "s"} to finish…`;
+      } else {
+        const ready = seated(room).filter((s) => rooms.wantsAgain(room, s));
+        const others = seated(room).filter((s) => s !== seat.seat && rooms.isOnline(room, s) && !rooms.wantsAgain(room, s));
+        $("rematch").disabled = ready.includes(seat.seat);
+        $("rematch").innerHTML = ready.includes(seat.seat) ? `Waiting for ${others.map(label).join(", ") || "others"}…`
+          : ready.length ? `Play again (${ready.map(label).join(", ")} ready)` : "Play again";
+        $("room-hint").textContent = "";
+      }
+    }
+
+    async function leaveRoomNow() {
+      if (!seat || !room) return goHome();
+      if (game && !confirm("Leave this round? Your words won't count.")) return;
+      // Mid-round, just go: the others skip this player when time's up rather than the round ending for all.
+      if (room.status !== "playing") await rooms.quit(seat);
+      goHome();
+    }
+
+    $("create").addEventListener("click", createRoom);
+    $("join-form").addEventListener("submit", (e) => { e.preventDefault(); joinRoom($("join-code").value); });
+    $("join-code").addEventListener("input", () => {
+      $("join-code").value = $("join-code").value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+      $("home-error").textContent = "";
+    });
+    $("my-name").value = rooms.myName();
+    $("my-name").addEventListener("change", () => { $("my-name").value = rooms.cleanRoomName($("my-name").value); });
+    $("start-btn").addEventListener("click", async () => {
+      $("start-btn").disabled = true;
+      try { await rooms.startGame(seat, (cur) => newRound(cur, cur.round)); }
+      catch (err) { console.error(err); $("waiting-note").textContent = err instanceof rooms.RoomError ? err.message : "Couldn't start. Try again."; }
+    });
+    $("rematch").addEventListener("click", async () => {
+      if (room?.status !== "done") return;
+      $("rematch").disabled = true;
+      try { await rooms.playAgain(seat, newRound); }
+      catch (err) { console.error(err); $("room-hint").textContent = "Couldn't start a new round. Try again."; }
+    });
+    for (const id of ["lobby-leave", "room-leave"]) $(id).addEventListener("click", leaveRoomNow);
+    $("share").addEventListener("click", async () => {
+      if ((await rooms.share(seat.code, "Word Grid")) === "copied") $("share").textContent = "Link copied";
+    });
+    $("copy").addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(seat.code); $("copy").textContent = "Copied"; } catch { prompt("Room code:", seat.code); }
+      setTimeout(() => ($("copy").textContent = "Copy code"), 1500);
+    });
+
+    // ---------- leaderboards ----------
+    // The shared Top 10 sheet on the shared leaderboard storage: an all-time board for random boards, and one
+    // board per day for the daily board. Nothing connects to Firebase until a sheet opens or a score is saved.
+    const leaderboardApi = async () => rooms;
+    const sheets = new Map();
+    function sheetFor(date) {
+      const id = date ? dailyId(date) : GAME_ID;
+      if (!sheets.has(id)) {
+        sheets.set(id, import("../shared/leaderboard.js").then(({ topTen }) => {
+          const title = date ? `Top 10 for ${dateLabel(date)}` : "All-time Top 10";
+          const sheet = topTen({ game: id, rooms: leaderboardApi, title, empty: date ? "No scores today yet. Be the first!" : undefined });
+          // Each sheet is its own dialog: give it ids of its own.
+          const dialog = [...document.querySelectorAll("dialog.leaders")].at(-1);
+          dialog.id = `leaders-${id}`;
+          dialog.querySelector("h2").id = `leaders-title-${id}`;
+          dialog.setAttribute("aria-labelledby", `leaders-title-${id}`);
+          return sheet;
+        }));
+      }
+      return sheets.get(id);
+    }
+    const openTop = async (date) => (await sheetFor(date)).open();
+    $("top-daily").addEventListener("click", () => openTop(today()));
+    $("top-all").addEventListener("click", () => openTop(null));
+
+    // A score is possible only if every word is on its board, none repeats, and (daily) the board is that day's.
+    function validResult(r) {
+      if (!r.found.length || new Set(r.found).size !== r.found.length) return false;
+      if (r.mode === "daily" && r.letters.join() !== makeBoard(dailySeed(r.date)).join()) return false;
+      const all = solve(r.letters);
+      return r.found.every((w) => all.has(w));
+    }
+
+    let saving = false;
+    $("save-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const r = shown;
+      if (saving || !r || r.saved) return;
+      const msg = $("save-msg");
+      const api = await leaderboardApi();
+      const name = api.cleanName($("save-name").value);
+      if (!api.NAME_RE.test(name)) {
+        msg.textContent = "Pick a name of up to 12 letters, numbers or spaces.";
+        $("save-name").focus();
+        return;
+      }
+      if (!validResult(r)) { msg.textContent = "Not saved: that isn't a possible score for this board."; return; }
+      const score = total(r.found);
+      const board = r.mode === "daily" ? dailyId(r.date) : GAME_ID;
+      saving = true;
+      $("save-btn").disabled = true;
+      msg.textContent = "Saving…";
+      try {
+        await api.saveScore(board, name, score, { order: "high" });
+        try { localStorage.setItem(NAME_KEY, name); } catch {}
+        $("save-name").value = name;
+        $("save-name").blur();
+        r.saved = true;
+        save();
+        (await sheetFor(r.mode === "daily" ? r.date : null)).stale();
+        $("save-box").hidden = true;
+        msg.textContent = `Saved ${score} as ${name}. Tap 🏆 to see the Top 10.`;
+      } catch (err) {
+        console.error(err);
+        msg.textContent = err instanceof api.RoomError ? err.message
+          : /network|offline|fetch|timeout|unavailable/i.test(String(err?.message || "")) || !navigator.onLine ? "Couldn't save: no connection."
+          : `Couldn't save: ${String(err?.message || err).slice(0, 80)}.`;
+      } finally {
+        saving = false;
+        $("save-btn").disabled = false;
+      }
+    });
+
+    // ---------- start ----------
+    renderHome();
+    await loadWords();
+    const linked = rooms.roomFromUrl();
+    if (words && linked) {
+      // A shared link (?room=CODE), or a reload in a room: join, or rejoin the same seat.
+      $("join-code").value = linked.toUpperCase();
+      joinRoom(linked);
+    } else if (words && store.game?.letters?.length === N && store.game.mode !== "room") {
+      // Back to the round in progress (the clock kept running), or its results if time ran out meanwhile.
+      start(store.game);
+    }
+
+    // Hooks for automated tests; harmless for players.
+    window.__wordgrid = {
+      ready: () => !!words,
+      state: () => ({ game, store, shown, room, seat }),
+      rooms,
+      solve: (letters) => [...solve(letters ?? game.letters)],
+      findPath: (word) => findPath(game.letters, word),
+      makeBoard,
+      start: (letters, mode = "random") => start({ mode, letters, date: mode === "daily" ? today() : undefined }),
+      setTimeLeft: (secs) => { if (game) { game.endsAt = Date.now() + secs * 1000; save(); tick(); } },
+    };
+  </script>
+</body>
+</html>
