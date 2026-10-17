@@ -9,16 +9,18 @@
 //
 // onState gets what the server sends this player about 10 times a second (the game module's view, plus `at`, the
 // server's clock), with `age`: roughly how many ms ago the server sent it (half the measured round trip), so a game
-// can move things on by that much. onStatus gets "connecting", "connected" or "refused" (with the server's reason;
-// it doesn't retry then). The connection pings every 5 seconds, reconnects by itself (and the server carries on
+// can move things on by that much. onStatus gets "connecting" (after a dropped connection, with why it closed),
+// "connected" or "refused" (with the server's reason; it doesn't retry then). The connection pings every 5 seconds, reconnects by itself (and the server carries on
 // from where it was), and closes after 20 seconds in the background so a phone left on another app costs nothing;
-// it reconnects when the page is back. game.rtt() is the measured round trip in ms.
+// it reconnects when the page is back. game.rtt() is the measured round trip in ms. While connected it sends a tiny
+// "tick" whenever nothing else went for 100 ms: the server's game only moves on when messages arrive (see worker/).
 // Works with the Firebase backends only (the server checks the player's Firebase sign-in): real Firebase uses the
 // live server, ?backend=emulator a local one (cd worker && npm run dev).
 
 const LIVE = "wss://play.reclaude.junsaku.dev";
 const LOCAL = "ws://127.0.0.1:8787";
 const PING_MS = 5000;
+const TICK_MS = 100; // the server's game moves on when messages come in: send something at least this often
 const HIDDEN_MS = 20_000;
 const REFUSED = new Set([4003, 4004]); // not seated / no such game: retrying won't help
 
@@ -29,7 +31,8 @@ export function serverUrl() {
 export function connect({ backend, code }, room, { onState = () => {}, onStatus = () => {} } = {}) {
   if (!backend.credentials) throw new Error("The game server needs Firebase (not ?backend=fake or one phone).");
   const url = `${serverUrl()}/${room.game}/${code}/${room.createdAt}`;
-  let ws = null, closed = false, retry = 500, retryTimer = 0, pingTimer = 0, hiddenTimer = 0;
+  let ws = null, closed = false, retry = 500, retryTimer = 0, pingTimer = 0, hiddenTimer = 0, tickTimer = 0, sentAt = 0;
+  const raw = (msg) => { ws.send(JSON.stringify(msg)); sentAt = performance.now(); };
   let rtt = 150, pingId = 0;
   const pings = new Map();
 
@@ -45,17 +48,22 @@ export function connect({ backend, code }, room, { onState = () => {}, onStatus 
     };
     sock.onmessage = (e) => {
       let msg; try { msg = JSON.parse(e.data); } catch { return; }
-      if (msg.t === "hi") { retry = 500; onStatus("connected"); ping(); }
+      if (msg.t === "hi") {
+        retry = 500; onStatus("connected"); ping();
+        clearInterval(tickTimer);
+        tickTimer = setInterval(() => { if (ws === sock && sock.readyState === WebSocket.OPEN && performance.now() - sentAt >= TICK_MS - 10) raw({ t: "tick" }); }, TICK_MS / 2);
+      }
       else if (msg.t === "pong") { const at = pings.get(msg.id); if (at) { pings.delete(msg.id); rtt += (performance.now() - at - rtt) * 0.3; } }
       else if (msg.t === "s") onState({ ...msg, age: rtt / 2 });
     };
     sock.onclose = (e) => {
       if (ws === sock) ws = null;
-      clearInterval(pingTimer);
+      clearInterval(pingTimer); clearInterval(tickTimer);
       if (closed) return;
       if (REFUSED.has(e.code)) { closed = true; onStatus("refused", e.reason); return; }
       if (document.hidden) return; // reconnects when the page is back
-      onStatus("connecting");
+      console.warn("game server connection closed", e.code, e.reason);
+      onStatus("connecting", e.reason ? `${e.code}: ${e.reason}` : `closed (${e.code})`);
       retryTimer = setTimeout(open, retry);
       retry = Math.min(retry * 2, 5000);
     };
@@ -67,7 +75,7 @@ export function connect({ backend, code }, room, { onState = () => {}, onStatus 
     const id = ++pingId;
     pings.set(id, performance.now());
     if (pings.size > 10) pings.delete(pings.keys().next().value);
-    ws.send(JSON.stringify({ t: "ping", id }));
+    raw({ t: "ping", id });
   }
   function onVisibility() {
     clearTimeout(hiddenTimer);
@@ -79,14 +87,14 @@ export function connect({ backend, code }, room, { onState = () => {}, onStatus 
 
   return {
     send(msg) {
-      if (ws?.readyState === WebSocket.OPEN) { ws.send(JSON.stringify(msg)); return true; }
+      if (ws?.readyState === WebSocket.OPEN) { raw(msg); return true; }
       return false;
     },
     rtt: () => rtt,
     isConnected: () => ws?.readyState === WebSocket.OPEN,
     close() {
       closed = true;
-      clearTimeout(retryTimer); clearTimeout(hiddenTimer); clearInterval(pingTimer);
+      clearTimeout(retryTimer); clearTimeout(hiddenTimer); clearInterval(pingTimer); clearInterval(tickTimer);
       document.removeEventListener("visibilitychange", onVisibility);
       if (ws) { const s = ws; ws = null; s.close(1000, "Left"); }
     },

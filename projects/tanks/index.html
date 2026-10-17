@@ -253,7 +253,7 @@
     let room = null;          // online: the Firebase room (lobby, names)
     let leaveRoom = null;
     let game = null;          // online: the server connection
-    let netStatus = "";
+    let netStatus = "", netWhy = "";
     let snaps = [];           // online: recent server updates { at, recv, v }
     let clockOff = null;      // online: local receive time minus server time, at best
     let me = null;            // online: own tank { x, y, d, alive, life, moving, round }
@@ -361,6 +361,19 @@
         sendMine(now);
       }
       if (world) { draw(world, now); hud(world); }
+      else if (mode === "online" && room?.status === "playing") waitingForServer();
+    }
+    // Online, before the first update from the game server: say so (and why, if a connection failed).
+    let waitText = "";
+    function waitingForServer() {
+      const text = netStatus === "connected" ? "Starting…" : `Connecting to the game server…${netWhy ? ` (${netWhy})` : ""}`;
+      if (text === waitText) return;
+      waitText = text;
+      ctx.fillStyle = "#111113"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.font = `600 ${Math.round(4.5 * px)}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+      ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = "#cfcfd4";
+      ctx.fillText(netStatus === "connected" ? "Starting…" : "Connecting to the game server…", 52 * px, 50 * px);
+      $("hint").textContent = text;
     }
     // Drives a tank by the held direction.
     function drive(tank, map, dt, blockers) {
@@ -585,6 +598,8 @@
         onState,
         onStatus: (st, why) => {
           netStatus = st;
+          if (why) netWhy = why;
+          waitText = "";
           if (st === "refused") showHome(`Couldn't join the game: ${why || "refused"}.`);
         },
       });
