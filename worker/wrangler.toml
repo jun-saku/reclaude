@@ -3,8 +3,9 @@
 name = "reclaude-games"
 main = "src/index.js"
 compatibility_date = "2026-09-01"
+# Reached at play.reclaude.junsaku.dev: a custom domain added once in the Cloudflare dashboard (Workers & Pages →
+# reclaude-games → Settings → Domains & Routes), so the deploy token needs only "Workers Scripts: Edit".
 workers_dev = false
-routes = [{ pattern = "play.reclaude.junsaku.dev", custom_domain = true }]
 
 [[durable_objects.bindings]]
 name = "ROOMS"

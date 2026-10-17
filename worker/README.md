@@ -23,7 +23,8 @@ calls it 30 times a second and sends each player its `view`. Check every input: 
 - Locally, against the Firebase emulator: `npm ci && npm run dev` (port 8787; pages use it with
   `?backend=emulator`). `tests/e2e.cjs` starts it by itself.
 - Live: deployed from `main` by `.github/workflows/pages.yml` (job `worker`) with the `CLOUDFLARE_API_TOKEN` secret,
-  which needs Workers permission on top of Pages.
+  which needs "Workers Scripts: Edit" on top of Pages. Its address, `play.reclaude.junsaku.dev`, is a custom domain
+  added once in the Cloudflare dashboard (Workers & Pages → reclaude-games → Settings → Domains & Routes).
 - Cost: Durable Objects are on Cloudflare's free Workers plan (SQLite-backed only): 100,000 requests and 13,000 GB-s
   a day. Messages from players count 20 to a request, messages to them are free, so a 4-player game costs about
   2 requests a second at most; an empty room costs nothing.

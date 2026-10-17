@@ -125,8 +125,8 @@ jobs:
 
   # The game server (worker/, a Cloudflare Worker with one Durable Object per room) at play.reclaude.junsaku.dev, from
   # main only, after the rules and before the site, so a new page never meets an older server. PR previews use the
-  # live server. Skipped until the Cloudflare secrets exist; the API token needs "Workers Scripts: Edit" (and, for the
-  # custom domain, "Workers Routes: Edit" and "Zone: Read" on junsaku.dev). If it fails, the site still deploys.
+  # live server. Skipped until the Cloudflare secrets exist; the API token needs "Workers Scripts: Edit". The address
+  # (custom domain) is set once in the Cloudflare dashboard. If this fails, the site still deploys.
   worker:
     if: ${{ !cancelled() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.build.result == 'success' }}
     needs: [build, publish_rules]
