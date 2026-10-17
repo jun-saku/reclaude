@@ -491,24 +491,26 @@
         o.present = fresh;
         if (o.t !== v.t) {
           o.t = v.t;
+          // When this update was taken, by this device's clock: the server stamped it, and live.age knows how long
+          // ago that was, so everything in it can be moved on by the time it took to get here.
+          const sampled = live.age ? now - live.age(v) : v.at;
           const slot = decodeSlot(v.d);
           const wasAlive = o.alive;
-          Object.assign(o, { d: slot.tank.d, alive: slot.tank.alive, moving: slot.tank.moving, shield: slot.tank.shield, deaths: slot.tank.deaths, sx: slot.tank.x, sy: slot.tank.y, at: v.at, events: slot.events });
+          Object.assign(o, { d: slot.tank.d, alive: slot.tank.alive, moving: slot.tank.moving, shield: slot.tank.shield, deaths: slot.tank.deaths, sx: slot.tank.x, sy: slot.tank.y, at: sampled, events: slot.events });
           if (!o.seen || !wasAlive) { o.x = o.sx; o.y = o.sy; }
           if (wasAlive && !o.alive) boom(o.x + 4, o.y + 4, true);
           o.seen = true;
-          if (slot.shell && (!o.shell || o.shell.id !== slot.shell.id)) o.shell = { ...slot.shell, speed: SHELL_SPEED, at: v.at, sx: slot.shell.x, sy: slot.shell.y };
+          if (slot.shell && (!o.shell || o.shell.id !== slot.shell.id)) o.shell = { ...slot.shell, speed: SHELL_SPEED, at: sampled, sx: slot.shell.x, sy: slot.shell.y };
           if (!slot.shell) o.shell = null;
-          if (s === room.turn && slot.header && !lead) applySnap(slot, v.at);
-          if (s === room.turn && slot.header) { lastSnap = slot; lastSnapT = v.at; }
+          if (s === room.turn && slot.header && !lead) applySnap(slot, sampled);
+          if (s === room.turn && slot.header) { lastSnap = slot; lastSnapT = sampled; }
         }
       }
       // Smooth the other tanks towards where they were, plus how far they've driven since.
       for (const [k, o] of Object.entries(others)) {
         if (!slots[k]) { o.present = false; continue; }
-        const age = Math.min(0.35, (now - o.at) / 1000);
-        let tx = o.sx, ty = o.sy;
-        if (o.moving) { tx += DIRS[o.d][0] * PLAYER_SPEED * age; ty += DIRS[o.d][1] * PLAYER_SPEED * age; }
+        const age = Math.min(0.6, (now - o.at) / 1000);
+        const [tx, ty] = ahead(o, PLAYER_SPEED, age);
         follow(o, tx, ty, dt);
         if (o.shell && !o.shell.done) {
           const sAge = (now - o.shell.at) / 1000;
@@ -519,9 +521,16 @@
         }
       }
     }
+    // Where a tank reported at (sx, sy) has got to by now, if it kept driving: up to the first wall.
+    function ahead(o, speed, age) {
+      if (!o.moving) return [o.sx, o.sy];
+      const t = { x: o.sx, y: o.sy, d: o.d };
+      drive(t, speed * age, []);
+      return [t.x, t.y];
+    }
     function follow(o, tx, ty, dt) {
       if (Math.hypot(tx - o.x, ty - o.y) > 12) { o.x = tx; o.y = ty; return; }
-      const k = Math.min(1, dt * 14);
+      const k = Math.min(1, dt * 20);
       o.x += (tx - o.x) * k; o.y += (ty - o.y) * k;
     }
 
@@ -554,9 +563,8 @@
     // Followers move the enemies and their shells between the lead's updates.
     function followEnemies(now, dt) {
       for (const e of enemies.values()) {
-        const age = Math.min(0.35, (now - e.at) / 1000);
-        let tx = e.sx, ty = e.sy;
-        if (e.moving) { tx += DIRS[e.d][0] * KINDS[e.kind].speed * age; ty += DIRS[e.d][1] * KINDS[e.kind].speed * age; }
+        const age = Math.min(0.6, (now - e.at) / 1000);
+        const [tx, ty] = ahead(e, KINDS[e.kind].speed, age);
         follow(e, tx, ty, dt);
       }
       for (const [id, b] of shells) {

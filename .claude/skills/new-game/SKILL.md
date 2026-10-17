@@ -67,7 +67,7 @@ secret goal) goes in private data: one string per seat, ≤ 512 chars, readable 
 | `seat.backend.transact(code, fn)` | Change the room: `fn(cur)` returns the new room, or `undefined` to abort. Firebase may call it again with fresher data, so check the turn inside `fn`. |
 | `seat.backend.setPrivate(code, seat, str)` / `watchPrivate(code, seat, cb)` | Your hidden data. |
 | `quit(seat)` | Leave for good: forfeits a game in play (a real-time game goes on without you), closes the host's lobby. Call it before `leave()`. |
-| `joinLive(seat)` → `{ send(text), slots(), isLead(), stop() }` | Real-time rooms only: send your fast-changing state (≤ 256 chars), read everyone else's latest, take over the lead automatically. |
+| `joinLive(seat)` → `{ send(text), slots(), age(slot), isLead(), stop() }` | Real-time rooms only: send your fast-changing state (≤ 254 chars), read everyone else's latest and how old it is, take over the lead automatically. |
 | `playAgain(seat, deal)` | Marks you ready; once everyone online is ready, `deal(room, round)` sets up the next round. |
 | `skipTurn(seat, room)` / `turnLeft(room)` | Turn timer: seconds left, and passing an overdue turn on. |
 | `nameOf(room, s)`, `myName()`, `setMyName(name, seat?)` | Player names (escape them before putting them in HTML). |
@@ -97,11 +97,15 @@ secret goal) goes in private data: one string per seat, ≤ 512 chars, readable 
 For games where everyone plays at once (a co-op tank game, say). The room works as usual (lobby, names, Play again),
 but the fast-changing parts go through `joinLive`, kept apart from the room so updates don't resend it:
 
-- `live.send(text)` in your game loop: whole current state (position, aim), up to 256 chars. The engine sends at most
+- `live.send(text)` in your game loop: whole current state (position, aim), up to 254 chars. The engine sends at most
   `liveHz` a second, only when it changed, plus a heartbeat every second. Sending is lossy (newer replaces older), so
   repeat one-off events (shots, hits) for a moment with a counter.
 - `live.slots()` → `{ seat: { d, at } }`: every other player's latest text this round (`at` = arrival, this device's
   clock). Read it each frame and smooth between updates.
+- `live.age(slot)`: how many ms ago that update was sent (the sender's upload time plus this device's download, both
+  timed from their own writes, plus the time since it arrived). Move things on by it (position + speed × age, up to
+  the first wall) or everything trails a connection's delay behind. Tanks does this; on a 150 ms connection it
+  cut how far other tanks trail from about half a tile to under a tenth.
 - `turn` is the **lead** seat. The lead runs the shared parts (enemies, score) and is the only one who changes the
   room (`state`, `status: "done"`) while playing. If the lead goes quiet for 3 seconds, the next online player takes
   over by themselves, and `quit` hands the lead on, so the game never stops because someone left. Run anything the

@@ -646,6 +646,10 @@ export async function playAgain({ backend, code, seat }, deal) {
 // through each player's live slot instead: live.send(text) (up to 256 characters) sends at most liveHz times a
 // second, only what changed, plus a heartbeat every second; live.slots() reads every other seat's latest text
 // for this round as { seat: { d, at } } (at: when it arrived, by this device's clock), e.g. in an animation loop.
+// live.age(slot) is how long ago (ms) the update was sent: each player times how long their own writes take to be
+// confirmed, and sends half of that (their upload time) with every update, so age = sender's upload + this
+// device's download + time since arrival. A game can move things on by that much so they don't trail behind.
+// (The engine adds those 2 characters itself; the game's own text can be up to 254 characters.)
 // When the lead goes quiet for 3 seconds the next online player takes the lead by themselves, so the game goes
 // on if a player leaves or loses their connection. Call live.stop() when leaving the room (it removes your slot).
 // Sending is lossy: a newer update simply replaces an older one, so send whole state (position, aim), and for
@@ -654,14 +658,15 @@ export function joinLive({ backend, code, seat }, onChange = () => {}) {
   let room = null;
   let slots = {};
   let leadHeard = Date.now(); // when the current lead was last heard from (or became the lead)
-  let pending = null, sent = null, sentAt = 0, sending = false, claimedAt = 0;
+  let pending = null, sent = null, sentAt = 0, inFlight = 0, claimedAt = 0;
+  let rtt = 150; // how long this device's writes take to be confirmed (ms), smoothed
   const others = (all) => {
     const out = {};
     for (const [k, v] of Object.entries(all || {})) {
       const s = Number(k.slice(1));
       if (s === seat || !v || v.r !== room?.round || typeof v.d !== "string") continue;
       const was = slots[s];
-      out[s] = was && was.t === v.t ? was : { d: v.d, t: v.t, at: Date.now() };
+      out[s] = was && was.t === v.t ? was : { d: v.d.slice(2), up: parseInt(v.d.slice(0, 2), 36) || 0, t: v.t, at: Date.now() };
     }
     return out;
   };
@@ -683,9 +688,14 @@ export function joinLive({ backend, code, seat }, onChange = () => {}) {
     if (room.turn !== seat && slots[room.turn]) leadHeard = Math.max(leadHeard, slots[room.turn].at);
     // Send what changed, at most liveHz times a second, and something at least every second.
     const gap = 1000 / Math.min(room.liveHz || 6, MAX_LIVE_HZ);
-    if (pending !== null && !sending && now - sentAt >= gap && (pending !== sent || now - sentAt >= 1000)) {
-      sending = true; sentAt = now; const d = pending;
-      backend.setLive(code, seat, d, room.round).then(() => { sent = d; }, () => {}).finally(() => { sending = false; });
+    // Writes don't wait for the one before to be confirmed (on a slow connection that would halve the rate),
+    // but a few unconfirmed ones at most, so a stalled connection doesn't pile them up.
+    if (pending !== null && inFlight < 3 && now - sentAt >= gap && (pending !== sent || now - sentAt >= 1000)) {
+      sentAt = now; sent = pending; inFlight++;
+      const up = Math.min(1295, Math.round(rtt / 2)).toString(36).padStart(2, "0");
+      backend.setLive(code, seat, up + pending, room.round)
+        .then(() => { rtt += (Math.min(5000, Date.now() - now) - rtt) * 0.2; }, () => {})
+        .finally(() => { inFlight--; });
     }
     // The lead has gone quiet: the online players take over in seat order, a second apart, so only one does.
     if (room.turn !== seat && seatOf(room, backend.uid) === seat && now - claimedAt > LEAD_QUIET_MS) {
@@ -698,8 +708,10 @@ export function joinLive({ backend, code, seat }, onChange = () => {}) {
   };
   const timer = setInterval(tick, 50);
   return {
-    send(d) { pending = String(d); tick(); },
+    send(d) { pending = String(d).slice(0, 254); tick(); },
     slots: () => slots,
+    age: (slot) => slot.up + rtt / 2 + (Date.now() - slot.at),
+    rtt: () => rtt,
     isLead: () => !!room && room.turn === seat,
     stop() {
       clearInterval(timer);
