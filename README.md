@@ -8,6 +8,7 @@ toys) built by Claude from a phone, each published at its own link.
 
 ## Projects
 
+- [Word Grid](https://reclaude.junsaku.dev/word-grid/): swipe across touching letters to find words in 3 minutes, with a daily board for everyone, a random board any time, and Top 10s for both
 - [Chain Reaction](https://reclaude.junsaku.dev/chain-reaction/): add orbs to your cells until they burst into their neighbours and take them over, 2–6 players online with a room code or on one phone
 - [Wall Race](https://reclaude.junsaku.dev/wall-race/): race your pawn to the far side or drop walls to block the others (Quoridor-style), 2–4 players online with a room code or 2 on one phone
 - [Bridge](https://reclaude.junsaku.dev/bridge/): contract bridge, 2–4 friends online with a room code (computers fill empty seats), or you and a computer partner against two computer opponents
