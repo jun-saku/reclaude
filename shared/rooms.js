@@ -644,7 +644,8 @@ export async function playAgain({ backend, code, seat }, deal) {
 // Play again…), with `turn` as the lead seat: the lead runs the shared parts of the game (enemies, scoring) and
 // is the only one who changes the room while it's playing. Everything that changes many times a second goes
 // through each player's live slot instead: live.send(text) (up to 256 characters) sends at most liveHz times a
-// second, only what changed, plus a heartbeat every second; live.slots() reads every other seat's latest text
+// second, only what changed, plus a heartbeat every second (only while the game keeps calling send and the page is
+// in view, so a stalled or hidden player goes quiet); live.slots() reads every other seat's latest text
 // for this round as { seat: { d, at } } (at: when it arrived, by this device's clock), e.g. in an animation loop.
 // live.age(slot) is how long ago (ms) the update was sent: each player times how long their own writes take to be
 // confirmed, and sends half of that (their upload time) with every update, so age = sender's upload + this
@@ -660,6 +661,7 @@ export function joinLive({ backend, code, seat }, onChange = () => {}) {
   let leadHeard = Date.now(); // when the current lead was last heard from (or became the lead)
   let pending = null, sent = null, sentAt = 0, inFlight = 0, claimedAt = 0;
   let rtt = 150; // how long this device's writes take to be confirmed (ms), smoothed
+  let calledAt = 0; // when the game last called send
   const others = (all) => {
     const out = {};
     for (const [k, v] of Object.entries(all || {})) {
@@ -686,11 +688,14 @@ export function joinLive({ backend, code, seat }, onChange = () => {}) {
     if (!room || room.status !== "playing" || !room.live) return;
     const now = Date.now();
     if (room.turn !== seat && slots[room.turn]) leadHeard = Math.max(leadHeard, slots[room.turn].at);
-    // Send what changed, at most liveHz times a second, and something at least every second.
+    // Send what changed, at most liveHz times a second, and something at least every second. Only while the game
+    // itself is still sending and the page is in view: a game whose loop has stopped (screen off, app in the
+    // background) must go quiet, so the others see it and the next player takes the lead.
+    const active = now - calledAt < 1000 && !(typeof document !== "undefined" && document.hidden);
     const gap = 1000 / Math.min(room.liveHz || 6, MAX_LIVE_HZ);
     // Writes don't wait for the one before to be confirmed (on a slow connection that would halve the rate),
     // but a few unconfirmed ones at most, so a stalled connection doesn't pile them up.
-    if (pending !== null && inFlight < 3 && now - sentAt >= gap && (pending !== sent || now - sentAt >= 1000)) {
+    if (active && pending !== null && inFlight < 3 && now - sentAt >= gap && (pending !== sent || now - sentAt >= 1000)) {
       sentAt = now; sent = pending; inFlight++;
       const up = Math.min(1295, Math.round(rtt / 2)).toString(36).padStart(2, "0");
       backend.setLive(code, seat, up + pending, room.round)
@@ -708,7 +713,7 @@ export function joinLive({ backend, code, seat }, onChange = () => {}) {
   };
   const timer = setInterval(tick, 50);
   return {
-    send(d) { pending = String(d).slice(0, 254); tick(); },
+    send(d) { pending = String(d).slice(0, 254); calledAt = Date.now(); tick(); },
     slots: () => slots,
     age: (slot) => slot.up + rtt / 2 + (Date.now() - slot.at),
     rtt: () => rtt,

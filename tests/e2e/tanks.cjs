@@ -34,6 +34,18 @@ module.exports = async ({ page, ok, BASE, out }) => {
   await H.evaluate(() => window.__tanks.clearWave());
   ok(await wait(P, () => window.__tanks.wave === 2 && window.__tanks.room.state.wave === 2), 'a cleared wave starts wave 2 for everyone');
 
+  // The host's screen goes off: its game loop stops (a page in the background gets no animation frames) while its
+  // timers may still run. The game mustn't freeze for P: P takes the lead and the enemies keep moving.
+  await H.evaluate(() => { window.requestAnimationFrame = () => 0; });
+  ok(await wait(P, () => window.__tanks.lead, null, 12000), "when the host's game stops, P takes the lead");
+  const moving = await P.evaluate(async () => {
+    const at = () => JSON.stringify(window.__tanks.enemies.map((e) => [e.id, Math.round(e.x), Math.round(e.y)]));
+    for (let i = 0; i < 40 && !window.__tanks.enemies.length; i++) await new Promise((r) => setTimeout(r, 250));
+    const a = at(); await new Promise((r) => setTimeout(r, 1500));
+    return window.__tanks.enemies.length > 0 && at() !== a;
+  });
+  ok(moving, 'and the enemies keep moving for P');
+
   // The host leaves: the game goes on and P takes the lead.
   await H.click('#leave');
   ok(await wait(P, () => window.__tanks.lead && window.__tanks.room.status === 'playing', null, 12000), 'when the host leaves, the game goes on and P leads');

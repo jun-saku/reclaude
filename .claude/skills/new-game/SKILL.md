@@ -97,8 +97,10 @@ secret goal) goes in private data: one string per seat, ≤ 512 chars, readable 
 For games where everyone plays at once (a co-op tank game, say). The room works as usual (lobby, names, Play again),
 but the fast-changing parts go through `joinLive`, kept apart from the room so updates don't resend it:
 
-- `live.send(text)` in your game loop: whole current state (position, aim), up to 254 chars. The engine sends at most
-  `liveHz` a second, only when it changed, plus a heartbeat every second. Sending is lossy (newer replaces older), so
+- `live.send(text)` in your game loop, **every frame**: whole current state (position, aim), up to 254 chars. The
+  engine sends at most `liveHz` a second, only when it changed, plus a heartbeat every second, but only while the
+  game keeps calling `send` and the page is in view: a phone whose screen went off goes quiet within a second, so
+  the next player takes the lead instead of everyone waiting on a frozen game. Sending is lossy (newer replaces older), so
   repeat one-off events (shots, hits) for a moment with a counter.
 - `live.slots()` → `{ seat: { d, at } }`: every other player's latest text this round (`at` = arrival, this device's
   clock). Read it each frame and smooth between updates.
