@@ -4,10 +4,12 @@
 //   save(state) → JSON-able value   kept for 10 minutes while nobody's connected
 //   join(state, seat, room)         a seated player connected (or reconnected)
 //   leave(state, seat)              their last connection closed
-//   input(state, seat, msg)         a message from a player (any JSON object; check it, players can send anything)
+//   input(state, seat, msg, { dev }) a message from a player (any JSON object; check it, players can send anything);
+//                                   dev is true on the local test server only, for test shortcuts
 //   tick(state, dt)                 advance the game by dt seconds (30 times a second)
 //   view(state, seat) → object      what to send that player (10 times a second)
 //   timeUp?(state)                  the game has run for 2 hours: end it
 import probe from "./games/probe.js";
+import tanks from "./games/tanks.js";
 
-export const GAMES = { probe };
+export const GAMES = { probe, tanks };

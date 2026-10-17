@@ -93,7 +93,7 @@ export class GameRoom extends DurableObject {
     if (!msg || typeof msg !== "object") return;
     if (msg.t === "ping") return send(socket, { t: "pong", id: Number(msg.id) || 0 });
     if (conn.seat === null) return this.hello(socket, conn, msg);
-    if (this.state) this.mod.input(this.state, conn.seat, msg);
+    if (this.state) this.mod.input(this.state, conn.seat, msg, { dev: this.env.EMULATOR === "1" });
   }
 
   // A new connection proves who it is; it then takes its seat (replacing any older connection for that seat).
