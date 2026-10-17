@@ -1,7 +1,8 @@
 name: Build and deploy
 
 # Every PR and push is built and the database rules are tested, so problems are caught before merging.
-# On main, the database rules are published to Firebase first, then the site goes to Cloudflare Pages.
+# On main, the database rules are published to Firebase first, then the game server (worker/) goes to Cloudflare
+# Workers, then the site goes to Cloudflare Pages.
 # PRs get a Cloudflare preview link, posted as a PR comment.
 # Cloudflare steps are skipped until the CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets exist.
 on:
@@ -27,6 +28,8 @@ jobs:
         with:
           node-version: 22
       - run: node scripts/build.mjs
+      # The game server's sign-in check (worker/src/auth.js), with test-signed tokens. No dependencies.
+      - run: node tests/worker-auth.test.mjs
       # Smoke test of every page (tests/smoke.cjs): part of the required build check. Uses the runner's own Chrome.
       - name: Smoke test
         run: |
@@ -91,6 +94,7 @@ jobs:
         run: |
           node scripts/build.mjs
           npm install --no-save --prefix "$RUNNER_TEMP/pw" playwright-core@1.56.1
+          (cd worker && npm ci)
           cd tests && npm ci
           E2E="${{ steps.pick.outputs.tests }}" NODE_PATH="$RUNNER_TEMP/pw/node_modules" CHROMIUM_PATH="$(command -v google-chrome)" npm run e2e
 
@@ -119,12 +123,50 @@ jobs:
       - name: Publish database rules
         run: npx --yes firebase-tools@13.35.1 deploy --only database --project reclaude-67a01 --non-interactive
 
+  # The game server (worker/, a Cloudflare Worker with one Durable Object per room) at play.reclaude.junsaku.dev, from
+  # main only, after the rules and before the site, so a new page never meets an older server. PR previews use the
+  # live server. Skipped until the Cloudflare secrets exist; the API token needs "Workers Scripts: Edit" (and, for the
+  # custom domain, "Workers Routes: Edit" and "Zone: Read" on junsaku.dev). If it fails, the site still deploys.
+  worker:
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.build.result == 'success' }}
+    needs: [build, publish_rules]
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - id: secrets
+        name: Check Cloudflare secrets
+        working-directory: .
+        run: |
+          if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Cloudflare secrets not set yet; skipping the game server deploy."
+          fi
+      - if: steps.secrets.outputs.ready == 'true'
+        uses: actions/checkout@v4
+      - if: steps.secrets.outputs.ready == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+      - if: steps.secrets.outputs.ready == 'true'
+        run: npm ci
+      - if: steps.secrets.outputs.ready == 'true'
+        name: Deploy the game server
+        run: npx wrangler deploy
+
   # Cloudflare Pages: production from main, previews for PRs. Uploads the built site directly
   # (no Cloudflare-GitHub connection needed, and direct uploads don't use Cloudflare's build quota).
   # On main it waits for the rules to publish; PR previews use the live rules.
   cloudflare:
     if: ${{ !cancelled() && needs.build.result == 'success' && (github.event_name == 'pull_request' || (github.ref == 'refs/heads/main' && needs.publish_rules.result == 'success')) }}
-    needs: [build, publish_rules]
+    needs: [build, publish_rules, worker]
     runs-on: ubuntu-latest
     permissions:
       contents: read

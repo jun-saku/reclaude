@@ -33,12 +33,17 @@ The user usually works from their phone, so keep replies short and end with the 
   inline `<script>` blocks (by hash), and Firebase's and reCAPTCHA's own folders on gstatic/google.com; connections
   only to Firebase and Google APIs. No inline event handlers (`onclick=`), `eval` or other external sources: they are
   blocked. A new external source has to be added to `CSP` in `build.mjs` first, as an exact folder, never a whole host.
+- `worker/`: the game server for real-time games (a Cloudflare Worker, one Durable Object per room, at
+  `wss://play.reclaude.junsaku.dev`; see `worker/README.md`). Pages connect with `shared/server.js` once a room is
+  playing; the server checks the player's Firebase sign-in and seat, runs the game (`worker/src/games/<name>.js`)
+  and sends it to everyone. Deployed from `main` (job `worker`, needs Workers permission on the Cloudflare token);
+  locally `cd worker && npm ci && npm run dev`, which the e2e tests start themselves.
 - `site/_headers`: Cloudflare response headers for every path (no framing by other sites, nosniff, referrer and
   permissions policies).
 - `scripts/new-project.mjs`: creates a project from the template.
 - `scripts/rules.mjs`: generates `firebase/database.rules.json` (room rules repeat per seat). Edit the rules there, never
   the JSON, then run `node scripts/rules.mjs`; `npm run rules` fails if the two don't match.
-- `tests/`: dev-only tests, never published. `tests/smoke.cjs` (run after the build: `node tests/smoke.cjs`) opens every
+- `tests/`: dev-only tests, never published. `tests/worker-auth.test.mjs` checks the game server's sign-in check (part of the `build` check). `tests/smoke.cjs` (run after the build: `node tests/smoke.cjs`) opens every
   page at 390px and fails on JavaScript errors, blocked scripts, sideways scroll, a game missing from the games page or
   its "‹ All games" link, or a same-device game that won't start; it's part of the required `build` check, needs no
   per-game code, and lists non-games (no card, no link) in `NOT_GAMES`. `npm run rules` checks the database rules on the Firebase emulator (CI runs

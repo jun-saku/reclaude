@@ -72,8 +72,9 @@ for (const name of built) stamp(join(OUT, name));
 
 // Content-Security-Policy, added to every page as a <meta> tag: scripts may only come from this site, the page's own
 // inline scripts (by hash, so injected ones can't run), Firebase's SDK folder and reCAPTCHA's (App Check), and pages
-// may only connect to Firebase and Google's APIs. Sources are exact folders, not whole hosts: a whole CDN would let an
-// injected tag load anyone's code from it. 127.0.0.1 is the Firebase emulator the tests use.
+// may only connect to Firebase, Google's APIs and reclaude's game server (worker/, play.reclaude.junsaku.dev). Sources
+// are exact folders, not whole hosts: a whole CDN would let an injected tag load anyone's code from it. 127.0.0.1 is the
+// Firebase emulator and the local game server the tests use.
 // site/_headers adds the rest (no framing by other sites, nosniff, referrer and permissions policies).
 // A new external source must be added here as its exact folder (e.g. https://cdn.jsdelivr.net/npm/some-lib@1.2.3/),
 // or the browser blocks it.
@@ -85,7 +86,8 @@ const CSP = {
   "style-src": ["'self'", "'unsafe-inline'"],
   "img-src": ["'self'", "data:", "https://www.gstatic.com/recaptcha/"],
   "connect-src": ["'self'", "https://*.firebasedatabase.app", "wss://*.firebasedatabase.app", "https://*.googleapis.com",
-    "https://www.google.com", "http://127.0.0.1:9000", "ws://127.0.0.1:9000", "http://127.0.0.1:9099"],
+    "https://www.google.com", "http://127.0.0.1:9000", "ws://127.0.0.1:9000", "http://127.0.0.1:9099",
+    "wss://play.reclaude.junsaku.dev", "ws://127.0.0.1:8787"],
   "frame-src": ["https://www.google.com", "https://recaptcha.google.com"],
   "object-src": ["'none'"],
   "base-uri": ["'none'"],
