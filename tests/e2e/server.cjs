@@ -24,8 +24,14 @@ module.exports = async ({ page, ok, BASE }) => {
   ok(room.status === 'playing', 'a probe room is playing');
   const wait = (p, fn, arg, ms = 10000) => p.waitForFunction(fn, arg, { timeout: ms }).then(() => true).catch(() => false);
 
+  // Live sign-in tokens are about 2 KB together (the emulator's are tiny): pad A's hello to that size.
+  await A.evaluate(() => {
+    const b = window.__seat.backend, real = b.credentials.bind(b);
+    b.credentials = async () => ({ ...(await real()), pad: 'x'.repeat(2500) });
+  });
   for (const p of [A, B]) await p.evaluate((room) => window.__connect(window.__seat, room), room);
   ok(await wait(A, () => window.__status.includes('connected')) && await wait(B, () => window.__status.includes('connected')), 'seated players connect to the game server (their Firebase sign-in is checked)');
+  ok(await A.evaluate(() => window.__status.includes('connected')), 'a hello as big as a live one (two sign-in tokens, ~2 KB) is accepted');
   await A.evaluate(() => window.__game.send({ t: 'set', v: 7 }));
   await B.evaluate(() => window.__game.send({ t: 'set', v: 9 }));
   ok(await wait(B, () => window.__last?.values?.[0] === 7 && window.__last.values[1] === 9 && window.__last.here.length === 2), "each player's input reaches everyone through the server");
