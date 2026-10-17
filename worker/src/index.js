@@ -28,7 +28,8 @@ const IDLE_MS = 30_000;        // a silent connection is closed after this
 const KEEP_MS = 10 * 60_000;   // an empty room's game is kept this long (the tests shorten it with the KEEP_MS variable)
 const MAX_GAME_MS = 2 * 3600_000;
 const HELLO_MS = 10_000;       // time to send hello before being cut off
-const MAX_MESSAGE = 1024;      // characters
+const MAX_MESSAGE = 1024;      // characters, for game messages
+const MAX_HELLO = 8192;        // the hello carries two sign-in tokens, about 2 KB live
 const MAX_RATE = 40;           // messages a second per connection
 const PATH = /^\/([a-z0-9-]{1,24})\/([A-HJ-NP-Z2-9]{4})\/(\d{1,15})$/;
 // Pages allowed to connect: the site, its previews, and (EMULATOR only) local test servers.
@@ -91,7 +92,7 @@ export class GameRoom extends DurableObject {
 
   async onMessage(socket, conn, data) {
     const now = Date.now();
-    if (typeof data !== "string" || data.length > MAX_MESSAGE) return this.drop(socket, 4009, "Message too big");
+    if (typeof data !== "string" || data.length > (conn.seat === null ? MAX_HELLO : MAX_MESSAGE)) return this.drop(socket, 4009, "Message too big");
     if (now - conn.window >= 1000) { conn.window = now; conn.count = 0; }
     if (++conn.count > MAX_RATE) return this.drop(socket, 4008, "Too many messages");
     conn.lastAt = now;
