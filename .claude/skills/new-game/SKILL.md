@@ -60,13 +60,14 @@ secret goal) goes in private data: one string per seat, ≤ 512 chars, readable 
 
 | Function | What it does |
 | --- | --- |
-| `createRoom(game, { seats, min, auto, turnSecs, makeRoom })` | New room, creator is host in seat 0. `seats` 2–10; `min` players to start; `auto: true` starts when full, `false` = host taps Start; `turnSecs` 0 = no timer; `makeRoom()` returns your initial `board`/`state`/`turn`. Returns `seat` = `{ backend, code, seat }`. |
+| `createRoom(game, { seats, min, auto, turnSecs, live, liveHz, makeRoom })` | New room, creator is host in seat 0. `seats` 2–10; `min` players to start; `auto: true` starts when full, `false` = host taps Start; `turnSecs` 0 = no timer; `live: true` = real-time room (below), `liveHz` updates a second (default 6, max 10); `makeRoom()` returns your initial `board`/`state`/`turn`. Returns `seat` = `{ backend, code, seat }`. |
 | `joinRoom(game, code)` | Takes the first free seat, or rejoins your old one. Throws `RoomError` with a message for players. |
 | `startGame(seat, setup)` | Host only, in a lobby: `setup(room)` deals and returns the room; status becomes `playing`. |
 | `enter(seat, onRoom, onGone)` | Watch the room and keep your online dot; returns `leave()`. |
 | `seat.backend.transact(code, fn)` | Change the room: `fn(cur)` returns the new room, or `undefined` to abort. Firebase may call it again with fresher data, so check the turn inside `fn`. |
 | `seat.backend.setPrivate(code, seat, str)` / `watchPrivate(code, seat, cb)` | Your hidden data. |
-| `quit(seat)` | Leave for good: forfeits a game in play, closes the host's lobby. Call it before `leave()`. |
+| `quit(seat)` | Leave for good: forfeits a game in play (a real-time game goes on without you), closes the host's lobby. Call it before `leave()`. |
+| `joinLive(seat)` → `{ send(text), slots(), isLead(), stop() }` | Real-time rooms only: send your fast-changing state (≤ 256 chars), read everyone else's latest, take over the lead automatically. |
 | `playAgain(seat, deal)` | Marks you ready; once everyone online is ready, `deal(room, round)` sets up the next round. |
 | `skipTurn(seat, room)` / `turnLeft(room)` | Turn timer: seconds left, and passing an overdue turn on. |
 | `nameOf(room, s)`, `myName()`, `setMyName(name, seat?)` | Player names (escape them before putting them in HTML). |
@@ -90,6 +91,25 @@ secret goal) goes in private data: one string per seat, ≤ 512 chars, readable 
   project, so that's fine; just check moves in your own code so honest mistakes can't happen.
 - Leaderboards are generic: a name (1–12 letters, numbers, spaces), any number as the score, at most one save
   every 5 seconds. **What a valid score is belongs in your game** (2048 checks it's even and possible, for example).
+
+## Real-time games (`live: true`)
+
+For games where everyone plays at once (a co-op tank game, say). The room works as usual (lobby, names, Play again),
+but the fast-changing parts go through `joinLive`, kept apart from the room so updates don't resend it:
+
+- `live.send(text)` in your game loop: whole current state (position, aim), up to 256 chars. The engine sends at most
+  `liveHz` a second, only when it changed, plus a heartbeat every second. Sending is lossy (newer replaces older), so
+  repeat one-off events (shots, hits) for a moment with a counter.
+- `live.slots()` → `{ seat: { d, at } }`: every other player's latest text this round (`at` = arrival, this device's
+  clock). Read it each frame and smooth between updates.
+- `turn` is the **lead** seat. The lead runs the shared parts (enemies, score) and is the only one who changes the
+  room (`state`, `status: "done"`) while playing. If the lead goes quiet for 3 seconds, the next online player takes
+  over by themselves, and `quit` hands the lead on, so the game never stops because someone left. Run anything the
+  lead decides from a shared seed in `state` so a new lead can carry on, and check `live.isLead()` every frame.
+- Players are fixed once the game starts; a player who left can rejoin their own seat by code.
+- Call `live.stop()` before `rooms.quit(seat)` / `leave()`.
+- Bandwidth: Spark's free plan allows 10 GB of downloads a month for every game together. Keep updates short and
+  `liveHz` low (6 is plenty with smoothing).
 
 ## Patterns that already work
 
