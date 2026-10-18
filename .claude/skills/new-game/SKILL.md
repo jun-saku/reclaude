@@ -29,6 +29,9 @@ and `firebase/database.rules.json` (who may write what). Read `CLAUDE.md` first;
    Follow `CLAUDE.md` → "Adding a project": phone first, touch controls, safe-area padding, light and dark mode,
    relative paths only.
    Page conventions the smoke test and shared styles rely on:
+   - `<link rel="stylesheet" href="../shared/base.css">` before the page's `<style>` (the template has it): the shared
+     colours, page, buttons, cards, join form, player bar, status line and lobby. The page's `<style>` holds only its
+     own board and pieces (and may override a colour token); don't restyle the shared parts.
    - The `‹ All games` link (`<a class="home-link" href="../games/">`, styles included) first in `<main>`, copied from
      any other game. It hides itself while `<section id="home">` (the start screen) is hidden, so players use Leave
      in a room.
@@ -54,7 +57,7 @@ and `firebase/database.rules.json` (who may write what). Read `CLAUDE.md` first;
 
 ```
 projects/<name>/game.js     the rules: no drawing, no network (the game server bundles it too)
-projects/<name>/index.html  <link rel="stylesheet" href="../shared/kit.css">, the "‹ All games" link in <main>, and
+projects/<name>/index.html  ../shared/base.css and ../shared/kit.css stylesheets, the "‹ All games" link in <main>, and
                             start(game, { title, howTo, setup(stage), render(info), frame(info), … })
 ```
 

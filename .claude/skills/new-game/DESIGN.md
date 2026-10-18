@@ -1,8 +1,10 @@
 # reclaude design standard
 
-Every game looks and reads the same way around its board, so a player who knows one game knows them all. Games on the
-kit (`shared/kit.js` + `kit.css`) get all of this for free; a game that builds its own screens copies the wording and
-layout below. `node tests/ui-audit.cjs <name>` checks the parts marked ✓ on every screen, in light and dark mode at 320
+Every game looks and reads the same way around its board, so a player who knows one game knows them all. The look is
+one shared stylesheet, `shared/base.css`, which every game links; a game's own `<style>` only draws its board and
+pieces. Games on the kit (`shared/kit.js` + `kit.css`) also get the screens and wording for free; a game that builds
+its own screens uses base.css's classes (`.card`, `.join`, `.name-row`, `.seg`, `.bar`, `.chip`, `.status`, `.hint`,
+`.bigcode`, `.seated`) and copies the wording and layout below. `node tests/ui-audit.cjs <name>` checks the parts marked ✓ on every screen, in light and dark mode at 320
 and 390 px; it must report 0 problems before a game PR is ready.
 
 ## Title
@@ -78,8 +80,9 @@ Game over replaces the status line with a card: the result as its heading, the s
 
 ## Look
 
-- Colours from the page's `:root` tokens (copy `kit.css` or a sibling game): `--bg --text --muted --panel --line
-  --soft --accent --on-accent --danger`, each with a dark-mode value. Player colours `--p0..--p3`.
+- Colours from base.css's tokens: `--bg --text --muted --panel --line --soft --accent --on-accent --danger --good`,
+  each with a dark-mode value, and player colours `--p0..--p3`. A game adds its own tokens for its board (light and
+  dark).
 - ✓ Text at least 12 px (body 17 px); contrast at least 4.5:1, or 3:1 for large text (24 px, or 18.7 px bold), in
   both light and dark mode.
 - Cards: `--panel` background, 1 px `--line` border, 16 px radius, 16 px padding, 12 px gaps. Buttons: 12 px radius.

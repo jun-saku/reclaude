@@ -7,130 +7,27 @@
   <meta name="theme-color" content="#161618" media="(prefers-color-scheme: dark)">
   <title>Tic-tac-toe</title>
   <meta name="description" content="Play a friend online with a room code, or pass the phone on one device.">
+  <link rel="stylesheet" href="../shared/base.css">
   <style>
     :root {
-      --bg: #f7f6f3;
-      --text: #1d1d1f;
-      --muted: #5e5e63;
-      --panel: #ffffff;
-      --line: #d9d2c6;
-      --soft: #ece7df;
       --x: #a8480f; --on-x: #fff;
       --o: #276d7a;
       --win: #f6e2c8;
-      --danger: #b3261e;
-      color-scheme: light;
     }
     @media (prefers-color-scheme: dark) {
       :root {
-        --bg: #161618;
-        --text: #ececef;
-        --muted: #9a9aa2;
-        --panel: #1f1f22;
-        --line: #3a3a40;
-        --soft: #2a2a2e;
         --x: #f08a4b; --on-x: #1d1d1f;
         --o: #5cc3d1;
         --win: #3a2a1c;
-        --danger: #ff8a80;
-        color-scheme: dark;
       }
     }
-    * { box-sizing: border-box; }
-    html, body { min-height: 100%; }
-    body {
-      margin: 0;
-      background: var(--bg);
-      color: var(--text);
-      font: 17px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      display: flex;
-      justify-content: center;
-      -webkit-tap-highlight-color: transparent;
-    }
-    main {
-      width: 100%;
-      max-width: 440px;
-      padding: max(20px, env(safe-area-inset-top)) 16px max(20px, env(safe-area-inset-bottom));
-      display: flex;
-      flex-direction: column;
-      gap: 18px;
-    }
-    h1 { margin: 0; font-size: clamp(1.9rem, 9vw, 2.4rem); line-height: 1.1; letter-spacing: -0.02em; }
+    h1 { display: block; }
     h1 .x { color: var(--x); } h1 .o { color: var(--o); }
-    .muted { color: var(--muted); }
-    [hidden] { display: none !important; }
-    #game { display: flex; flex-direction: column; gap: 14px; }
-
-    button, input {
-      font: inherit;
-      border-radius: 12px;
-      touch-action: manipulation;
-    }
-    button {
-      border: 0;
-      padding: 13px 18px;
-      font-weight: 650;
-      background: var(--x);
-      color: var(--on-x);
-      cursor: pointer;
-    }
-    button.secondary { background: var(--soft); color: var(--text); }
     button.link { background: none; color: var(--muted); padding: 6px 0; font-weight: 500; text-decoration: underline; }
-    button:disabled { opacity: 0.45; cursor: default; }
-
-    .card {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 16px;
-      padding: 18px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-    .card h2 { margin: 0; font-size: 1.05rem; }
-    .card p { margin: 0; }
-    .join { display: flex; gap: 8px; }
-    .join input {
-      flex: 1;
-      min-width: 0;
-      padding: 12px 14px;
-      border: 1px solid var(--line);
-      background: var(--bg);
-      color: var(--text);
-      font-size: 1.3rem;
-      font-weight: 700;
-      letter-spacing: 0.3em;
-      text-transform: uppercase;
-      text-align: center;
-    }
-    .error { color: var(--danger); font-size: 0.95rem; min-height: 1.3em; margin: 0; }
-
-    .bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-    .code {
-      font-size: 0.85rem;
-      color: var(--muted);
-    }
-    .code b { color: var(--text); letter-spacing: 0.12em; font-size: 1rem; }
-    .players { display: flex; gap: 8px; }
-    .chip {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 12px;
-      border-radius: 999px;
-      background: var(--soft);
-      font-size: 0.9rem;
-      font-weight: 600;
-      border: 2px solid transparent;
-    }
     .chip.turn.x { border-color: var(--x); }
     .chip.turn.o { border-color: var(--o); }
     .chip .mark { font-weight: 800; }
     .chip.x .mark { color: var(--x); } .chip.o .mark { color: var(--o); }
-    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); opacity: 0.4; }
-    .dot.on { background: #2e9d5b; opacity: 1; }
-
-    .status { text-align: center; font-size: 1.25rem; font-weight: 700; min-height: 1.5em; margin: 0; }
 
     .board {
       display: grid;
@@ -167,20 +64,7 @@
     @media (prefers-reduced-motion: reduce) { .cell.placed span { animation: none; } }
 
     .share { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
-    .bigcode { font-size: clamp(2.6rem, 16vw, 3.4rem); font-weight: 800; letter-spacing: 0.18em; margin: 0; padding-left: 0.18em; }
-    .row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
     .footer { display: flex; justify-content: center; }
-    /* Back to the games list; hidden while in a room or a game (use Leave there). */
-    .home-link {
-      align-self: flex-start; display: inline-flex; align-items: center; gap: 2px; margin: -6px 0 -6px -6px; padding: 6px;
-      color: var(--muted); font-size: 0.9rem; font-weight: 600; text-decoration: none; border-radius: 8px;
-    }
-    .home-link:active { opacity: 0.6; }
-    main:has(#home[hidden]) .home-link { display: none; }
-    /* Design standard (checked by tests/ui-audit.cjs): every control is at least 44 px each way. Game boards and
-       racks ([data-small-ok]) size their own pieces. */
-    :is(button, input, select):not([data-small-ok] *) { min-height: 44px; min-width: 44px; }
-    .home-link { min-height: 44px; }
   </style>
 </head>
 <body>

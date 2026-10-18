@@ -22,7 +22,9 @@ The user usually works from their phone, so keep replies short and end with the 
   links, presence, player names (`myName`/`setMyName`/`nameOf`, remembered per device), an optional turn timer
   (`turnSecs` on `createRoom`, `turnLeft`, `skipTurn`), private per-seat data (`setPrivate`/`watchPrivate`, e.g. hands
   of cards), idle disconnect, and Firebase / emulator / stand-in / same-device backends. New multiplayer games must use it rather than copying room code.
-  `shared/kit.js` (+ `kit.css`) is the game kit: a game gives its rules (`projects/<name>/game.js`) and its drawing,
+  `shared/base.css` is the shared look every game links first (colours for light and dark, buttons, cards, the
+  player bar, the lobby, the 44 px rule; see `.claude/skills/new-game/DESIGN.md`): a page's own `<style>` holds only
+  its board. `shared/kit.js` (+ `kit.css`, on top of base.css) is the game kit: a game gives its rules (`projects/<name>/game.js`) and its drawing,
   and the kit builds the home screen, lobby, player bar, Leave, game over, Play again and Top 10, and runs the game
   solo / on one phone, online turn-based (Firebase rooms) or online real-time (the game server). New games should use
   it (see `.claude/skills/new-game/SKILL.md`); Tanks does.
