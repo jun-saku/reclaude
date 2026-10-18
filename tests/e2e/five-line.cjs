@@ -50,5 +50,5 @@ module.exports = async ({ page, ok, statusIs, BASE, out }) => {
   const fr1 = await F1.evaluate(() => window.__fl.room);
   const leaver = [F1, F2][1 - fr1.turn], stayer = [F1, F2][fr1.turn];
   leaver.once('dialog', (d) => d.accept()); await leaver.click('#leave'); await leaver.waitForSelector('#home:not([hidden])', { timeout: 8000 });
-  ok(await statusIs(stayer, `P${2 - fr1.turn} left. You win 🎉`), 'leaving off-turn forfeits a game with state; the other player wins');
+  ok(await statusIs(stayer, `P${2 - fr1.turn} left. You win! 🎉`), 'leaving off-turn forfeits a game with state; the other player wins');
 };

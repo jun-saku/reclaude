@@ -10,13 +10,13 @@
     :root {
       --bg: #f7f6f3;
       --text: #1d1d1f;
-      --muted: #6b6b70;
+      --muted: #5e5e63;
       --panel: #ffffff;
       --border: #e3e1dc;
       --felt: #2f7a52;
       --felt-dark: #256443;
       --felt-text: #f1f7f3;
-      --accent: #c2571a;
+      --accent: #b04d14; --on-accent: #fff;
       --card: #ffffff;
       --card-edge: #cfcac0;
       --black: #1d1d1f;
@@ -35,7 +35,7 @@
         --felt: #1d4a33;
         --felt-dark: #163a28;
         --felt-text: #e3efe7;
-        --accent: #f08a4b;
+        --accent: #f08a4b; --on-accent: #1d1d1f;
         --card: #f2efe8;
         --card-edge: #8d887d;
         --back: #3a5f9e;
@@ -73,7 +73,7 @@
       border-radius: 10px;
       border: 0;
       background: var(--accent);
-      color: #fff;
+      color: var(--on-accent);
       cursor: pointer;
       touch-action: manipulation;
       white-space: nowrap;
@@ -169,7 +169,7 @@
     .calls { grid-template-columns: 2fr 1fr 1fr; }
     .bidbox button { padding: 9px 0; background: var(--panel); color: var(--text); border: 1px solid var(--border); font-size: 1rem; }
     .bidbox button.red { color: var(--red); }
-    .bidbox button.sel { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .bidbox button.sel { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
     .bidbox button.pass { background: var(--felt); color: #fff; border-color: var(--felt); }
     .bidbox button.dbl { color: var(--red); }
     .bidbox button.hint { box-shadow: 0 0 0 3px var(--accent); }
@@ -237,6 +237,10 @@
     }
     .home-link:active { opacity: 0.6; }
     main:has(#home[hidden]) .home-link { display: none; }
+    /* Design standard (checked by tests/ui-audit.cjs): every control is at least 44 px each way. Game boards and
+       racks ([data-small-ok]) size their own pieces. */
+    :is(button, input, select):not([data-small-ok] *) { min-height: 44px; min-width: 44px; }
+    .home-link { min-height: 44px; }
   </style>
 </head>
 <body>
@@ -264,9 +268,9 @@
         <p class="error" id="home-error" role="alert"></p>
       </div>
       <div class="panel">
-        <h2>Play the computer</h2>
+        <h2>Solo</h2>
         <p class="muted">You and a computer partner against two computer opponents.</p>
-        <button class="big secondary" id="solo">Play</button>
+        <button class="big secondary" id="solo">Play solo</button>
       </div>
       <button class="secondary" id="home-help">How to play</button>
     </section>
@@ -1113,7 +1117,7 @@
       show("home");
       $("home-error").textContent = error;
       for (const id of ["create", "join"]) $(id).disabled = false;
-      $("solo").textContent = loadSolo() ? "Continue game" : "Play";
+      $("solo").textContent = loadSolo() ? "Continue game" : "Play solo";
     }
 
     function startSolo() {

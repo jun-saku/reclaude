@@ -11,12 +11,12 @@
     :root {
       --bg: #f7f6f3;
       --text: #1d1d1f;
-      --muted: #6b6b70;
+      --muted: #5e5e63;
       --panel: #ffffff;
       --line: #d9d2c6;
       --soft: #ece7df;
-      --x: #c2571a;
-      --o: #2f7f8f;
+      --x: #a8480f; --on-x: #fff;
+      --o: #276d7a;
       --win: #f6e2c8;
       --danger: #b3261e;
       color-scheme: light;
@@ -29,7 +29,7 @@
         --panel: #1f1f22;
         --line: #3a3a40;
         --soft: #2a2a2e;
-        --x: #f08a4b;
+        --x: #f08a4b; --on-x: #1d1d1f;
         --o: #5cc3d1;
         --win: #3a2a1c;
         --danger: #ff8a80;
@@ -71,7 +71,7 @@
       padding: 13px 18px;
       font-weight: 650;
       background: var(--x);
-      color: #fff;
+      color: var(--on-x);
       cursor: pointer;
     }
     button.secondary { background: var(--soft); color: var(--text); }
@@ -177,6 +177,10 @@
     }
     .home-link:active { opacity: 0.6; }
     main:has(#home[hidden]) .home-link { display: none; }
+    /* Design standard (checked by tests/ui-audit.cjs): every control is at least 44 px each way. Game boards and
+       racks ([data-small-ok]) size their own pieces. */
+    :is(button, input, select):not([data-small-ok] *) { min-height: 44px; min-width: 44px; }
+    .home-link { min-height: 44px; }
   </style>
 </head>
 <body>
@@ -200,7 +204,7 @@
         <p class="error" id="home-error" role="alert"></p>
       </div>
       <div class="card" style="margin-top: 12px">
-        <h2>Same device</h2>
+        <h2>Same phone</h2>
         <p class="muted">Take turns on this phone. Works offline.</p>
         <button class="secondary" id="local">Play here</button>
       </div>
@@ -224,7 +228,7 @@
       </div>
 
       <p class="status" id="status" aria-live="polite"></p>
-      <div class="board" id="board" role="grid" aria-label="Board"></div>
+      <div class="board" id="board" data-small-ok role="grid" aria-label="Board"></div>
 
       <div class="row">
         <button id="rematch" hidden>Play again</button>
@@ -400,7 +404,7 @@
       const online = r.online || {};
       const other = side === "x" ? "o" : "x";
 
-      els.roomLabel.innerHTML = local ? "Same device" : `Room <b>${code}</b>`;
+      els.roomLabel.innerHTML = local ? "Same phone" : `Room <b>${code}</b>`;
       const chip = (s, label, dot) =>
         `<span class="chip ${s}${r.status === "playing" && r.turn === s ? " turn" : ""}">` +
         `<span class="mark">${s.toUpperCase()}</span>${label}${dot === undefined ? "" : `<span class="dot${dot ? " on" : ""}"></span>`}</span>`;
@@ -430,9 +434,9 @@
         if (local) status = `${r.turn.toUpperCase()} to play`;
         else if (!online[other]) status = r.turn === side ? "Your turn (friend is away)" : "Friend is away…";
         else status = r.turn === side ? "Your turn" : "Friend's turn…";
-      } else if (r.winner === "draw") status = "It's a draw";
+      } else if (r.winner === "draw") status = "It's a draw!";
       else if (local) status = `${r.winner.toUpperCase()} wins!`;
-      else if (r.left === other) status = "Your friend left. You win 🎉";
+      else if (r.left === other) status = "Your friend left. You win! 🎉";
       else if (r.left === side) status = "You left this game";
       else status = r.winner === side ? "You win! 🎉" : "Friend wins";
       els.status.textContent = status;

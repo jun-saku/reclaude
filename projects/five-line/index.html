@@ -11,15 +11,15 @@
     :root {
       --bg: #f7f6f3;
       --text: #1d1d1f;
-      --muted: #6b6b70;
+      --muted: #5e5e63;
       --panel: #ffffff;
       --line: #d9d2c6;
       --soft: #ece7df;
-      --accent: #c2571a;
+      --accent: #b04d14; --on-accent: #fff;
       --danger: #b3261e;
       --cell: #ffffff;
       --free: #e6e0d4;
-      --r: #d14343; --b: #2f6fd6; --g: #2a9a5b; --p: #8a4bd4;
+      --r: #d14343; --b: #2f6fd6; --g: #1f7a47; --p: #8a4bd4;
       --c0: #1d1d1f; --c0-ring: #ffffff;
       --c1: #ffffff; --c1-ring: #1d1d1f;
       --c2: #f2a93b; --c2-ring: #7a4a00;
@@ -34,7 +34,7 @@
         --panel: #1f1f22;
         --line: #3a3a40;
         --soft: #2a2a2e;
-        --accent: #f08a4b;
+        --accent: #f08a4b; --on-accent: #1d1d1f;
         --danger: #ff8a80;
         --cell: #26262a;
         --free: #35353b;
@@ -75,7 +75,7 @@
     .muted { color: var(--muted); }
     button {
       font: inherit; font-weight: 650; border: 0; border-radius: 12px; padding: 12px 16px;
-      background: var(--accent); color: #fff; cursor: pointer; touch-action: manipulation;
+      background: var(--accent); color: var(--on-accent); cursor: pointer; touch-action: manipulation;
     }
     button:disabled { opacity: 0.5; cursor: default; }
     button.secondary { background: var(--soft); color: var(--text); }
@@ -146,7 +146,7 @@
       font-weight: 800; font-size: 1.25rem; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
       padding: 0; cursor: pointer; touch-action: manipulation;
     }
-    .hcard small { font-size: 0.6rem; font-weight: 700; letter-spacing: 0.02em; }
+    .hcard small { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.02em; }
     .hcard[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); transform: translateY(-4px); }
     .hcard.dead { opacity: 0.45; }
     .hcard:disabled { cursor: default; }
@@ -161,6 +161,10 @@
     }
     .home-link:active { opacity: 0.6; }
     main:has(#home[hidden]) .home-link { display: none; }
+    /* Design standard (checked by tests/ui-audit.cjs): every control is at least 44 px each way. Game boards and
+       racks ([data-small-ok]) size their own pieces. */
+    :is(button, input, select):not([data-small-ok] *) { min-height: 44px; min-width: 44px; }
+    .home-link { min-height: 44px; }
   </style>
 </head>
 <body>
@@ -229,9 +233,9 @@
       </div>
 
       <p class="status" id="status" aria-live="polite"></p>
-      <div class="board" id="board" role="grid" aria-label="Board" hidden></div>
+      <div class="board" id="board" data-small-ok role="grid" aria-label="Board" hidden></div>
       <p class="hint" id="hint"></p>
-      <div class="hand" id="hand" aria-label="Your hand" hidden></div>
+      <div class="hand" id="hand" data-small-ok aria-label="Your hand" hidden></div>
 
       <div class="row">
         <button id="rematch" hidden>Play again</button>
@@ -651,7 +655,7 @@
         }
         const left = rooms.turnLeft(r);
         if (left !== null) status += ` <span class="clock${left <= 10 ? " low" : ""}">${left ? `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}` : "time's up"}</span>`;
-      } else if (typeof r.left === "number") status = r.left === mine ? "You left this game" : `${label(r.left)} left. ${r.winner === "draw" ? "Game over" : r.winner === myTeam() ? "You win 🎉" : r.teams === 2 ? `Team ${r.winner + 1} wins` : `${label(r.winner)} wins`}`;
+      } else if (typeof r.left === "number") status = r.left === mine ? "You left this game" : `${label(r.left)} left. ${r.winner === "draw" ? "Game over" : r.winner === myTeam() ? "You win! 🎉" : r.teams === 2 ? `Team ${r.winner + 1} wins` : `${label(r.winner)} wins`}`;
       else if (r.winner === "draw") status = st && st.passes ? "Nobody can play: it's a draw" : "No cards left: it's a draw";
       else if (r.winner === myTeam()) status = r.teams === 2 ? "Your team wins! 🎉" : "You win! 🎉";
       else status = r.teams === 2 ? `Team ${r.winner + 1} wins` : `${label(r.winner)} wins`;
