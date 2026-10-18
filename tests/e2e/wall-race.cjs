@@ -40,5 +40,5 @@ module.exports = async ({ page, ok, statusIs, BASE, out }) => {
   await W1.waitForFunction(() => window.__wr.room.round === 1 && window.__wr.room.status === 'playing' && window.__wr.room.turn === 1, null, { timeout: 8000 });
   ok(true, 'play again starts a new race once both tapped, and the other player goes first');
   W1.once('dialog', (d) => d.accept()); await W1.click('#leave'); await W1.waitForSelector('#home:not([hidden])', { timeout: 8000 });
-  ok(await statusIs(W2, 'P1 left. You win 🎉'), 'leaving mid-game forfeits to the other player');
+  ok(await statusIs(W2, 'P1 left. You win! 🎉'), 'leaving mid-game forfeits to the other player');
 };

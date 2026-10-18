@@ -41,7 +41,11 @@ and `firebase/database.rules.json` (who may write what). Read `CLAUDE.md` first;
    version). **Start from `projects/five-line/index.html`**, the most complete example: lobby, 2–4 players, teams,
    hidden hands, names, timer, pass, Leave, Play again. `chain-reaction` is a simpler 2–6 player example with a
    same-phone mode; `four-in-a-row` a small 2-player one.
-4. Test (below), add a line to `README.md` under Projects and a card to `site/games/index.html` (newest first: icon, title,
+4. Follow the design standard, [DESIGN.md](DESIGN.md): the title, the wording, the home screen's sections and their
+   order (create and join rooms), the lobby, the game screen and the controls. The kit does most of it; a game with
+   its own screens copies it. Then run the design check, `node scripts/build.mjs && node tests/ui-audit.cjs <name>`,
+   and fix everything it reports until it says `0 problem(s).` (CI's `ui` job runs it on every PR).
+5. Test (below), add a line to `README.md` under Projects and a card to `site/games/index.html` (newest first: icon, title,
    one line, player tags), commit, push, open a PR.
 
 ## The game kit (start here for a new game)
@@ -155,8 +159,9 @@ locally. Keep the page's own solo mode working without the server.
 
 - [ ] The PR touches only `projects/<name>/` (+ README, + its landing-page card, + its own `tests/e2e/<name>.cjs`), or is clearly an engine PR.
 - [ ] Works on a phone: touch, no sideways scroll, safe areas, light and dark.
-- [ ] `node tests/ui-audit.cjs <name>` reports 0 problems (44 px controls, 12 px text, 4.5:1 contrast, labels; mark
-      the board or rack container `data-small-ok`). Text on an accent button uses `var(--on-accent)`.
+- [ ] Follows [DESIGN.md](DESIGN.md), and `node tests/ui-audit.cjs <name>` reports 0 problems (title, standard
+      wording and section order, 44 px controls, 12 px text, 4.5:1 contrast, labels; mark the board or rack container
+      `data-small-ok`). Text on an accent button uses `var(--on-accent)`.
 - [ ] Online: create, join by code and by link, play to a win, Play again, Leave mid-game, reload mid-game
       (`?backend=fake` and the emulator test), then the user tries it on the preview.
 - [ ] `node scripts/build.mjs` and `node tests/smoke.cjs` pass, and `E2E=<name> npm run e2e` passes if the game is online.

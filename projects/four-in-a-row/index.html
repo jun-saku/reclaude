@@ -178,7 +178,7 @@
         <p class="error" id="home-error" role="alert"></p>
       </div>
       <div class="card">
-        <h2>Same device</h2>
+        <h2>Same phone</h2>
         <p class="muted">Take turns on this phone. Works offline.</p>
         <button class="secondary" id="local">Play here</button>
       </div>
@@ -398,7 +398,7 @@
       const online = r.online || {};
       const other = side === "x" ? "o" : "x";
 
-      $("room-label").innerHTML = local ? "Same device" : `Room <b>${code}</b>`;
+      $("room-label").innerHTML = local ? "Same phone" : `Room <b>${code}</b>`;
       const chip = (s, label, dot) =>
         `<span class="chip ${s}${r.status === "playing" && r.turn === s ? " turn" : ""}"><span class="disc"></span>${label}` +
         (dot === undefined ? "" : `<span class="dot${dot ? " on" : ""}"></span>`) + `</span>`;
@@ -448,7 +448,7 @@
       } else if (r.status === "done") {
         if (r.winner === "draw") status = "Board full: it's a draw";
         else if (local) status = `${r.winner === "x" ? "Red" : "Yellow"} wins!`;
-        else if (r.left === other) status = "Your friend left. You win 🎉";
+        else if (r.left === other) status = "Your friend left. You win! 🎉";
         else if (r.left === side) status = "You left this game";
         else status = r.winner === side ? "You win! 🎉" : "Friend wins";
       }

@@ -268,9 +268,9 @@
         <p class="error" id="home-error" role="alert"></p>
       </div>
       <div class="panel">
-        <h2>Play the computer</h2>
+        <h2>Solo</h2>
         <p class="muted">You and a computer partner against two computer opponents.</p>
-        <button class="big secondary" id="solo">Play</button>
+        <button class="big secondary" id="solo">Play solo</button>
       </div>
       <button class="secondary" id="home-help">How to play</button>
     </section>
@@ -1117,7 +1117,7 @@
       show("home");
       $("home-error").textContent = error;
       for (const id of ["create", "join"]) $(id).disabled = false;
-      $("solo").textContent = loadSolo() ? "Continue game" : "Play";
+      $("solo").textContent = loadSolo() ? "Continue game" : "Play solo";
     }
 
     function startSolo() {

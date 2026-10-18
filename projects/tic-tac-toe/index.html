@@ -204,7 +204,7 @@
         <p class="error" id="home-error" role="alert"></p>
       </div>
       <div class="card" style="margin-top: 12px">
-        <h2>Same device</h2>
+        <h2>Same phone</h2>
         <p class="muted">Take turns on this phone. Works offline.</p>
         <button class="secondary" id="local">Play here</button>
       </div>
@@ -404,7 +404,7 @@
       const online = r.online || {};
       const other = side === "x" ? "o" : "x";
 
-      els.roomLabel.innerHTML = local ? "Same device" : `Room <b>${code}</b>`;
+      els.roomLabel.innerHTML = local ? "Same phone" : `Room <b>${code}</b>`;
       const chip = (s, label, dot) =>
         `<span class="chip ${s}${r.status === "playing" && r.turn === s ? " turn" : ""}">` +
         `<span class="mark">${s.toUpperCase()}</span>${label}${dot === undefined ? "" : `<span class="dot${dot ? " on" : ""}"></span>`}</span>`;
@@ -434,9 +434,9 @@
         if (local) status = `${r.turn.toUpperCase()} to play`;
         else if (!online[other]) status = r.turn === side ? "Your turn (friend is away)" : "Friend is away…";
         else status = r.turn === side ? "Your turn" : "Friend's turn…";
-      } else if (r.winner === "draw") status = "It's a draw";
+      } else if (r.winner === "draw") status = "It's a draw!";
       else if (local) status = `${r.winner.toUpperCase()} wins!`;
-      else if (r.left === other) status = "Your friend left. You win 🎉";
+      else if (r.left === other) status = "Your friend left. You win! 🎉";
       else if (r.left === side) status = "You left this game";
       else status = r.winner === side ? "You win! 🎉" : "Friend wins";
       els.status.textContent = status;

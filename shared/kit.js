@@ -53,11 +53,6 @@ export function start(game, ui = {}) {
     <section id="home">
       ${online || ui.leaderboard ? `<div class="card"><label class="name-row"><span>Your name</span>
         <input id="my-name" maxlength="12" autocomplete="nickname" spellcheck="false" placeholder="So friends know it's you"></label></div>` : ""}
-      ${modes.includes("solo") ? `<div class="card"><h2>Solo</h2><p class="muted">${ui.soloText || "Play on your own. Works offline."}</p>
-        <button id="local" data-players="1">Play solo</button></div>` : ""}
-      ${localPlayers.length ? `<div class="card"><h2>Same phone</h2><p class="muted">Pass the phone around. Works offline.</p>
-        ${localPlayers.length > 1 ? `<div class="name-row"><span>Players</span><div class="seg" id="local-count">${localPlayers.map((n, i) => `<button type="button" data-n="${n}" aria-pressed="${!i}">${n}</button>`).join("")}</div></div>` : ""}
-        <button class="secondary" id="${modes.includes("solo") ? "local-many" : "local"}" data-players="${localPlayers[0]}">Play here</button></div>` : ""}
       ${online ? `<div class="card"><h2>Play friends online</h2>
         <p class="muted">${ui.onlineText || `Create a room for ${Math.max(2, minP) === maxP ? maxP : `${Math.max(2, minP)}–${maxP}`} players and send the code or link. The host starts once everyone's in.`}</p>
         <button id="create">Create room</button></div>
@@ -67,6 +62,11 @@ export function start(game, ui = {}) {
           <button id="join" type="submit">Join</button>
         </form>
         <p class="error" id="home-error" role="alert"></p></div>` : ""}
+      ${localPlayers.length ? `<div class="card"><h2>Same phone</h2><p class="muted">Pass the phone around. Works offline.</p>
+        ${localPlayers.length > 1 ? `<div class="name-row"><span>Players</span><div class="seg" id="local-count">${localPlayers.map((n, i) => `<button type="button" data-n="${n}" aria-pressed="${!i}">${n}</button>`).join("")}</div></div>` : ""}
+        <button class="secondary" id="${modes.includes("solo") ? "local-many" : "local"}" data-players="${localPlayers[0]}">Play here</button></div>` : ""}
+      ${modes.includes("solo") ? `<div class="card"><h2>Solo</h2><p class="muted">${ui.soloText || "Play on your own. Works offline."}</p>
+        <button class="secondary" id="local" data-players="1">Play solo</button></div>` : ""}
       ${ui.howTo ? `<details class="card rules"><summary>How to play</summary>${ui.howTo}</details>` : ""}
     </section>
     <section id="game" hidden>
@@ -76,7 +76,7 @@ export function start(game, ui = {}) {
         <p class="bigcode" id="waiting-code"></p>
         <div class="row"><button id="share">Share link</button><button class="secondary" id="copy">Copy code</button></div>
         <div class="seated" id="seated"></div>
-        <button id="start-btn" hidden>Start</button>
+        <button id="start-btn" hidden>Start game</button>
         <p class="muted" id="waiting-note" style="text-align: center; font-size: 0.9rem"></p>
       </div>
       <p class="status" id="status" aria-live="polite"></p>
@@ -310,7 +310,7 @@ export function start(game, ui = {}) {
     const id = mode === "online" ? `${room.round}` : engine;
     if (savedFor !== id) { savedFor = id; saved = false; $("save-msg").textContent = ""; }
     const text = ui.resultText?.(over, i) || {
-      title: over.winner === "draw" || over.winner == null ? (over.winner === "draw" ? "It's a draw" : "Game over")
+      title: over.winner === "draw" || over.winner == null ? (over.winner === "draw" ? "It's a draw!" : "Game over")
         : over.winner === i.me && mode !== "local" ? "You win! 🎉" : `${name(over.winner)} wins${mode === "local" ? "! 🎉" : ""}`,
       text: typeof over.left === "number" ? (over.left === i.me ? "You left this game." : `${name(over.left)} left the game.`)
         : typeof over.score === "number" ? `Score: ${ui.leaderboard?.format ? ui.leaderboard.format(over.score) : over.score}` : "",

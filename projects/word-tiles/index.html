@@ -248,7 +248,7 @@
         </div>
         <div class="seated" id="seated"></div>
         <p class="muted" id="waiting-note" style="text-align: center; font-size: 0.9rem"></p>
-        <button id="start-btn" hidden>Start</button>
+        <button id="start-btn" hidden>Start game</button>
       </div>
 
       <div id="play" hidden>
@@ -740,7 +740,7 @@
       const turnName = label(r.turn);
       let status = "";
       if (playing) status = myTurn() ? (local() ? `${turnName}'s turn` : "Your turn") : `${turnName}'s turn${local() || rooms.isOnline(r, r.turn) ? "…" : " (away)"}`;
-      else if (typeof r.left === "number") status = r.left === seat.seat ? "You left this game" : `${label(r.left)} left. ${r.winner === "draw" ? "Game over" : r.winner === seat.seat ? "You win 🎉" : `${label(r.winner)} wins`}`;
+      else if (typeof r.left === "number") status = r.left === seat.seat ? "You left this game" : `${label(r.left)} left. ${r.winner === "draw" ? "Game over" : r.winner === seat.seat ? "You win! 🎉" : `${label(r.winner)} wins`}`;
       else status = r.winner === "draw" ? "It's a draw!" : !local() && r.winner === seat.seat ? "You win! 🎉" : `${label(r.winner)} wins! 🎉`;
       $("status").innerHTML = status;
       let last = "";

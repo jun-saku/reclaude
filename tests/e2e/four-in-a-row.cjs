@@ -43,7 +43,7 @@ module.exports = async ({ page, ok, statusIs, BASE, out }) => {
   // Red leaves mid-game (confirming the dialog): Yellow is told and wins the round
   A.once('dialog', (d) => d.accept());
   await A.click('#leave'); await A.waitForSelector('#home:not([hidden])', { timeout: 8000 });
-  ok(await statusIs(B, 'Your friend left. You win 🎉'), 'leaving mid-game forfeits; the friend sees it');
+  ok(await statusIs(B, 'Your friend left. You win! 🎉'), 'leaving mid-game forfeits; the friend sees it');
   ok(await B.waitForFunction(() => document.getElementById('rematch').hidden, null, { timeout: 8000 }).then(() => true).catch(() => false), 'play again waits until the friend is back');
   // A waiting room is deleted when its host leaves it
   const Z = await page(C4);

@@ -51,6 +51,7 @@ The user usually works from their phone, so keep replies short and end with the 
   page at 390px and fails on JavaScript errors, blocked scripts, sideways scroll, a game missing from the games page or
   its "‹ All games" link, or a same-device game that won't start; it's part of the required `build` check, needs no
   per-game code, and lists non-games (no card, no link) in `NOT_GAMES`. `node tests/ui-audit.cjs` (after the build; CI's `ui` job) checks every screen against the design standard
+  (`.claude/skills/new-game/DESIGN.md`: titles, wording, home-screen order, controls)
   in light and dark mode at 320 and 390 px: tap targets at least 44 px, text at least 12 px with 4.5:1 contrast (3:1
   large), no sideways scroll or cut-off text, icon-only buttons labelled, no JavaScript errors. Game boards and racks
   are marked `data-small-ok` (their pieces size themselves). `npm run rules` checks the database rules on the Firebase emulator (CI runs

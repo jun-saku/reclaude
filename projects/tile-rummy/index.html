@@ -684,7 +684,7 @@
         }
         const left = rooms.turnLeft(r);
         if (left !== null) status += ` <span class="clock${left <= 10 ? " low" : ""}">${left ? `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}` : "time's up"}</span>`;
-      } else if (typeof r.left === "number") status = r.left === mine ? "You left this game" : `${label(r.left)} left. ${r.winner === "draw" ? "Game over" : r.winner === mine ? "You win 🎉" : `${label(r.winner)} wins`}`;
+      } else if (typeof r.left === "number") status = r.left === mine ? "You left this game" : `${label(r.left)} left. ${r.winner === "draw" ? "Game over" : r.winner === mine ? "You win! 🎉" : `${label(r.winner)} wins`}`;
       else if (r.winner === "draw") status = "Pool's empty: it's a tie";
       else if (r.winner === mine) status = "You win! 🎉";
       else status = `${label(r.winner)} wins`;

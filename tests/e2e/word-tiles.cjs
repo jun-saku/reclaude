@@ -72,5 +72,5 @@ module.exports = async ({ page, ok, statusIs, BASE, out }) => {
   // Leaving mid-game forfeits.
   A.once('dialog', (d) => d.accept());
   await A.click('#leave'); await A.waitForSelector('#home:not([hidden])', { timeout: 8000 });
-  ok(await statusIs(B, 'P1 left. You win 🎉'), 'leaving mid-game forfeits; the other player sees it');
+  ok(await statusIs(B, 'P1 left. You win! 🎉'), 'leaving mid-game forfeits; the other player sees it');
 };

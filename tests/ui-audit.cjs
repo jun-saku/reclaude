@@ -5,6 +5,10 @@
 //   fits     no sideways scroll, no text cut off inside its box
 //   labelled buttons with no text (only an icon or emoji) have an aria-label
 //   works    no JavaScript errors
+//   consistent  the standard wording (.claude/skills/new-game/DESIGN.md): the title is the same in <title>, <h1> and
+//            the games page card; the home screen's sections are online first (Play friends online, Join a room), then
+//            Same phone, then Solo; Create room, Join, Share link, Copy code, Start game, Play here / Play solo, Leave
+//            and Play again are worded the same in every game
 // Run after the build: node tests/ui-audit.cjs [game…]   Prints every problem; exits 1 if there are any.
 const { chromium } = (() => {
   for (const m of ['playwright', 'playwright-core']) { try { return require(m); } catch {} }
@@ -25,8 +29,12 @@ const server = http.createServer((req, res) => {
 const ALL = fs.readdirSync(SITE).filter((d) => fs.existsSync(path.join(SITE, d, 'index.html')) && !['shared'].includes(d));
 const ONLY = process.argv.slice(2);
 
+// The games page's card titles, by folder.
+const CARDS = {};
+for (const m of fs.readFileSync(path.join(SITE, 'games', 'index.html'), 'utf8').matchAll(/href="\.\.\/([^/"]+)\/"[\s\S]*?<h2>([^<]+)<\/h2>/g)) CARDS[m[1]] = m[2];
+
 // Runs in the page: the problems on the screen as it is now.
-function audit() {
+function audit({ card }) {
   const out = [];
   const vis = (el) => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el); return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none' && Number(s.opacity) > 0.05; };
   const label = (el) => (el.id ? `#${el.id}` : el.tagName.toLowerCase() + (el.className && typeof el.className === 'string' ? '.' + el.className.trim().split(/\s+/)[0] : '')) + (el.textContent.trim() ? ` "${el.textContent.trim().slice(0, 24)}"` : '');
@@ -75,6 +83,44 @@ function audit() {
       if (ratio < need - 0.05 && !seen.has(key)) { seen.add(key); out.push(`legible: ${label(el)} contrast ${ratio.toFixed(2)} (needs ${need})`); }
     }
   }
+  // Consistent: titles and the standard wording.
+  const shown = (el) => el && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
+  const h1 = document.querySelector('h1');
+  if (h1) {
+    const c = h1.cloneNode(true); c.querySelectorAll('svg, [aria-hidden="true"], button').forEach((e) => e.remove());
+    const t = c.textContent.trim();
+    if (t !== document.title.trim()) out.push(`consistent: <h1> "${t}" isn't the page <title> "${document.title}"`);
+    if (card && t !== card) out.push(`consistent: <h1> "${t}" isn't the games page title "${card}"`);
+  }
+  const link = document.querySelector('.home-link');
+  if (shown(link) && link.textContent.trim() !== '‹ All games') out.push(`consistent: the home link says "${link.textContent.trim()}", not "‹ All games"`);
+  const WORDS = {
+    create: /^Create room$/, join: /^Join$/, share: /^Share link$/, copy: /^(Copy code|Copied!?)$/, leave: /^Leave$/,
+    'lobby-leave': /^Leave$/, rematch: /^Play again( \(.+\))?$/, local: /^(Play (here|solo)|Continue game)$/, 'local-many': /^Play here$/,
+    solo: /^(Play solo|Continue game)$/, 'start-btn': /^(Start game|Start with \d+ players|Waiting for (friends|a friend)…)$/,
+    start: /^(Start game|Start with \d+ players|Waiting for (friends|a friend)…)$/,
+  };
+  for (const [id, re] of Object.entries(WORDS)) {
+    const el = document.getElementById(id);
+    if (el && el.tagName === 'BUTTON' && shown(el) && !re.test(el.textContent.trim())) out.push(`consistent: #${id} says "${el.textContent.trim()}" (standard: ${re.source.replace(/[\^$\\]/g, '')})`);
+  }
+  const code = document.getElementById('join-code');
+  if (shown(code) && code.placeholder !== 'CODE') out.push(`consistent: #join-code placeholder is "${code.placeholder}", not "CODE"`);
+  const name = document.getElementById('my-name');
+  if (shown(name) && name.placeholder !== "So friends know it's you") out.push(`consistent: #my-name placeholder is "${name.placeholder}"`);
+  const home = document.getElementById('home');
+  if (shown(home)) {
+    const ORDER = ['Play friends online', 'Play a friend online', 'Join a room', 'Same phone', 'Solo'];
+    const rank = (t) => (t === 'Play a friend online' ? 0 : ORDER.indexOf(t));
+    let last = -1;
+    for (const h of home.querySelectorAll('h2')) {
+      if (!shown(h) || h.closest('dialog, [role="dialog"]')) continue;
+      const t = h.textContent.trim(), r = rank(t);
+      if (r < 0) out.push(`consistent: home section "${t}" isn't a standard one (${ORDER.join(', ')})`);
+      else if (r < last) out.push(`consistent: home section "${t}" is out of order (online, Join a room, Same phone, Solo)`);
+      else last = r;
+    }
+  }
   return out;
 }
 
@@ -91,19 +137,19 @@ function audit() {
       const open = async () => { const p = await ctx.newPage(); p.on('pageerror', (e) => errs.push(e.message)); await p.goto(`http://localhost:${PORT}/${game}/?backend=fake`); await p.waitForTimeout(400); return p; };
       const tag = `${scheme} ${width}`;
       const p = await open();
-      note(game, `home ${tag}`, await p.evaluate(audit));
+      note(game, `home ${tag}`, await p.evaluate(audit, { card: CARDS[game] }));
       if (await p.isVisible('#local').catch(() => false)) {
         await p.click('#local'); await p.waitForTimeout(500);
-        note(game, `one phone ${tag}`, await p.evaluate(audit));
+        note(game, `one phone ${tag}`, await p.evaluate(audit, { card: CARDS[game] }));
         // A hand-over screen (one phone, hidden hands) hides the game; tap through it once.
-        for (const sel of ['#reveal', '#show-hand', '#ready', '.cover button']) if (await p.isVisible(sel).catch(() => false)) { await p.click(sel).catch(() => {}); await p.waitForTimeout(300); note(game, `one phone (revealed) ${tag}`, await p.evaluate(audit)); break; }
+        for (const sel of ['#reveal', '#show-hand', '#ready', '.cover button']) if (await p.isVisible(sel).catch(() => false)) { await p.click(sel).catch(() => {}); await p.waitForTimeout(300); note(game, `one phone (revealed) ${tag}`, await p.evaluate(audit, { card: CARDS[game] })); break; }
       }
       if (game !== 'tanks') {
         const h = await open();
         if (await h.isVisible('#create').catch(() => false)) {
           if (await h.isVisible('#my-name').catch(() => false)) await h.fill('#my-name', 'Jun');
           await h.click('#create'); await h.waitForTimeout(700);
-          note(game, `lobby ${tag}`, await h.evaluate(audit));
+          note(game, `lobby ${tag}`, await h.evaluate(audit, { card: CARDS[game] }));
           const code = ((await h.textContent('#waiting-code').catch(() => '')) || '').trim();
           if (code) {
             const q = await open();
@@ -111,7 +157,7 @@ function audit() {
             await q.fill('#join-code', code).catch(() => {}); await q.click('#join').catch(() => {}); await q.waitForTimeout(700);
             if (await h.isVisible('#start-btn').catch(() => false)) await h.click('#start-btn').catch(() => {});
             await h.waitForTimeout(900);
-            note(game, `online ${tag}`, await h.evaluate(audit));
+            note(game, `online ${tag}`, await h.evaluate(audit, { card: CARDS[game] }));
           }
         }
       }

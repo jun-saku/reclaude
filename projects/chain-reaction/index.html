@@ -500,7 +500,7 @@
         const left = rooms.turnLeft(r);
         if (left !== null) status += ` <span class="clock${left <= 5 ? " low" : ""}">${left ? `0:${String(left).padStart(2, "0")}` : "time's up"}</span>`;
       } else if (typeof r.left === "number") {
-        status = r.left === mine ? "You left this game" : `${label(r.left)} left. ${r.winner === "draw" ? "Game over" : r.winner === mine ? "You win 🎉" : `${label(r.winner)} wins`}`;
+        status = r.left === mine ? "You left this game" : `${label(r.left)} left. ${r.winner === "draw" ? "Game over" : r.winner === mine ? "You win! 🎉" : `${label(r.winner)} wins`}`;
       } else if (local()) status = `${COLOURS[r.winner]} wins! 🎉`;
       else status = r.winner === mine ? "You win! 🎉" : `${label(r.winner)} wins`;
       $("status").innerHTML = status;
