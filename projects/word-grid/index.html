@@ -7,51 +7,25 @@
   <meta name="theme-color" content="#161618" media="(prefers-color-scheme: dark)">
   <title>Word Grid</title>
   <meta name="description" content="Swipe across touching letters to find words before the timer runs out.">
+  <link rel="stylesheet" href="../shared/base.css">
   <style>
     :root {
-      --bg: #f7f6f3;
-      --text: #1d1d1f;
-      --muted: #5e5e63;
       --board: #ded7cb;
-      --panel: #ffffff;
       --tile: #fffdf8;
       --tile-text: #2b2620;
-      --accent: #b04d14; --on-accent: #fff;
       --good: #2f9a5c;
       --warn: #d9a21b;
       --bad: #cf3f3f;
-      color-scheme: light;
     }
     @media (prefers-color-scheme: dark) {
       :root {
-        --bg: #161618;
-        --text: #ececef;
-        --muted: #9a9aa2;
         --board: #2a2a2e;
-        --panel: #1f1f22;
         --tile: #3b3a40;
         --tile-text: #f3efe8;
-        --accent: #f08a4b; --on-accent: #1d1d1f;
         --good: #3fb874;
         --warn: #e0b23a;
         --bad: #e05a5a;
-        color-scheme: dark;
       }
-    }
-    * { box-sizing: border-box; }
-    html, body { min-height: 100%; }
-    body {
-      margin: 0;
-      background: var(--bg);
-      color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      display: flex;
-      justify-content: center;
-      overscroll-behavior: none;
-      user-select: none;
-      -webkit-user-select: none;
-      -webkit-touch-callout: none;
-      -webkit-tap-highlight-color: transparent;
     }
     .game {
       width: 100%;
@@ -63,33 +37,13 @@
     }
     section { display: flex; flex-direction: column; gap: 14px; }
     section[hidden] { display: none; }
-    h1 { margin: 0; font-size: clamp(2rem, 10vw, 2.6rem); line-height: 1; font-weight: 800; letter-spacing: -0.02em; }
     h2 { margin: 0; font-size: 1.6rem; }
     h3 { margin: 4px 0 0; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
-    p { margin: 0; }
     .lead { color: var(--muted); line-height: 1.4; }
-    .hint { color: var(--muted); font-size: 0.9rem; line-height: 1.4; }
     .hint:empty { display: none; }
-
-    button {
-      font: inherit;
-      font-weight: 600;
-      font-size: 0.95rem;
-      padding: 9px 16px;
-      border-radius: 10px;
-      border: 0;
-      background: var(--accent);
-      color: var(--on-accent);
-      cursor: pointer;
-      touch-action: manipulation;
-      white-space: nowrap;
-    }
-    button.secondary { background: var(--board); color: var(--text); }
-    button:disabled { opacity: 0.45; cursor: default; }
     button.big { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 14px 16px; border-radius: 14px; font-size: 1.1rem; text-align: left; white-space: normal; }
     button.big small { font-size: 0.82rem; font-weight: 500; opacity: 0.85; }
-    .row { display: flex; gap: 8px; flex-wrap: wrap; }
-    .row button { flex: 1; }
+    .row button { flex: 1 1 auto; }
     .row[hidden] { display: none; }
 
     .rules { margin: 0; padding-left: 1.2em; color: var(--muted); font-size: 0.9rem; line-height: 1.5; }
@@ -194,32 +148,18 @@
     }
     .save-box { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 14px; background: var(--panel); }
     .save-box[hidden] { display: none; }
-
-    /* ---------- online rooms ---------- */
-    .card { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 14px; background: var(--panel); }
     .card[hidden] { display: none; }
-    .name-row { display: flex; align-items: center; gap: 10px; font-weight: 650; }
-    .name-row span { white-space: nowrap; }
     .name-row input, .join input {
       flex: 1; min-width: 0; font: inherit; padding: 9px 12px; border-radius: 10px;
       border: 1px solid var(--board); background: var(--bg); color: var(--text);
     }
-    .join { display: flex; gap: 8px; }
-    .join input { font-size: 1.15rem; letter-spacing: 0.3em; text-transform: uppercase; text-align: center; }
-    .error { color: var(--bad); font-size: 0.9rem; }
     .error:empty { display: none; }
     .topline { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
     .topline:empty, .players:empty { display: none; }
-    .players { display: flex; gap: 6px; flex-wrap: wrap; }
     .chip {
       display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px;
       background: var(--board); font-size: 0.85rem; font-weight: 600;
     }
-    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); opacity: 0.4; }
-    .dot.on { background: var(--good); opacity: 1; }
-    .code { font-size: 0.85rem; color: var(--muted); }
-    .code b { font-size: 1.05rem; letter-spacing: 0.15em; color: var(--text); }
-    .bigcode { font-size: 2.6rem; font-weight: 800; letter-spacing: 0.25em; text-align: center; }
     .center { text-align: center; }
     .standings { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
     .standings li {
@@ -231,18 +171,6 @@
     .standings .who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
     .standings .pts { font-weight: 700; }
     .standings .pts small { font-weight: 500; color: var(--muted); }
-
-    /* Back to the games list; hidden while in a room or a game (use Leave there). */
-    .home-link {
-      align-self: flex-start; display: inline-flex; align-items: center; gap: 2px; margin: -6px 0 -6px -6px; padding: 6px;
-      color: var(--muted); font-size: 0.9rem; font-weight: 600; text-decoration: none; border-radius: 8px;
-    }
-    .home-link:active { opacity: 0.6; }
-    main:has(#home[hidden]) .home-link { display: none; }
-    /* Design standard (checked by tests/ui-audit.cjs): every control is at least 44 px each way. Game boards and
-       racks ([data-small-ok]) size their own pieces. */
-    :is(button, input, select):not([data-small-ok] *) { min-height: 44px; min-width: 44px; }
-    .home-link { min-height: 44px; }
   </style>
 </head>
 <body>
