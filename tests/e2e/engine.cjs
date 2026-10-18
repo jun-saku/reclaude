@@ -50,38 +50,4 @@ module.exports = async ({ page, ok, statusIs, BASE, out }) => {
   const peek = await P3.evaluate(() => new Promise((res) => { const s = window.__seat; s.backend.watchPrivate(s.code, 1, (v, e) => res(e ? 'denied' : 'saw: ' + v)); setTimeout(() => res('timeout'), 6000); }));
   ok(own === 'QH,2S,7D', 'a player can read their own private hand');
   ok(peek === 'denied', `another player can't read it (${peek})`);
-
-  // ---- Real-time rooms: live slots, lead takeover, leaving without ending the game ----
-  const L = [await page(BASE + 'four-in-a-row/?backend=emulator'), await page(BASE + 'four-in-a-row/?backend=emulator'), await page(BASE + 'four-in-a-row/?backend=emulator')];
-  const lcode = await L[0].evaluate(async () => {
-    const s = await window.__c4.rooms.createRoom('live-test', { seats: 3, min: 2, auto: false, live: true, liveHz: 6 });
-    window.__seat = s; return s.code;
-  });
-  for (const P of L.slice(1)) await P.evaluate(async (c) => { window.__seat = await window.__c4.rooms.joinRoom('live-test', c); }, lcode);
-  await L[0].evaluate(() => window.__c4.rooms.startGame(window.__seat));
-  for (const P of L) {
-    await P.evaluate(() => {
-      const r = window.__c4.rooms;
-      window.__room = null;
-      window.__leave = r.enter(window.__seat, (room) => { window.__room = room; }, () => {});
-      window.__live = r.joinLive(window.__seat);
-    });
-  }
-  await L[0].evaluate(() => window.__live.send('lead 1'));
-  await L[1].evaluate(async () => { for (let i = 0; i <= 40; i++) { window.__live.send('p2 ' + i); await new Promise((r) => setTimeout(r, 10)); } });
-  const seen = await L[2].waitForFunction(() => { const s = window.__live.slots(); return s[0]?.d === 'lead 1' && s[1]?.d === 'p2 40' && s; }, null, { timeout: 8000 }).then((h) => h.jsonValue()).catch(() => null);
-  ok(seen && !seen[2], `live updates reach the other players, the latest one wins (${JSON.stringify(seen)})`);
-  ok(await L[0].evaluate(() => window.__live.isLead()), 'the host starts as the lead');
-  // The lead goes quiet (still in the room): the next online player takes the lead by themselves.
-  await L[0].evaluate(() => window.__live.stop());
-  const took = await L[2].waitForFunction(() => window.__room?.turn === 1, null, { timeout: 12000 }).then(() => true).catch(() => false);
-  ok(took, 'when the lead goes quiet, the next player takes the lead through the real rules');
-  ok(await L[1].evaluate(() => window.__live.isLead()), 'the new lead knows it leads');
-  // A player leaving doesn't end a real-time game; a lead leaving hands the lead on.
-  await L[2].evaluate(async () => { window.__live.stop(); await window.__c4.rooms.quit(window.__seat); window.__leave(); });
-  await L[1].waitForTimeout(800);
-  ok((await L[1].evaluate(() => window.__room.status)) === 'playing', 'a player leaving a real-time game leaves it playing');
-  await L[1].evaluate(async () => { window.__live.stop(); await window.__c4.rooms.quit(window.__seat); window.__leave(); });
-  const handed = await L[0].waitForFunction(() => window.__room?.turn === 0 && window.__room.status === 'playing', null, { timeout: 8000 }).then(() => true).catch(() => false);
-  ok(handed, 'the lead leaving hands the lead to a player still online');
 };

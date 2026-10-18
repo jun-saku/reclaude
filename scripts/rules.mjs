@@ -46,14 +46,8 @@ const forfeit = `(newData.child('status').val() === 'done' && data.child('player
 // Turn timer: once a turn has run longer than turnSecs, any seated player may pass it to another seated player.
 // (Rules fail as a whole on a missing value in arithmetic, so check both are numbers first.)
 const skip = `(data.child('turnSecs').isNumber() && data.child('turnAt').isNumber() && data.child('turnSecs').val() > 0 && data.child('turnAt').val() + data.child('turnSecs').val() * 1000 < now && newData.child('turn').val() !== data.child('turn').val() && data.child('players/s' + newData.child('turn').val()).exists() && ${leaves([...game.filter((k) => k !== "turn"), "status"])} && ${stateKept})`;
-// Real-time rooms (live): `turn` is the lead seat, which runs the shared parts of the game. If the lead's live
-// slot (below) has gone quiet for 3 seconds, any seated player may make themselves the lead, changing nothing else.
-const leadSlot = "root.child('live').child($code).child('s' + data.child('turn').val())";
-const leadQuiet = `(!${leadSlot}.child('t').isNumber() || ${leadSlot}.child('t').val() < now - 3000 || ${leadSlot}.child('r').val() !== data.child('round').val())`;
-const takeover = `(data.child('live').val() === true && data.child('turnAt').isNumber() && data.child('turnAt').val() < now - 3000 && ${leadQuiet} && newData.child('players/s' + newData.child('turn').val()).val() === auth.uid && ${leaves([...game.filter((k) => k !== "turn"), "status"])} && ${stateKept})`;
-// Playing: only the player whose turn it is may change the game (or a forfeit, a skip after the timer, or a lead
-// takeover in a real-time room).
-const playing = `(!${st("playing")} || ${turnPlayer} || ${forfeit} || ${skip} || ${takeover} || (${leaves([...game, "status"])} && ${stateKept}))`;
+// Playing: only the player whose turn it is may change the game (or a forfeit, or a skip after the timer).
+const playing = `(!${st("playing")} || ${turnPlayer} || ${forfeit} || ${skip} || (${leaves([...game, "status"])} && ${stateKept}))`;
 // Done: the result stays put; anyone seated may start the next round.
 const done = `(!${st("done")} || (newData.child('status').val() !== 'done' ? newData.child('round').val() === data.child('round').val() + 1 : ${leaves(game)} && ${stateKept}))`;
 
@@ -82,9 +76,6 @@ const room = {
   // Turn timer: seconds per turn (0 = off), fixed at creation; turnAt is when the current turn started.
   turnSecs: { ".validate": `newData.isNumber() && newData.val() >= 0 && newData.val() <= 3600 && ${fixed}` },
   turnAt: { ".validate": "newData.isNumber() && newData.val() <= now + 60000" },
-  // Real-time room (see live/ below), fixed at creation: live updates allowed, and how many a second each player sends.
-  live: { ".validate": `newData.isBoolean() && ${fixed}` },
-  liveHz: { ".validate": `newData.isNumber() && newData.val() >= 1 && newData.val() <= 10 && ${fixed}` },
   board: { ".validate": "newData.isString() && newData.val().length <= 256" },
   winner: { ".validate": `(newData.isNumber() && newData.val() >= 0 && newData.val() <= ${SEATS - 1}) || newData.val() === 'draw'` },
   line: { ".validate": "newData.isString() && newData.val().length <= 128 && newData.val().matches(/^[0-9,]*$/)" },
@@ -107,28 +98,6 @@ const priv = {
   },
 };
 
-// ---------- live/<code>/<seat>: real-time updates, one slot per seat, in rooms created with live: true ----------
-// Kept apart from the room so frequent updates don't resend the whole room. Each slot is { d: up to 256 characters,
-// t: server time, r: the room's round }; only seated players read them, and each player writes only their own
-// slot, while the room is playing, at most every 90 ms (10 a second). A player may always remove their own slot.
-const liveRoom = "root.child('rooms').child($code)";
-const liveSeated = S.map((i) => `${liveRoom}.child('players/s${i}').val() === auth.uid`).join(" || ");
-const live = {
-  $code: {
-    ".read": `auth != null && (${liveSeated})`,
-    // Clearing a room's slots: anyone once the room is gone or a day old, its host before the game starts.
-    ".write": `auth != null && !newData.exists() && (!${liveRoom}.exists() || ${liveRoom}.child('createdAt').val() < now - 86400000 || (${liveRoom}.child('host').val() === auth.uid && ${liveRoom}.child('status').val() === 'waiting'))`,
-    $seat: {
-      ".write": `auth != null && $seat.matches(/${SEAT_RE}/) && ${liveRoom}.child('players').child($seat).val() === auth.uid && (!newData.exists() || (${liveRoom}.child('live').val() === true && ${liveRoom}.child('status').val() === 'playing'))`,
-      ".validate": `newData.hasChildren(['d', 't', 'r']) && (!data.child('t').isNumber() || now - data.child('t').val() >= 90)`,
-      d: { ".validate": "newData.isString() && newData.val().length <= 256" },
-      t: { ".validate": "newData.val() === now" },
-      r: { ".validate": `newData.val() === ${liveRoom}.child('round').val()` },
-      $other: { ".validate": false },
-    },
-  },
-};
-
 // ---------- scores/<game>/<uid>: public leaderboards, one entry per player ----------
 // Generic for every game: a name, a number score and a server timestamp, saved at most every 5 seconds.
 // What counts as a valid or better score (higher or lower, even, a maximum…) is up to each game's own page.
@@ -147,7 +116,7 @@ const scores = {
   },
 };
 
-const out = JSON.stringify({ rules: { rooms: { $code: room }, private: priv, live, scores } }, null, 2) + "\n";
+const out = JSON.stringify({ rules: { rooms: { $code: room }, private: priv, scores } }, null, 2) + "\n";
 const file = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "firebase", "database.rules.json");
 if (process.argv.includes("--check")) {
   if (fs.readFileSync(file, "utf8") !== out) {
