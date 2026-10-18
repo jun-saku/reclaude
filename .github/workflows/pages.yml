@@ -36,6 +36,21 @@ jobs:
           npm install --no-save --prefix "$RUNNER_TEMP/pw" playwright-core@1.56.1
           NODE_PATH="$RUNNER_TEMP/pw/node_modules" CHROMIUM_PATH="$(command -v google-chrome)" node tests/smoke.cjs
 
+  # Design check of every screen (tests/ui-audit.cjs): tap targets, text size and contrast, fit at 320 and 390 px, labels
+  # and JavaScript errors, in light and dark mode. Not a required check (it takes a few minutes); a red result is a bug.
+  ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/build.mjs
+      - name: UI audit
+        run: |
+          npm install --no-save --prefix "$RUNNER_TEMP/pw" playwright-core@1.56.1
+          NODE_PATH="$RUNNER_TEMP/pw/node_modules" CHROMIUM_PATH="$(command -v google-chrome)" node tests/ui-audit.cjs
+
   # Checks firebase/database.rules.json against the Firebase emulator (tests/rules.test.mjs).
   rules:
     runs-on: ubuntu-latest

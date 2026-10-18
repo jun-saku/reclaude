@@ -14,15 +14,15 @@
       --soft: #ebe7df;
       --line: #e1ddd5;
       --text: #1d1d1f;
-      --muted: #6b6b70;
-      --accent: #c2571a;
+      --muted: #5e5e63;
+      --accent: #b04d14; --on-accent: #fff;
       --danger: #cf3f3f;
       --good: #2f9a5c;
       --square: #e7e1d3;
-      --tw: #d9604f;
+      --tw: #b8402f;
       --dw: #eba59a;
-      --tl: #4f86c6;
-      --dl: #a9c8e8;
+      --tl: #2f68a6;
+      --dl: #a9c8e8; --dw-ink: #5c1d15; --dl-ink: #173a5e;
       --tile: #f6e7c4;
       --tile-edge: #d8c08d;
       --tile-text: #2b2620;
@@ -36,14 +36,14 @@
         --line: #333338;
         --text: #ececef;
         --muted: #9a9aa2;
-        --accent: #f08a4b;
+        --accent: #f08a4b; --on-accent: #1d1d1f;
         --danger: #e05a5a;
         --good: #3fb874;
         --square: #2a2a2e;
         --tw: #a8463a;
         --dw: #7a4943;
         --tl: #2f5f96;
-        --dl: #36506c;
+        --dl: #36506c; --dw-ink: #fff; --dl-ink: #fff;
         --tile: #e9d5a8;
         --tile-edge: #b49a63;
         --tile-text: #231f19;
@@ -76,7 +76,7 @@
     .muted { color: var(--muted); }
     button {
       font: inherit; font-weight: 650; font-size: 0.95rem; padding: 10px 14px; border-radius: 12px; border: 0;
-      background: var(--accent); color: #fff; cursor: pointer; touch-action: manipulation; white-space: nowrap;
+      background: var(--accent); color: var(--on-accent); cursor: pointer; touch-action: manipulation; white-space: nowrap;
     }
     button.secondary { background: var(--soft); color: var(--text); }
     button:disabled { opacity: 0.45; cursor: default; }
@@ -136,9 +136,9 @@
       font-size: 2.2cqi; font-weight: 700; display: grid; place-items: center; min-width: 0; line-height: 1;
     }
     .sq.tw { background: var(--tw); color: #fff; }
-    .sq.dw, .sq.star { background: var(--dw); color: #fff; }
+    .sq.dw, .sq.star { background: var(--dw); color: var(--dw-ink); }
     .sq.tl { background: var(--tl); color: #fff; }
-    .sq.dl { background: var(--dl); color: #fff; }
+    .sq.dl { background: var(--dl); color: var(--dl-ink); }
     .sq.star { font-size: 4cqi; }
     .sq.tile, .rack .tile {
       background: var(--tile); color: var(--tile-text); box-shadow: inset 0 -2px 0 var(--tile-edge); border-radius: 3px;
@@ -180,6 +180,10 @@
     }
     .home-link:active { opacity: 0.6; }
     main:has(#home[hidden]) .home-link { display: none; }
+    /* Design standard (checked by tests/ui-audit.cjs): every control is at least 44 px each way. Game boards and
+       racks ([data-small-ok]) size their own pieces. */
+    :is(button, input, select):not([data-small-ok] *) { min-height: 44px; min-width: 44px; }
+    .home-link { min-height: 44px; }
   </style>
 </head>
 <body>
@@ -250,9 +254,9 @@
       <div id="play" hidden>
         <p class="status" id="status" aria-live="polite"></p>
         <p class="hint" id="last"></p>
-        <div class="board-wrap" id="board-wrap"><div class="board" id="board" role="grid" aria-label="Board"></div></div>
+        <div class="board-wrap" id="board-wrap"><div class="board" id="board" data-small-ok role="grid" aria-label="Board"></div></div>
         <p class="hint" id="hint" aria-live="polite"></p>
-        <div class="rack" id="rack" aria-label="Your tiles"></div>
+        <div class="rack" id="rack" data-small-ok aria-label="Your tiles"></div>
         <div class="row" id="actions">
           <button id="play-btn">Play</button>
           <button class="secondary" id="recall">Recall</button>
@@ -283,7 +287,7 @@
   <div class="overlay" id="picker" hidden>
     <div class="card">
       <h2>Which letter is the blank?</h2>
-      <div class="letters" id="letters"></div>
+      <div class="letters" id="letters" data-small-ok></div>
       <button class="secondary" id="picker-cancel">Cancel</button>
     </div>
   </div>
@@ -311,6 +315,7 @@
       return TOP[Math.min(r, 14 - r)][Math.min(c, 14 - c)];
     });
     const PREMIUM_CLASS = { T: "tw", D: "dw", t: "tl", d: "dl", "*": "star" };
+    const PREMIUM_NAME = { T: "triple word", D: "double word", t: "triple letter", d: "double letter", "*": "start (double word)" };
     const PREMIUM_LABEL = { T: "TW", D: "DW", t: "TL", d: "DL", "*": "★" };
 
     // ---------- dictionary ----------
@@ -717,6 +722,9 @@
         }
         if (el.className !== cls) el.className = cls;
         if (el.innerHTML !== html) el.innerHTML = html;
+        // A name for screen readers: where the square is, and what's on it.
+        const name = `Row ${Math.floor(i / 15) + 1}, column ${(i % 15) + 1}: ${ch !== "." ? ch.toUpperCase() : PREMIUM[i] !== "." ? PREMIUM_NAME[PREMIUM[i]] : "empty"}`;
+        if (el.getAttribute("aria-label") !== name) el.setAttribute("aria-label", name);
       });
 
       // Rack

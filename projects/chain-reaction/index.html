@@ -11,11 +11,11 @@
     :root {
       --bg: #f7f6f3;
       --text: #1d1d1f;
-      --muted: #6b6b70;
+      --muted: #5e5e63;
       --panel: #ffffff;
       --line: #d9d2c6;
       --soft: #ece7df;
-      --accent: #c2571a;
+      --accent: #b04d14; --on-accent: #fff;
       --danger: #b3261e;
       --cell: #ffffff;
       --p0: #e03e3e; --p1: #2f6fd6; --p2: #24a05a; --p3: #d9940f; --p4: #8a4bd4; --p5: #e0559a;
@@ -29,7 +29,7 @@
         --panel: #1f1f22;
         --line: #3a3a40;
         --soft: #2a2a2e;
-        --accent: #f08a4b;
+        --accent: #f08a4b; --on-accent: #1d1d1f;
         --danger: #ff8a80;
         --cell: #1c1c1f;
         --p0: #ff5f5f; --p1: #5f97ff; --p2: #3fd37f; --p3: #f7bd3f; --p4: #b88cff; --p5: #ff7fbf;
@@ -67,7 +67,7 @@
     .muted { color: var(--muted); }
     button {
       font: inherit; font-weight: 650; border: 0; border-radius: 12px; padding: 12px 16px;
-      background: var(--accent); color: #fff; cursor: pointer; touch-action: manipulation;
+      background: var(--accent); color: var(--on-accent); cursor: pointer; touch-action: manipulation;
     }
     button:disabled { opacity: 0.5; cursor: default; }
     button.secondary { background: var(--soft); color: var(--text); }
@@ -85,6 +85,7 @@
     .seg button[aria-pressed="true"] { background: var(--panel); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
     .name-row { display: flex; align-items: center; gap: 10px; font-weight: 650; }
     .name-row span { white-space: nowrap; }
+    .name-row:has(.seg) { flex-wrap: wrap; } /* the toggles drop below their label on a narrow phone */
     .name-row input {
       flex: 1; min-width: 0; font: inherit; font-weight: 500; padding: 10px 12px; border-radius: 12px;
       border: 1px solid var(--line); background: var(--bg); color: var(--text);
@@ -154,6 +155,10 @@
     }
     .home-link:active { opacity: 0.6; }
     main:has(#home[hidden]) .home-link { display: none; }
+    /* Design standard (checked by tests/ui-audit.cjs): every control is at least 44 px each way. Game boards and
+       racks ([data-small-ok]) size their own pieces. */
+    :is(button, input, select):not([data-small-ok] *) { min-height: 44px; min-width: 44px; }
+    .home-link { min-height: 44px; }
   </style>
 </head>
 <body>
@@ -228,7 +233,7 @@
       </div>
 
       <p class="status" id="status" aria-live="polite"></p>
-      <div class="board" id="board" role="grid" aria-label="Board" hidden></div>
+      <div class="board" id="board" data-small-ok role="grid" aria-label="Board" hidden></div>
       <p class="hint" id="hint"></p>
 
       <div class="row">

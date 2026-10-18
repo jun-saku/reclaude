@@ -17,7 +17,7 @@
       --soft: #e1e9e2;
       --felt: #2f7a52;
       --felt-line: #25643f;
-      --accent: #c2571a;
+      --accent: #b04d14; --on-accent: #fff;
       --danger: #b3261e;
       --face: #fffaf0;
       --face-edge: #d8ccb4;
@@ -35,7 +35,7 @@
         --soft: #29302c;
         --felt: #1d4a33;
         --felt-line: #163a28;
-        --accent: #f08a4b;
+        --accent: #f08a4b; --on-accent: #1d1d1f;
         --danger: #ff8a80;
         --face: #2b2b30;
         --face-edge: #45454c;
@@ -65,7 +65,7 @@
     .muted { color: var(--muted); }
     button {
       font: inherit; font-weight: 650; border: 0; border-radius: 12px; padding: 12px 16px;
-      background: var(--accent); color: #fff; cursor: pointer; touch-action: manipulation;
+      background: var(--accent); color: var(--on-accent); cursor: pointer; touch-action: manipulation;
     }
     button:disabled { opacity: 0.5; cursor: default; }
     button.secondary { background: var(--soft); color: var(--text); }
@@ -127,7 +127,7 @@
       background: var(--felt); border: 2px solid var(--felt-line); border-radius: 14px; padding: 10px;
       min-height: 120px; display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start;
     }
-    .table .empty { color: rgba(255, 255, 255, 0.75); font-size: 0.9rem; margin: auto; text-align: center; }
+    .table .empty { color: rgba(255, 255, 255, 0.92); font-size: 0.9rem; margin: auto; text-align: center; }
     .set {
       display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 4px; border-radius: 8px;
       background: rgba(0, 0, 0, 0.14); border: 2px solid transparent; align-items: center; max-width: 100%;
@@ -172,6 +172,10 @@
     }
     .home-link:active { opacity: 0.6; }
     main:has(#home[hidden]) .home-link { display: none; }
+    /* Design standard (checked by tests/ui-audit.cjs): every control is at least 44 px each way. Game boards and
+       racks ([data-small-ok]) size their own pieces. */
+    :is(button, input, select):not([data-small-ok] *) { min-height: 44px; min-width: 44px; }
+    .home-link { min-height: 44px; }
   </style>
 </head>
 <body>
@@ -245,7 +249,7 @@
       <p class="status" id="status" aria-live="polite"></p>
       <div id="play" hidden>
         <div style="display: flex; flex-direction: column; gap: 10px">
-          <div class="table" id="table" aria-label="Table"></div>
+          <div class="table" id="table" data-small-ok aria-label="Table"></div>
           <p class="hint" id="hint"></p>
           <div class="tools">
             <span class="muted" id="pool" style="font-size: 0.85rem"></span>
@@ -254,7 +258,7 @@
               <button type="button" data-sort="number" aria-pressed="false">Number</button>
             </div>
           </div>
-          <div class="rack" id="rack" aria-label="Your rack"></div>
+          <div class="rack" id="rack" data-small-ok aria-label="Your rack"></div>
           <div class="actions" id="actions">
             <button class="secondary" id="reset">Undo</button>
             <button class="secondary" id="draw">Draw</button>

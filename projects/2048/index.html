@@ -11,11 +11,11 @@
     :root {
       --bg: #f7f6f3;
       --text: #1d1d1f;
-      --muted: #6b6b70;
+      --muted: #5e5e63; --score-ink: #4a4a4f;
       --board: #d9d2c6;
       --cell: #e9e3d9;
       --panel: #ffffff;
-      --accent: #c2571a;
+      --accent: #b04d14; --on-accent: #fff;
       --overlay: rgba(247, 246, 243, 0.82);
       --t2: #f8f4ec;   --t2-text: #4a4237;
       --t4: #f1e3c8;   --t4-text: #4a4237;
@@ -28,11 +28,11 @@
       :root {
         --bg: #161618;
         --text: #ececef;
-        --muted: #9a9aa2;
+        --muted: #9a9aa2; --score-ink: #b4b4bb;
         --board: #2a2a2e;
         --cell: #34343a;
         --panel: #1f1f22;
-        --accent: #f08a4b;
+        --accent: #f08a4b; --on-accent: #1d1d1f;
         --overlay: rgba(22, 22, 24, 0.84);
         --t2: #4a4540;   --t2-text: #f1ebe2;
         --t4: #5c5244;   --t4-text: #f1ebe2;
@@ -73,7 +73,7 @@
       text-align: center;
       line-height: 1.15;
     }
-    .score span { display: block; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+    .score span { display: block; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--score-ink, var(--muted)); }
     .score b { font-size: 1.15rem; font-variant-numeric: tabular-nums; }
 
     .actions { display: flex; gap: 8px; }
@@ -86,7 +86,7 @@
       border-radius: 10px;
       border: 0;
       background: var(--accent);
-      color: #fff;
+      color: var(--on-accent);
       cursor: pointer;
       touch-action: manipulation;
       white-space: nowrap;
@@ -210,6 +210,10 @@
     }
     .home-link:active { opacity: 0.6; }
     main:has(#home[hidden]) .home-link { display: none; }
+    /* Design standard (checked by tests/ui-audit.cjs): every control is at least 44 px each way. Game boards and
+       racks ([data-small-ok]) size their own pieces. */
+    :is(button, input, select):not([data-small-ok] *) { min-height: 44px; min-width: 44px; }
+    .home-link { min-height: 44px; }
   </style>
 </head>
 <body>
@@ -228,7 +232,7 @@
       <button id="new">New game</button>
     </div>
 
-    <div class="board" id="board" aria-label="Game board" role="application">
+    <div class="board" id="board" data-small-ok aria-label="Game board" role="application">
       <div class="cells" aria-hidden="true"></div>
       <div class="tiles" id="tiles"></div>
       <div class="message" id="message" role="alert">

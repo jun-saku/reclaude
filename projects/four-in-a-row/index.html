@@ -11,11 +11,11 @@
     :root {
       --bg: #f7f6f3;
       --text: #1d1d1f;
-      --muted: #6b6b70;
+      --muted: #5e5e63;
       --panel: #ffffff;
       --line: #d9d2c6;
       --soft: #ece7df;
-      --accent: #c2571a;
+      --accent: #b04d14; --on-accent: #fff;
       --frame: #2f5ea8;
       --frame-edge: #24498a;
       --hole: #f7f6f3;
@@ -32,7 +32,7 @@
         --panel: #1f1f22;
         --line: #3a3a40;
         --soft: #2a2a2e;
-        --accent: #f08a4b;
+        --accent: #f08a4b; --on-accent: #1d1d1f;
         --frame: #2a4a82;
         --frame-edge: #1f3966;
         --hole: #161618;
@@ -71,7 +71,7 @@
     #game { display: flex; flex-direction: column; gap: 14px; }
 
     button, input { font: inherit; border-radius: 12px; touch-action: manipulation; }
-    button { border: 0; padding: 13px 18px; font-weight: 650; background: var(--accent); color: #fff; cursor: pointer; }
+    button { border: 0; padding: 13px 18px; font-weight: 650; background: var(--accent); color: var(--on-accent); cursor: pointer; }
     button.secondary { background: var(--soft); color: var(--text); }
     button:disabled { opacity: 0.45; cursor: default; }
 
@@ -152,6 +152,10 @@
     }
     .home-link:active { opacity: 0.6; }
     main:has(#home[hidden]) .home-link { display: none; }
+    /* Design standard (checked by tests/ui-audit.cjs): every control is at least 44 px each way. Game boards and
+       racks ([data-small-ok]) size their own pieces. */
+    :is(button, input, select):not([data-small-ok] *) { min-height: 44px; min-width: 44px; }
+    .home-link { min-height: 44px; }
   </style>
 </head>
 <body>
@@ -197,7 +201,7 @@
       </div>
 
       <p class="status" id="status" aria-live="polite"></p>
-      <div class="board" id="board" role="grid" aria-label="Board: tap a column to drop a disc"></div>
+      <div class="board" id="board" data-small-ok role="grid" aria-label="Board: tap a column to drop a disc"></div>
 
       <div class="row">
         <button id="rematch" hidden>Play again</button>

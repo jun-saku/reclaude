@@ -11,12 +11,12 @@
     :root {
       --bg: #f7f6f3;
       --text: #1d1d1f;
-      --muted: #6b6b70;
+      --muted: #5e5e63;
       --board: #ded7cb;
       --panel: #ffffff;
       --tile: #fffdf8;
       --tile-text: #2b2620;
-      --accent: #c2571a;
+      --accent: #b04d14; --on-accent: #fff;
       --good: #2f9a5c;
       --warn: #d9a21b;
       --bad: #cf3f3f;
@@ -31,7 +31,7 @@
         --panel: #1f1f22;
         --tile: #3b3a40;
         --tile-text: #f3efe8;
-        --accent: #f08a4b;
+        --accent: #f08a4b; --on-accent: #1d1d1f;
         --good: #3fb874;
         --warn: #e0b23a;
         --bad: #e05a5a;
@@ -79,7 +79,7 @@
       border-radius: 10px;
       border: 0;
       background: var(--accent);
-      color: #fff;
+      color: var(--on-accent);
       cursor: pointer;
       touch-action: manipulation;
       white-space: nowrap;
@@ -104,7 +104,7 @@
       text-align: center;
       line-height: 1.15;
     }
-    .stat span { display: block; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+    .stat span { display: block; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
     .stat b { font-size: 1.2rem; font-variant-numeric: tabular-nums; }
     .stat.low b { color: var(--bad); }
     .word {
@@ -149,7 +149,7 @@
       transition: background 80ms, color 80ms, transform 80ms;
     }
     .tile.qu { font-size: 7cqi; }
-    .on .tile { background: var(--accent); color: #fff; transform: scale(0.94); }
+    .on .tile { background: var(--accent); color: var(--on-accent); transform: scale(0.94); }
     .board.good .on .tile { background: var(--good); }
     .board.warn .on .tile { background: var(--warn); }
     .board.bad .on .tile { background: var(--bad); }
@@ -174,7 +174,7 @@
     }
     .words li sup { font-size: 0.65rem; color: var(--muted); margin-left: 2px; }
     .words.missed li { background: transparent; box-shadow: inset 0 0 0 1px var(--board); color: var(--muted); cursor: pointer; }
-    .words li.pick { background: var(--accent); color: #fff; box-shadow: none; }
+    .words li.pick { background: var(--accent); color: var(--on-accent); box-shadow: none; }
     .words li.pick sup { color: inherit; }
 
     /* ---------- results ---------- */
@@ -239,6 +239,10 @@
     }
     .home-link:active { opacity: 0.6; }
     main:has(#home[hidden]) .home-link { display: none; }
+    /* Design standard (checked by tests/ui-audit.cjs): every control is at least 44 px each way. Game boards and
+       racks ([data-small-ok]) size their own pieces. */
+    :is(button, input, select):not([data-small-ok] *) { min-height: 44px; min-width: 44px; }
+    .home-link { min-height: 44px; }
   </style>
 </head>
 <body>
@@ -302,7 +306,7 @@
         <button class="secondary" id="end">End</button>
       </div>
       <div class="word" id="word" aria-live="polite"></div>
-      <div class="board" id="board" role="application" aria-label="Letter grid. Drag across letters, or type a word and press Enter.">
+      <div class="board" id="board" data-small-ok role="application" aria-label="Letter grid. Drag across letters, or type a word and press Enter.">
         <div class="cells" id="cells"></div>
         <svg class="trail" viewBox="0 0 5 5" aria-hidden="true"><polyline id="trail"></polyline></svg>
       </div>

@@ -11,11 +11,11 @@
     :root {
       --bg: #f7f6f3;
       --text: #1d1d1f;
-      --muted: #6b6b70;
+      --muted: #5e5e63;
       --panel: #ffffff;
       --line: #d9d2c6;
       --soft: #ece7df;
-      --accent: #c2571a;
+      --accent: #b04d14; --on-accent: #fff;
       --danger: #b3261e;
       --groove: #c9bfae;
       --cell: #fbf8f2;
@@ -32,7 +32,7 @@
         --panel: #1f1f22;
         --line: #3a3a40;
         --soft: #2a2a2e;
-        --accent: #f08a4b;
+        --accent: #f08a4b; --on-accent: #1d1d1f;
         --danger: #ff8a80;
         --groove: #0e0e10;
         --cell: #2a2a2f;
@@ -72,7 +72,7 @@
     .muted { color: var(--muted); }
     button {
       font: inherit; font-weight: 650; border: 0; border-radius: 12px; padding: 12px 16px;
-      background: var(--accent); color: #fff; cursor: pointer; touch-action: manipulation;
+      background: var(--accent); color: var(--on-accent); cursor: pointer; touch-action: manipulation;
     }
     button:disabled { opacity: 0.5; cursor: default; }
     button.secondary { background: var(--soft); color: var(--text); }
@@ -164,6 +164,10 @@
     }
     .home-link:active { opacity: 0.6; }
     main:has(#home[hidden]) .home-link { display: none; }
+    /* Design standard (checked by tests/ui-audit.cjs): every control is at least 44 px each way. Game boards and
+       racks ([data-small-ok]) size their own pieces. */
+    :is(button, input, select):not([data-small-ok] *) { min-height: 44px; min-width: 44px; }
+    .home-link { min-height: 44px; }
   </style>
 </head>
 <body>
@@ -236,7 +240,7 @@
       </div>
 
       <p class="status" id="status" aria-live="polite"></p>
-      <div class="board" id="board" aria-label="Board" hidden></div>
+      <div class="board" id="board" data-small-ok aria-label="Board" hidden></div>
       <p class="hint" id="hint"></p>
 
       <div id="controls" hidden>

@@ -50,7 +50,10 @@ The user usually works from their phone, so keep replies short and end with the 
 - `tests/`: dev-only tests, never published. `tests/worker-auth.test.mjs` checks the game server's sign-in check (part of the `build` check). `tests/smoke.cjs` (run after the build: `node tests/smoke.cjs`) opens every
   page at 390px and fails on JavaScript errors, blocked scripts, sideways scroll, a game missing from the games page or
   its "‹ All games" link, or a same-device game that won't start; it's part of the required `build` check, needs no
-  per-game code, and lists non-games (no card, no link) in `NOT_GAMES`. `npm run rules` checks the database rules on the Firebase emulator (CI runs
+  per-game code, and lists non-games (no card, no link) in `NOT_GAMES`. `node tests/ui-audit.cjs` (after the build; CI's `ui` job) checks every screen against the design standard
+  in light and dark mode at 320 and 390 px: tap targets at least 44 px, text at least 12 px with 4.5:1 contrast (3:1
+  large), no sideways scroll or cut-off text, icon-only buttons labelled, no JavaScript errors. Game boards and racks
+  are marked `data-small-ok` (their pieces size themselves). `npm run rules` checks the database rules on the Firebase emulator (CI runs
   it); `npm run e2e` plays the online games on the real Firebase SDK + emulator in headless Chromium, one file per game
   in `tests/e2e/<name>.cjs` (`engine.cjs` for room features); `E2E=wall-race,engine npm run e2e` runs only some. On
   PRs, CI's `e2e` job runs only the tests for the games the PR changes (`tests/pick-e2e.mjs`), or all of them when

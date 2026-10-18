@@ -155,6 +155,8 @@ locally. Keep the page's own solo mode working without the server.
 
 - [ ] The PR touches only `projects/<name>/` (+ README, + its landing-page card, + its own `tests/e2e/<name>.cjs`), or is clearly an engine PR.
 - [ ] Works on a phone: touch, no sideways scroll, safe areas, light and dark.
+- [ ] `node tests/ui-audit.cjs <name>` reports 0 problems (44 px controls, 12 px text, 4.5:1 contrast, labels; mark
+      the board or rack container `data-small-ok`). Text on an accent button uses `var(--on-accent)`.
 - [ ] Online: create, join by code and by link, play to a win, Play again, Leave mid-game, reload mid-game
       (`?backend=fake` and the emulator test), then the user tries it on the preview.
 - [ ] `node scripts/build.mjs` and `node tests/smoke.cjs` pass, and `E2E=<name> npm run e2e` passes if the game is online.
