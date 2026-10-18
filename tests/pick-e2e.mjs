@@ -2,7 +2,7 @@
 // `tests=<comma list>` for GitHub Actions (empty: nothing to run).
 //   projects/<game>/…          → that game's test, if it has one
 //   tests/e2e/<name>.cjs       → that test
-//   shared code, the game server, rules, build, the test runner or its packages, the workflow → every test
+//   shared code, the game server, rules, build, the test runner, its fixtures or packages, the workflow → every test
 // Run: node tests/pick-e2e.mjs <base ref>   (e.g. origin/main)
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
@@ -13,7 +13,7 @@ const here = new URL(".", import.meta.url).pathname;
 const all = readdirSync(join(here, "e2e")).filter((f) => f.endsWith(".cjs")).map((f) => f.slice(0, -4)).sort();
 const changed = execFileSync("git", ["diff", "--name-only", `${base}...HEAD`], { encoding: "utf8" }).split("\n").filter(Boolean);
 
-const EVERYTHING = [/^shared\//, /^worker\//, /^firebase\//, /^scripts\/(rules|build)\.mjs$/, /^tests\/e2e\.cjs$/, /^tests\/package(-lock)?\.json$/, /^\.github\/workflows\//];
+const EVERYTHING = [/^shared\//, /^worker\//, /^tests\/fixtures\//, /^firebase\//, /^scripts\/(rules|build)\.mjs$/, /^tests\/e2e\.cjs$/, /^tests\/package(-lock)?\.json$/, /^\.github\/workflows\//];
 const pick = new Set();
 for (const f of changed) {
   if (EVERYTHING.some((re) => re.test(f))) { all.forEach((n) => pick.add(n)); break; }

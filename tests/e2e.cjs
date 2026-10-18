@@ -14,6 +14,7 @@ const http = require('http');
 const fs = require('fs'), path = require('path');
 const FB = __dirname;
 const SITE = path.join(__dirname, '..', '_site');
+const FIXTURES = path.join(__dirname, 'fixtures');
 const PORT = 8019;
 const ALL = fs.readdirSync(path.join(__dirname, 'e2e')).filter((f) => f.endsWith('.cjs')).map((f) => f.slice(0, -4)).sort();
 const ONLY = (process.env.E2E || '').split(',').map((s) => s.trim()).filter(Boolean);
@@ -23,8 +24,12 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
 const server = http.createServer((req, res) => {
   let p = decodeURIComponent(new URL(req.url, 'http://x').pathname).replace(/^\/reclaude/, '');
   if (p.endsWith('/')) p += 'index.html';
-  const f = path.join(SITE, p);
-  if (!f.startsWith(SITE) || !fs.existsSync(f)) { res.writeHead(404); return res.end('not found'); }
+  // /__fixtures/<name>/ serves test-only pages from tests/fixtures/ (not published), next to the real site.
+  const root = p.startsWith('/__fixtures/') ? FIXTURES : SITE;
+  if (root === FIXTURES) p = p.slice('/__fixtures'.length);
+  const base = root === FIXTURES && p.startsWith('/shared/') ? SITE : root; // fixtures use the built shared code
+  const f = path.join(base, p);
+  if (!f.startsWith(base) || !fs.existsSync(f)) { res.writeHead(404); return res.end('not found'); }
   res.writeHead(200, { 'content-type': TYPES[path.extname(f)] || 'application/octet-stream' });
   fs.createReadStream(f).pipe(res);
 });

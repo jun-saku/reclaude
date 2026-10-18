@@ -22,11 +22,16 @@ The user usually works from their phone, so keep replies short and end with the 
   links, presence, player names (`myName`/`setMyName`/`nameOf`, remembered per device), an optional turn timer
   (`turnSecs` on `createRoom`, `turnLeft`, `skipTurn`), private per-seat data (`setPrivate`/`watchPrivate`, e.g. hands
   of cards), idle disconnect, and Firebase / emulator / stand-in / same-device backends. New multiplayer games must use it rather than copying room code.
+  `shared/kit.js` (+ `kit.css`) is the game kit: a game gives its rules (`projects/<name>/game.js`) and its drawing,
+  and the kit builds the home screen, lobby, player bar, Leave, game over, Play again and Top 10, and runs the game
+  solo / on one phone, online turn-based (Firebase rooms) or online real-time (the game server). New games should use
+  it (see `.claude/skills/new-game/SKILL.md`); Tanks does.
   It also has public leaderboards (`topScores`, `myScore`, `saveScore`; `scores/<game>/<uid>` in the rules), which
   connect only briefly. The rules only check a name and a number: each game validates its own scores. The 🏆 Top 10
   sheet is shared too (`shared/leaderboard.js`, `topTen`); 2048 uses both.
 - `scripts/build.mjs`: builds `_site/`. Fails on bad or reserved names and missing `index.html`. It rewrites every
-  `../shared/<file>` link in project files to `../shared/<file>?v=<content hash>`, so browsers never mix a new
+  `../shared/<file>` link in project files (and between shared files) to `../shared/<file>?v=<content hash>`, so
+  browsers never mix a new
   page with an old cached shared file. Always reference shared code with exactly that `../shared/<file>` form.
   It also adds a Content-Security-Policy `<meta>` tag to every page: scripts only from this site, each page's own
   inline `<script>` blocks (by hash), and Firebase's and reCAPTCHA's own folders on gstatic/google.com; connections

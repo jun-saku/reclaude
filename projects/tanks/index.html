@@ -7,102 +7,10 @@
   <meta name="theme-color" content="#161618" media="(prefers-color-scheme: dark)">
   <title>Tanks</title>
   <meta name="description" content="Battle City-style co-op: defend your base from waves of enemy tanks, solo or with 2–4 friends online, and post your best wave to the Top 10.">
+  <link rel="stylesheet" href="../shared/kit.css">
   <style>
-    :root {
-      --bg: #f7f6f3;
-      --text: #1d1d1f;
-      --muted: #6b6b70;
-      --panel: #ffffff;
-      --line: #d9d2c6;
-      --soft: #ece7df;
-      --accent: #c2571a;
-      --danger: #b3261e;
-      --arena-edge: #3a3a40;
-      --p0: #d9a514; --p1: #2f9e55; --p2: #2f6fd6; --p3: #d6458c;
-      color-scheme: light;
-    }
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg: #161618;
-        --text: #ececef;
-        --muted: #9a9aa2;
-        --panel: #1f1f22;
-        --line: #3a3a40;
-        --soft: #2a2a2e;
-        --accent: #f08a4b;
-        --danger: #ff8a80;
-        --arena-edge: #4a4a52;
-        --p0: #f2c23a; --p1: #48c774; --p2: #5f97ff; --p3: #ff7fbf;
-        color-scheme: dark;
-      }
-    }
-    * { box-sizing: border-box; }
-    [hidden] { display: none !important; }
-    html, body { min-height: 100%; }
-    body {
-      margin: 0;
-      background: var(--bg);
-      color: var(--text);
-      font: 17px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      display: flex;
-      justify-content: center;
-      -webkit-tap-highlight-color: transparent;
-    }
-    main {
-      width: 100%;
-      max-width: 480px;
-      padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-    .title-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-    h1 { font-size: 1.6rem; margin: 0; display: flex; align-items: center; gap: 10px; }
-    h1 svg { width: 1.1em; height: 1.1em; }
-    h2 { font-size: 1.05rem; margin: 0; }
-    p { margin: 0; }
-    .muted { color: var(--muted); }
-    button {
-      font: inherit; font-weight: 650; border: 0; border-radius: 12px; padding: 12px 16px;
-      background: var(--accent); color: #fff; cursor: pointer; touch-action: manipulation;
-    }
-    button:disabled { opacity: 0.5; cursor: default; }
-    button.secondary { background: var(--soft); color: var(--text); }
-    .trophy { background: var(--soft); color: var(--text); padding: 8px 12px; font-size: 1.1rem; }
-    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
-    #home { display: flex; flex-direction: column; gap: 12px; }
-    .row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
-    .join { display: flex; gap: 10px; }
-    .join input, .save input {
-      flex: 1; min-width: 0; font: inherit; padding: 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--text);
-    }
-    .join input { font-size: 1.3rem; letter-spacing: 0.3em; text-transform: uppercase; text-align: center; }
-    .save { display: flex; gap: 10px; }
-    .error { color: var(--danger); min-height: 1.4em; font-size: 0.95rem; }
-    .name-row { display: flex; align-items: center; gap: 10px; font-weight: 650; }
-    .name-row span { white-space: nowrap; }
-    .name-row input {
-      flex: 1; min-width: 0; font: inherit; font-weight: 500; padding: 10px 12px; border-radius: 12px;
-      border: 1px solid var(--line); background: var(--bg); color: var(--text);
-    }
-
-    .bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
-    .players { display: flex; gap: 6px; flex-wrap: wrap; }
-    .chip {
-      display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px;
-      background: var(--soft); font-size: 0.85rem; font-weight: 600; border: 2px solid transparent;
-    }
-    .chip.lead { border-color: var(--pc); }
-    .chip.out { opacity: 0.5; }
-    .chip .disc { width: 12px; height: 12px; border-radius: 3px; background: var(--pc); }
-    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); opacity: 0.4; }
-    .dot.on { background: #2e9d5b; opacity: 1; }
-    .code { font-size: 0.85rem; color: var(--muted); }
-    .code b { font-size: 1.05rem; letter-spacing: 0.15em; color: var(--text); }
-    .bigcode { font-size: 2.6rem; font-weight: 800; letter-spacing: 0.25em; text-align: center; margin: 0; }
-    .seated { display: flex; flex-direction: column; gap: 6px; }
-    .seated div { display: flex; align-items: center; gap: 8px; }
-
+    :root { --arena-edge: #3a3a40; }
+    @media (prefers-color-scheme: dark) { :root { --arena-edge: #4a4a52; } }
     .hud { display: flex; justify-content: space-between; gap: 8px; font-weight: 700; font-variant-numeric: tabular-nums; font-size: 0.95rem; }
     .hud span { white-space: nowrap; }
     #arena {
@@ -125,278 +33,99 @@
       box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.18);
     }
     .fire.on { transform: scale(0.95); box-shadow: none; }
-    .over { align-items: center; text-align: center; }
-    .over h2 { font-size: 1.3rem; }
-    .over .save { align-self: stretch; }
-    .hint { text-align: center; font-size: 0.9rem; color: var(--muted); min-height: 1.3em; }
-    .rules { font-size: 0.9rem; color: var(--muted); }
-    .rules li { margin: 2px 0; }
-    .rules summary { cursor: pointer; font-weight: 600; color: var(--text); }
-    /* Back to the games list; hidden while in a room or a game (use Leave there). */
-    .home-link {
-      align-self: flex-start; display: inline-flex; align-items: center; gap: 2px; margin: -6px 0 -6px -6px; padding: 6px;
-      color: var(--muted); font-size: 0.9rem; font-weight: 600; text-decoration: none; border-radius: 8px;
-    }
-    .home-link:active { opacity: 0.6; }
-    main:has(#home[hidden]) .home-link { display: none; }
+    #status:empty { display: none; }
   </style>
 </head>
 <body>
   <main>
     <a class="home-link" href="../games/">‹ All games</a>
-    <div class="title-row">
-      <h1><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1" y="2" width="4" height="12" rx="1" fill="#555"/><rect x="11" y="2" width="4" height="12" rx="1" fill="#555"/><rect x="4" y="4" width="8" height="9" rx="1.5" fill="var(--p0)"/><rect x="7" y="0" width="2" height="7" fill="#777"/><circle cx="8" cy="9" r="2.4" fill="#a87d0a"/></svg>Tanks</h1>
-      <button class="trophy" id="trophy" aria-label="Top 10 leaderboard" aria-haspopup="dialog">🏆</button>
-    </div>
-
-    <section id="home">
-      <div class="card">
-        <label class="name-row"><span>Your name</span>
-          <input id="my-name" maxlength="12" autocomplete="nickname" spellcheck="false" placeholder="For the team and the Top 10">
-        </label>
-      </div>
-      <div class="card">
-        <h2>Solo</h2>
-        <p class="muted">Hold off the waves alone. Works offline.</p>
-        <button id="local">Play solo</button>
-      </div>
-      <div class="card">
-        <h2>Play friends online</h2>
-        <p class="muted">Create a room for 2–4 players and send the code or link. Start once everyone's in.</p>
-        <button id="create">Create room</button>
-      </div>
-      <div class="card">
-        <h2>Join a room</h2>
-        <form class="join" id="join-form" autocomplete="off">
-          <input id="join-code" maxlength="4" autocapitalize="characters" spellcheck="false" placeholder="CODE" aria-label="Room code">
-          <button id="join" type="submit">Join</button>
-        </form>
-        <p class="error" id="home-error" role="alert"></p>
-      </div>
-      <details class="card rules">
-        <summary>How to play</summary>
-        <ul>
-          <li>Enemy tanks roll in from the top. Keep them away from the eagle at the bottom: if it's hit, the game is over.</li>
-          <li>Drive with the pad (or arrow keys / WASD) and tap Fire (or Space). One shell at a time.</li>
-          <li>Shells break bricks; steel and water stop you. You can hide under trees.</li>
-          <li>Your team shares its spare lives. Clearing a wave earns one more.</li>
-          <li>Grey tanks are steady, light ones fast, bronze ones shoot fast shells, and dark armoured ones take four hits.</li>
-          <li>Online, the game carries on if someone leaves; they can rejoin with the code.</li>
-        </ul>
-      </details>
-    </section>
-
-    <section id="game" hidden>
-      <div class="bar">
-        <div class="players" id="players"></div>
-        <div class="code" id="room-label"></div>
-      </div>
-
-      <div class="card" id="waiting" hidden>
-        <p class="muted" style="text-align: center">Send this code to your friends</p>
-        <p class="bigcode" id="waiting-code"></p>
-        <div class="row">
-          <button id="share">Share link</button>
-          <button class="secondary" id="copy">Copy code</button>
-        </div>
-        <div class="seated" id="seated"></div>
-        <button id="start-btn" hidden>Start</button>
-        <p class="muted" id="waiting-note" style="text-align: center; font-size: 0.9rem"></p>
-      </div>
-
-      <div id="play" hidden>
-        <div class="hud"><span id="hud-wave"></span><span id="hud-lives"></span><span id="hud-left"></span></div>
-        <canvas id="arena" aria-label="Battlefield"></canvas>
-        <p class="hint" id="hint"></p>
-        <div class="controls" id="controls">
-          <div class="pad" id="pad" aria-label="Drive"><i data-d="0">▲</i><i data-d="1">▶</i><i data-d="2">▼</i><i data-d="3">◀</i></div>
-          <button class="fire" id="fire" aria-label="Fire">FIRE</button>
-        </div>
-      </div>
-
-      <div class="card over" id="over" hidden>
-        <h2 id="over-title"></h2>
-        <p class="muted" id="over-text"></p>
-        <form class="save" id="save-form" autocomplete="off">
-          <input id="save-name" maxlength="12" placeholder="Your name" aria-label="Name for the leaderboard" enterkeyhint="done">
-          <button id="save-btn" type="submit">Save</button>
-        </form>
-        <p class="hint" id="save-msg"></p>
-        <button id="rematch">Play again</button>
-      </div>
-
-      <div class="row">
-        <button class="secondary" id="leave">Leave</button>
-      </div>
-    </section>
   </main>
-
   <script type="module">
-    import * as rooms from "../shared/rooms.js";
-    import * as server from "../shared/server.js";
-    import { topTen } from "../shared/leaderboard.js";
+    import { start } from "../shared/kit.js";
+    import game from "./game.js";
     import * as sim from "./sim.js";
 
-    const GAME = "tanks";
-    const { U, N, CELL, TANK, DIRS, BRICK, STEEL, WATER, TREES, BASE_X, BASE_Y, PLAYER_SPEED } = sim;
+    // Tanks on the game kit: the kit runs the screens and the game (here for solo, on the game server online);
+    // this page draws the battlefield, reads the pad and Fire button, and drives this player's own tank.
+    const { U, N, CELL, TANK, BRICK, STEEL, WATER, TREES, BASE_X, BASE_Y, PLAYER_SPEED } = sim;
     const KIND_COLOURS = ["#a9adb5", "#d9dce2", "#c08a5a", "#6f7484"];
     const ARMOUR_COLOURS = ["#6f7484", "#c75b5b", "#b9a04a", "#7f9d6a", "#6f7484"]; // by hits left
     const INTERP_MS = 110;   // online, other things are drawn this far in the past, between two server updates
     const SEND_MS = 66;      // own tank to the server about 15 times a second (while it changes)
 
-    // ---------- state ----------
-    // Solo: the game runs here (sim.js). Online: the game server runs it; this page drives its own tank and draws the
-    // rest from the server's updates.
-    let mode = null;          // "solo" | "online" | null (home)
-    let g = null;             // solo: the game
-    let seat = null;          // online: { backend, code, seat }
-    let room = null;          // online: the Firebase room (lobby, names)
-    let leaveRoom = null;
-    let game = null;          // online: the server connection
-    let netStatus = "", netWhy = "";
-    let snaps = [];           // online: recent server updates { at, recv, v }
-    let clockOff = null;      // online: local receive time minus server time, at best
-    let me = null;            // online: own tank { x, y, d, alive, life, moving, round }
+    let canvas, ctx, ground, gctx, px = 1, groundKey = "", hudEl, controlsEl, hintEl;
+    let me = null;           // own tank { x, y, d, alive, life, moving, round }
     let lastSent = { at: 0, key: "" }, lastFire = 0;
-    let effects = [], seenBooms = new Set();
-    let saved = false;
-
-    const $ = (id) => document.getElementById(id);
-    const mySeat = () => (mode === "solo" ? 0 : seat.seat);
-    const esc = (t) => String(t).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-    const label = (s) => (mode === "solo" || s === mySeat() ? "You" : esc(rooms.nameOf(room, s)));
-    const latest = () => snaps[snaps.length - 1]?.v || null;
+    let effects = [], seenBooms = new Set(), mapCache = { key: "", bricks: null };
+    let heldDir = null, firing = false;
+    const keysDown = [];
 
     // ---------- the world on screen ----------
-    // Both modes draw a "world": { wave, lives, left, base, layout, bricks, tanks: [{ seat, x, y, d, alive, shield }],
-    // enemies, shells, booms, banner, over }.
-    function soloWorld() {
-      return {
-        wave: g.wave, lives: g.lives, left: g.toSpawn + g.enemies.length, base: g.base, layout: g.layout, bricks: g.bricks,
-        tanks: Object.values(g.tanks).filter((t) => t.present).map((t) => ({ seat: t.seat, x: t.x, y: t.y, d: t.d, alive: t.alive, shield: t.shield > 0, out: !t.alive && t.respawnIn === null })),
-        enemies: g.enemies.map((e) => ({ id: e.id, kind: e.kind, x: e.x, y: e.y, d: e.d, hp: e.hp, flash: g.t - e.flash < 0.1 })),
-        shells: g.shells.map((s) => ({ x: s.x, y: s.y })),
-        booms: g.booms.map((b) => ({ id: b.id, x: b.x, y: b.y, big: b.big })),
-        banner: g.t < g.bannerUntil ? `Wave ${g.wave}` : null, over: g.over,
-      };
-    }
-    let mapCache = { key: "", bricks: null };
-    function onlineWorld(now) {
-      const v = latest();
-      if (!v) return null;
-      // Draw the moment INTERP_MS ago (by the server's clock), between the two updates either side of it.
-      const t = now - clockOff - INTERP_MS;
+    // The battlefield at the moment to draw: online, INTERP_MS ago (by the server's clock), between the two updates
+    // either side of it, so others move smoothly; this player's own tank is where this device has driven it.
+    function worldOf(info, now) {
+      const snaps = info.snaps;
+      if (!snaps.length) return null;
+      const t = now - info.clockOff - (info.mode === "online" ? INTERP_MS : 0);
       let a = snaps[snaps.length - 1], b = a;
       for (let i = snaps.length - 1; i > 0; i--) { if (snaps[i - 1].at <= t) { a = snaps[i - 1]; b = snaps[i]; break; } }
       const k = b.at > a.at ? Math.max(0, Math.min(1, (t - a.at) / (b.at - a.at))) : 1;
       const mix = (p, q) => (Math.hypot(q[0] - p[0], q[1] - p[1]) > 16 ? q : [p[0] + (q[0] - p[0]) * k, p[1] + (q[1] - p[1]) * k]);
-      const byId = (list, off = 0) => new Map(list.map((x) => [x[0], x]));
-      const ea = byId(a.v.e), sa = byId(a.v.s);
-      const enemies = b.v.e.map((e) => {
+      const av = a.v, v = b.v;
+      const ea = new Map(av.e.map((x) => [x[0], x])), sa = new Map(av.s.map((x) => [x[0], x]));
+      const enemies = v.e.map((e) => {
         const p = ea.get(e[0]);
         const [x, y] = p ? mix([p[2], p[3]], [e[2], e[3]]) : [e[2], e[3]];
         return { id: e[0], kind: e[1], x, y, d: e[4], hp: e[5], flash: !!e[7] };
       });
-      const shells = b.v.s.map((s) => { const p = sa.get(s[0]); const [x, y] = p ? mix([p[1], p[2]], [s[1], s[2]]) : [s[1], s[2]]; return { x, y }; });
-      const tanks = Object.entries(b.v.tanks).map(([k2, q]) => {
-        const s = Number(k2), p = a.v.tanks[k2];
+      const shells = v.s.map((s) => { const p = sa.get(s[0]); const [x, y] = p ? mix([p[1], p[2]], [s[1], s[2]]) : [s[1], s[2]]; return { x, y }; });
+      const tanks = Object.entries(v.tanks).map(([key, q]) => {
+        const p = av.tanks[key];
         const [x, y] = p && p[6] === q[6] ? mix([p[0], p[1]], [q[0], q[1]]) : [q[0], q[1]];
-        return { seat: s, x, y, d: q[2], alive: !!q[3], shield: !!q[4], out: !!q[7] };
+        return { seat: Number(key), x, y, d: q[2], alive: !!q[3], shield: !!q[4], out: !!q[7] };
       });
-      // This player's own tank is where this device has driven it.
-      const own = tanks.find((x) => x.seat === mySeat());
+      const own = tanks.find((x) => x.seat === info.me);
       if (own && me && me.alive) Object.assign(own, { x: me.x, y: me.y, d: me.d });
       if (mapCache.key !== v.b + v.w) mapCache = { key: v.b + v.w, bricks: sim.decBricks(v.b, v.w) };
       return { wave: v.w, lives: v.l, left: v.n, base: !!v.base, layout: sim.layoutFor(v.w), bricks: mapCache.bricks, tanks, enemies, shells,
         booms: v.bo.map((x) => ({ id: x[0], x: x[1], y: x[2], big: !!x[3] })), banner: v.banner, over: v.over };
     }
 
-    // ---------- the server's updates (online) ----------
-    function onState(v) {
-      const recv = Date.now();
-      const off = recv - v.at;
-      clockOff = clockOff === null ? off : Math.min(off, clockOff + 2); // the quickest arrival, drifting slowly
-      snaps.push({ at: v.at, recv, v });
-      if (snaps.length > 12) snaps.shift();
-      // Own tank: follow the server when it was hit, respawned, a new game started, or it didn't accept a move.
-      const t = v.tanks[mySeat()];
+    // Own tank: follow the game when it was hit, respawned, a new game started, or it didn't accept a move.
+    function syncMe(info) {
+      const snap = info.snaps[info.snaps.length - 1];
+      const t = snap?.v.tanks[info.me];
       if (!t) return;
       const [x, y, d, alive, , , life] = t;
-      if (!me || me.round !== v.round || me.life !== life || !alive) me = { x, y, d, alive: !!alive, life, moving: false, round: v.round };
+      if (!me || me.round !== snap.round || me.life !== life || !alive) me = { x, y, d, alive: !!alive, life, moving: false, round: snap.round };
       else if (Math.hypot(me.x - x, me.y - y) > 20) Object.assign(me, { x, y });
-      renderOver();
-    }
-    function sendMine(now) {
-      if (!game || !me || !me.alive) return;
-      const key = `${me.x.toFixed(1)},${me.y.toFixed(1)},${me.d},${me.moving ? 1 : 0},${me.life}`;
-      if (now - lastSent.at < SEND_MS || (key === lastSent.key && now - lastSent.at < 1000)) return;
-      if (game.send({ t: "me", x: +me.x.toFixed(2), y: +me.y.toFixed(2), d: me.d, m: me.moving ? 1 : 0, life: me.life })) lastSent = { at: now, key };
     }
 
-    // ---------- the main loop ----------
-    let heldDir = null, firing = false;
-    const keysDown = [];
-    let last = 0, raf = 0;
-    function frame(t) {
-      raf = requestAnimationFrame(frame);
-      const dt = Math.min(0.05, (t - (last || t)) / 1000);
-      last = t;
-      const now = Date.now();
-      let world = null;
-      if (mode === "solo") {
-        if (!document.hidden && !g.over) {
-          const tank = g.tanks[0];
-          if (tank.alive) drive(tank, g, dt, [...g.enemies]);
-          if (firing) sim.fire(g, 0);
-          sim.step(g, dt);
+    // ---------- every frame ----------
+    function frame(info) {
+      syncMe(info);
+      const world = worldOf(info, info.now);
+      if (!world) return;
+      controlsEl.hidden = !!info.over;
+      if (me && me.alive && !world.over) {
+        if (heldDir !== null) {
+          sim.turn(world, me, heldDir);
+          const blockers = [...world.enemies, ...world.tanks.filter((x) => x.alive && x.seat !== info.me)];
+          me.moving = sim.drive(world, me, PLAYER_SPEED * info.dt, blockers) > 0;
+        } else me.moving = false;
+        const key = `${me.x.toFixed(1)},${me.y.toFixed(1)},${me.d},${me.moving ? 1 : 0},${me.life}`;
+        // Here, the game takes every position at once; online, about 15 a second (and one a second while still).
+        const gap = info.mode === "online" ? SEND_MS : 0;
+        if (info.now - lastSent.at >= gap && (key !== lastSent.key || info.now - lastSent.at > 1000)) {
+          if (info.act({ t: "me", x: +me.x.toFixed(2), y: +me.y.toFixed(2), d: me.d, m: me.moving ? 1 : 0, life: me.life })) lastSent = { at: info.now, key };
         }
-        world = soloWorld();
-      } else if (mode === "online") {
-        world = onlineWorld(now);
-        if (world && me && me.alive && !world.over) {
-          const blockers = [...world.enemies, ...world.tanks.filter((x) => x.alive && x.seat !== mySeat())];
-          drive(me, world, dt, blockers);
-          if (firing && now - lastFire > 250) { lastFire = now; game.send({ t: "fire" }); }
-        }
-        sendMine(now);
+        if (firing && info.now - lastFire > (info.mode === "online" ? 250 : 0)) { lastFire = info.now; info.act({ t: "fire" }); }
       }
-      if (world) { draw(world, now); hud(world); }
-      else if (mode === "online" && room?.status === "playing") waitingForServer();
-    }
-    // Online, before the first update from the game server: say so (and why, if a connection failed).
-    let waitText = "";
-    function waitingForServer() {
-      const text = netStatus === "connected" ? "Starting…" : `Connecting to the game server…${netWhy ? ` (${netWhy})` : ""}`;
-      if (text === waitText) return;
-      waitText = text;
-      ctx.fillStyle = "#111113"; ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.font = `600 ${Math.round(4.5 * px)}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
-      ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = "#cfcfd4";
-      ctx.fillText(netStatus === "connected" ? "Starting…" : "Connecting to the game server…", 52 * px, 50 * px);
-      $("hint").textContent = text;
-    }
-    // Drives a tank by the held direction.
-    function drive(tank, map, dt, blockers) {
-      if (heldDir === null) { tank.moving = false; return; }
-      sim.turn(map, tank, heldDir);
-      tank.moving = sim.drive(map, tank, PLAYER_SPEED * dt, blockers) > 0;
+      draw(world, info.now);
+      hud(world, info);
     }
 
     // ---------- drawing ----------
-    const canvas = $("arena");
-    const ctx = canvas.getContext("2d");
-    let px = 1; // canvas pixels per unit
-    const ground = document.createElement("canvas");
-    const gctx = ground.getContext("2d");
-    let groundKey = "";
-    function resize() {
-      const css = canvas.getBoundingClientRect().width || 300;
-      const size = Math.round(css * Math.min(devicePixelRatio || 1, 3));
-      if (canvas.width !== size) { canvas.width = canvas.height = ground.width = ground.height = size; groundKey = ""; }
-      px = size / U;
-    }
-    new ResizeObserver(resize).observe(canvas);
-
     function drawGround(w) {
       const g2 = gctx, s = px;
       g2.fillStyle = "#111113"; g2.fillRect(0, 0, ground.width, ground.height);
@@ -493,216 +222,62 @@
       }
     }
 
+
     let hudText = "";
-    function hud(w) {
-      const mine = w.tanks.find((t) => t.seat === mySeat());
-      const status = mode === "online" && netStatus !== "connected" ? "Reconnecting…"
-        : mine && !mine.alive ? (mine.out ? "Out of lives: hold on, clearing a wave brings you back." : "Back in a moment…") : "";
-      const t = `${w.wave}|${w.lives}|${w.left}|${status}|${!!w.over}|${w.tanks.map((x) => x.seat + ":" + x.alive).join()}`;
+    function hud(w, info) {
+      const mine = w.tanks.find((t) => t.seat === info.me);
+      const status = mine && !mine.alive ? (mine.out ? "Out of lives: hold on, clearing a wave brings you back." : "Back in a moment…") : "";
+      const t = `${w.wave}|${w.lives}|${w.left}|${status}`;
       if (t === hudText) return;
       hudText = t;
-      $("hud-wave").textContent = `Wave ${w.wave}`;
-      $("hud-lives").textContent = `❤ ${w.lives} spare`;
-      $("hud-left").textContent = `Enemies ${w.left}`;
-      $("hint").textContent = status;
-      renderPlayers(w);
-      if (mode === "solo") renderOver();
+      hudEl.innerHTML = `<span>Wave ${w.wave}</span><span>❤ ${w.lives} spare</span><span>Enemies ${w.left}</span>`;
+      hintEl.textContent = status;
     }
 
-    // ---------- screens ----------
-    function setBusy(b) { for (const id of ["create", "join", "local"]) $(id).disabled = b; }
-
-    function renderPlayers(w = null) {
-      $("room-label").innerHTML = mode === "solo" ? "Solo" : `Room <b>${seat.code}</b>`;
-      if (mode !== "online" || !room) { $("players").innerHTML = ""; return; }
-      const inGame = new Map((w?.tanks || []).map((t) => [t.seat, t]));
-      $("players").innerHTML = rooms.seatList(room).map((uid, s) => {
-        if (!uid) return "";
-        const t = inGame.get(s);
-        const away = room.status === "playing" && !t;
-        return `<span class="chip${t && !t.alive ? " out" : ""}${away ? " out" : ""}" style="--pc: var(--p${s % 4})"><span class="disc"></span>${label(s)}` +
-          `<span class="dot${away ? "" : " on"}"></span></span>`;
-      }).join("");
+    // ---------- the board and controls ----------
+    function setup(stage) {
+      stage.innerHTML = `
+        <div class="hud" id="hud"></div>
+        <canvas id="arena" aria-label="Battlefield"></canvas>
+        <p class="hint" id="tank-hint"></p>
+        <div class="controls" id="controls">
+          <div class="pad" id="pad" aria-label="Drive"><i data-d="0">▲</i><i data-d="1">▶</i><i data-d="2">▼</i><i data-d="3">◀</i></div>
+          <button class="fire" id="fire" aria-label="Fire">FIRE</button>
+        </div>`;
+      canvas = stage.querySelector("#arena"); ctx = canvas.getContext("2d");
+      ground = document.createElement("canvas"); gctx = ground.getContext("2d"); groundKey = "";
+      hudEl = stage.querySelector("#hud"); controlsEl = stage.querySelector("#controls"); hintEl = stage.querySelector("#tank-hint");
+      me = null; effects = []; seenBooms = new Set(); hudText = ""; lastSent = { at: 0, key: "" };
+      const resize = () => {
+        const size = Math.round((canvas.getBoundingClientRect().width || 300) * Math.min(devicePixelRatio || 1, 3));
+        if (canvas.width !== size) { canvas.width = canvas.height = ground.width = ground.height = size; groundKey = ""; }
+        px = size / U;
+      };
+      new ResizeObserver(resize).observe(canvas);
+      // The pad: press and slide a finger; the direction follows it.
+      const pad = stage.querySelector("#pad"), padKeys = [...pad.querySelectorAll("i")];
+      let padPointer = null;
+      const padDir = (e) => {
+        const r = pad.getBoundingClientRect();
+        const dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+        if (Math.hypot(dx, dy) < 14) return null;
+        return Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 1 : 3) : (dy > 0 ? 2 : 0);
+      };
+      setDir = (d) => { heldDir = d; for (const k of padKeys) k.classList.toggle("on", Number(k.dataset.d) === d); };
+      pad.addEventListener("pointerdown", (e) => { padPointer = e.pointerId; pad.setPointerCapture(e.pointerId); setDir(padDir(e)); e.preventDefault(); });
+      pad.addEventListener("pointermove", (e) => { if (e.pointerId === padPointer) setDir(padDir(e)); });
+      for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) pad.addEventListener(ev, (e) => { if (e.pointerId === padPointer) { padPointer = null; setDir(keysDown.length ? keysDown[keysDown.length - 1] : null); } });
+      const fireBtn = stage.querySelector("#fire");
+      setFire = (on) => { firing = on; fireBtn.classList.toggle("on", on); };
+      fireBtn.addEventListener("pointerdown", (e) => { fireBtn.setPointerCapture(e.pointerId); setFire(true); e.preventDefault(); });
+      for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) fireBtn.addEventListener(ev, () => setFire(false));
+      for (const el of [pad, fireBtn, canvas]) el.addEventListener("contextmenu", (e) => e.preventDefault());
+      setDir(null); setFire(false);
     }
-
-    function renderLobby() {
-      const r = room, seats = rooms.seatList(r), count = rooms.playerCount(r), host = mySeat() === 0;
-      $("waiting-code").textContent = seat.code;
-      $("seated").innerHTML = seats.map((uid, s) => uid ? `<div><span class="chip" style="--pc: var(--p${s % 4})"><span class="disc"></span>${label(s)}${s === mySeat() && rooms.nameOf(r, s) !== `P${s + 1}` ? ` (${esc(rooms.nameOf(r, s))})` : ""}${s === 0 ? " (host)" : ""}</span></div>` : "").join("");
-      $("start-btn").hidden = !host;
-      $("start-btn").disabled = count < 2;
-      $("start-btn").textContent = count < 2 ? "Waiting for a friend…" : `Start with ${count} players`;
-      $("waiting-note").textContent = host ? `${count} of ${r.seats} here. Start when everyone's in.` : `${count} of ${r.seats} here. The host starts the game.`;
-    }
-
-    let overShown = null;
-    function renderOver() {
-      const over = mode === "solo" ? g?.over : latest()?.over;
-      $("over").hidden = !over;
-      $("controls").hidden = !!over;
-      if (!over) { overShown = null; return; }
-      const id = mode === "solo" ? g : latest()?.round;
-      if (overShown !== id) { overShown = id; saved = false; $("save-msg").textContent = ""; }
-      const n = over.waves;
-      $("over-title").textContent = over.timeUp ? "Time's up" : over.base ? "The eagle fell" : "Out of tanks";
-      $("over-text").textContent = n ? `Your team cleared ${n} wave${n === 1 ? "" : "s"}.` : "No waves cleared this time.";
-      $("save-form").hidden = !n || saved;
-      $("save-btn").textContent = `Save ${n}`;
-      if (!$("save-name").value) $("save-name").value = rooms.cleanName(rooms.myName());
-      if (mode === "solo") { $("rematch").disabled = false; $("rematch").textContent = "Play again"; return; }
-      const v = latest();
-      const ready = v.again.includes(mySeat());
-      const waitingOn = Object.keys(v.tanks).map(Number).filter((s) => s !== mySeat() && !v.again.includes(s)).map(label);
-      $("rematch").disabled = ready;
-      $("rematch").textContent = ready ? `Waiting for ${waitingOn.join(", ") || "others"}…` : v.again.length ? `Play again (${v.again.map(label).join(", ")} ready)` : "Play again";
-    }
-
-    function enterGame() {
-      $("home").hidden = true;
-      $("game").hidden = false;
-      setBusy(false);
-      hudText = ""; effects = []; seenBooms = new Set(); snaps = []; clockOff = null; me = null; saved = false;
-      if (!raf) { last = 0; raf = requestAnimationFrame(frame); }
-      requestAnimationFrame(resize);
-    }
-    function startSolo() {
-      mode = "solo"; seat = null; room = null;
-      g = sim.newGame([0]);
-      enterGame();
-      $("waiting").hidden = true;
-      $("play").hidden = false;
-      renderPlayers();
-      renderOver();
-    }
-    function startOnline(s) {
-      mode = "online"; seat = s; g = null;
-      enterGame();
-      leaveRoom = rooms.enter(s, onRoom, showHome);
-    }
-    // The Firebase room: the lobby until it's playing, then the game is on the server.
-    function onRoom(value) {
-      room = value;
-      const waiting = room.status === "waiting";
-      $("waiting").hidden = !waiting;
-      $("play").hidden = waiting;
-      if (waiting) renderLobby();
-      else if (!game) {
-        netStatus = "connecting";
-        try { game = makeConnection(); } catch (err) { showHome(err.message); return; }
-      }
-      renderPlayers(mode === "online" ? onlineWorld(Date.now()) : null);
-    }
-    // The game server connection (Firebase only: the server checks the player's sign-in).
-    function makeConnection() {
-      return server.connect(seat, room, {
-        onState,
-        onStatus: (st, why) => {
-          netStatus = st;
-          if (why) netWhy = why;
-          waitText = "";
-          if (st === "refused") showHome(`Couldn't join the game: ${why || "refused"}.`);
-        },
-      });
-    }
-    function showHome(error = "") {
-      if (game) game.close();
-      if (leaveRoom) leaveRoom();
-      game = leaveRoom = null;
-      cancelAnimationFrame(raf); raf = 0;
-      mode = null; g = seat = room = me = null;
-      $("game").hidden = true;
-      $("home").hidden = false;
-      $("home-error").textContent = error;
-      setBusy(false);
-    }
-
-    async function createRoom() {
-      setBusy(true);
-      $("home-error").textContent = "";
-      await rooms.setMyName($("my-name").value);
-      try {
-        startOnline(await rooms.createRoom(GAME, { seats: 4, min: 2, auto: false }));
-      } catch (err) {
-        console.error(err);
-        showHome(err instanceof rooms.RoomError ? err.message : "Couldn't create a room. Check your connection and try again.");
-      }
-    }
-    async function joinRoom(code) {
-      setBusy(true);
-      $("home-error").textContent = "";
-      await rooms.setMyName($("my-name").value);
-      try {
-        startOnline(await rooms.joinRoom(GAME, code));
-      } catch (err) {
-        console.error(err);
-        showHome(err instanceof rooms.RoomError ? err.message : "Couldn't join. Check your connection and try again.");
-      }
-    }
-    async function startMatch() {
-      $("start-btn").disabled = true;
-      try {
-        await rooms.startGame(seat);
-      } catch (err) {
-        console.error(err);
-        $("waiting-note").textContent = err instanceof rooms.RoomError ? err.message : "Couldn't start. Try again.";
-        $("start-btn").disabled = false;
-      }
-    }
-    function rematch() {
-      if (mode === "solo") { g = sim.newGame([0]); hudText = ""; renderOver(); return; }
-      game?.send({ t: "again" });
-      $("rematch").disabled = true;
-    }
-
-    // ---------- leaderboard ----------
-    // Waves cleared, best first. A score is a whole number of waves, saved by each player for their team's game.
-    const fmt = (n) => `${n} wave${Number(n) === 1 ? "" : "s"}`;
-    const sheet = topTen({ game: GAME, rooms: async () => rooms, button: $("trophy"), format: fmt });
-    const validScore = (n) => Number.isInteger(n) && n >= 1 && n <= 999;
-    $("save-form").addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const n = (mode === "solo" ? g?.over : latest()?.over)?.waves;
-      const name = rooms.cleanName($("save-name").value);
-      if (!rooms.NAME_RE.test(name)) { $("save-msg").textContent = "Pick a name of up to 12 letters, numbers or spaces."; return; }
-      if (!validScore(n)) { $("save-msg").textContent = "Nothing to save."; return; }
-      $("save-btn").disabled = true;
-      $("save-msg").textContent = "Saving…";
-      try {
-        await rooms.saveScore(GAME, name, n, { order: "high" });
-        saved = true;
-        sheet.stale();
-        $("save-msg").textContent = `Saved ${fmt(n)} as ${name}. Tap 🏆 to see the Top 10.`;
-        renderOver();
-      } catch (err) {
-        console.error(err);
-        $("save-msg").textContent = err instanceof rooms.RoomError ? err.message : "Couldn't save: no connection?";
-      } finally { $("save-btn").disabled = false; }
-    });
-
-    // ---------- controls ----------
-    const pad = $("pad"), padKeys = [...pad.querySelectorAll("i")];
-    let padPointer = null;
-    function padDir(e) {
-      const r = pad.getBoundingClientRect();
-      const dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
-      if (Math.hypot(dx, dy) < 14) return null;
-      return Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 1 : 3) : (dy > 0 ? 2 : 0);
-    }
-    function setDir(d) {
-      heldDir = d;
-      for (const k of padKeys) k.classList.toggle("on", Number(k.dataset.d) === d);
-    }
-    pad.addEventListener("pointerdown", (e) => { padPointer = e.pointerId; pad.setPointerCapture(e.pointerId); setDir(padDir(e)); e.preventDefault(); });
-    pad.addEventListener("pointermove", (e) => { if (e.pointerId === padPointer) setDir(padDir(e)); });
-    for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) pad.addEventListener(ev, (e) => { if (e.pointerId === padPointer) { padPointer = null; setDir(keysDown.length ? keysDown[keysDown.length - 1] : null); } });
-    const fireBtn = $("fire");
-    const setFire = (on) => { firing = on; fireBtn.classList.toggle("on", on); };
-    fireBtn.addEventListener("pointerdown", (e) => { fireBtn.setPointerCapture(e.pointerId); setFire(true); e.preventDefault(); });
-    for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) fireBtn.addEventListener(ev, () => setFire(false));
-    for (const el of [pad, fireBtn, canvas]) el.addEventListener("contextmenu", (e) => e.preventDefault());
+    let setDir = (d) => { heldDir = d; }, setFire = (on) => { firing = on; };
     const KEYS = { ArrowUp: 0, KeyW: 0, ArrowRight: 1, KeyD: 1, ArrowDown: 2, KeyS: 2, ArrowLeft: 3, KeyA: 3 };
     addEventListener("keydown", (e) => {
-      if (!mode || e.target.closest?.("input")) return;
+      if (!kit.mode || e.target.closest?.("input")) return;
       if (e.code in KEYS) {
         const d = KEYS[e.code];
         if (!keysDown.includes(d)) keysDown.push(d);
@@ -712,50 +287,39 @@
     addEventListener("keyup", (e) => {
       if (e.code in KEYS) {
         const i = keysDown.indexOf(KEYS[e.code]); if (i >= 0) keysDown.splice(i, 1);
-        if (padPointer === null) setDir(keysDown.length ? keysDown[keysDown.length - 1] : null);
+        setDir(keysDown.length ? keysDown[keysDown.length - 1] : null);
       } else if (e.code === "Space" || e.code === "KeyJ") setFire(false);
     });
     addEventListener("blur", () => { keysDown.length = 0; setDir(null); setFire(false); });
 
-    // ---------- wiring ----------
-    $("my-name").value = rooms.myName();
-    $("my-name").addEventListener("change", () => { $("my-name").value = rooms.cleanName($("my-name").value); });
-    $("local").addEventListener("click", () => { rooms.setMyName($("my-name").value); startSolo(); });
-    $("create").addEventListener("click", createRoom);
-    $("join-form").addEventListener("submit", (e) => { e.preventDefault(); joinRoom($("join-code").value); });
-    $("join-code").addEventListener("input", () => {
-      $("join-code").value = $("join-code").value.toUpperCase().replace(/[^A-Z0-9]/g, "");
-      $("home-error").textContent = "";
-    });
-    $("start-btn").addEventListener("click", startMatch);
-    $("rematch").addEventListener("click", rematch);
-    $("leave").addEventListener("click", async () => {
-      // Online, the game carries on for the others (the server runs it); a host leaving the lobby closes the room.
-      if (mode === "online" && room?.status === "waiting") { $("leave").disabled = true; await rooms.quit(seat); $("leave").disabled = false; }
-      showHome();
-    });
-    $("share").addEventListener("click", async () => {
-      if ((await rooms.share(seat.code, "Tanks")) === "copied") $("share").textContent = "Link copied";
-    });
-    $("copy").addEventListener("click", async () => {
-      try { await navigator.clipboard.writeText(seat.code); $("copy").textContent = "Copied"; } catch { prompt("Room code:", seat.code); }
-      setTimeout(() => ($("copy").textContent = "Copy code"), 1500);
+    const kit = start(game, {
+      title: "Tanks",
+      logo: `<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1" y="2" width="4" height="12" rx="1" fill="#555"/><rect x="11" y="2" width="4" height="12" rx="1" fill="#555"/><rect x="4" y="4" width="8" height="9" rx="1.5" fill="var(--p0)"/><rect x="7" y="0" width="2" height="7" fill="#777"/><circle cx="8" cy="9" r="2.4" fill="#a87d0a"/></svg>`,
+      soloText: "Hold off the waves alone. Works offline.",
+      onlineText: "Create a room for 2–4 players and send the code or link. Start once everyone's in.",
+      howTo: `<ul>
+        <li>Enemy tanks roll in from the top. Keep them away from the eagle at the bottom: if it's hit, the game is over.</li>
+        <li>Drive with the pad (or arrow keys / WASD) and tap Fire (or Space). One shell at a time.</li>
+        <li>Shells break bricks; steel and water stop you. You can hide under trees.</li>
+        <li>Your team shares its spare lives. Clearing a wave earns one more.</li>
+        <li>Grey tanks are steady, light ones fast, bronze ones shoot fast shells, and dark armoured ones take four hits.</li>
+        <li>Online, the game carries on if someone leaves; they can rejoin with the code.</li>
+      </ul>`,
+      leaderboard: { order: "high", format: (n) => `${n} wave${Number(n) === 1 ? "" : "s"}`, valid: (n) => Number.isInteger(n) && n >= 1 && n <= 999 },
+      setup,
+      frame,
+      resultText: (r) => ({
+        title: r.timeUp ? "Time's up" : r.base ? "The eagle fell" : "Out of tanks",
+        text: r.waves ? `Your team cleared ${r.waves} wave${r.waves === 1 ? "" : "s"}.` : "No waves cleared this time.",
+      }),
     });
 
-    // Opening a shared link (?room=CODE) joins straight away.
-    const linked = rooms.roomFromUrl();
-    if (linked) { $("join-code").value = linked.toUpperCase(); joinRoom(linked); }
-
-    // Hooks for automated tests.
+    // Hooks for automated tests (with window.__kit).
     window.__tanks = {
-      rooms, sim,
-      get mode() { return mode; }, get g() { return g; }, get room() { return room; }, get seat() { return seat; },
-      get me() { return me; }, get status() { return netStatus; }, get latest() { return latest(); },
-      world: () => (mode === "solo" ? soloWorld() : onlineWorld(Date.now())),
+      sim, kit,
+      get me() { return me; },
+      world: () => { const i = kit.info; return i && worldOf(i, Date.now()); },
       hold: (d) => setDir(d), fire: (on) => setFire(on),
-      dev: (what) => game?.send({ t: "dev", do: what }),
-      disconnect: () => { game?.close(); game = null; netStatus = "offline"; },
-      reconnect: () => { if (room && !game) onRoom(room); },
     };
   </script>
 </body>

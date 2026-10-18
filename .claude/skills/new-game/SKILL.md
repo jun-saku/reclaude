@@ -44,6 +44,29 @@ and `firebase/database.rules.json` (who may write what). Read `CLAUDE.md` first;
 4. Test (below), add a line to `README.md` under Projects and a card to `site/games/index.html` (newest first: icon, title,
    one line, player tags), commit, push, open a PR.
 
+## The game kit (start here for a new game)
+
+`shared/kit.js` runs everything around a game, so a game is its rules and its drawing:
+
+```
+projects/<name>/game.js     the rules: no drawing, no network (the game server bundles it too)
+projects/<name>/index.html  <link rel="stylesheet" href="../shared/kit.css">, the "‹ All games" link in <main>, and
+                            start(game, { title, howTo, setup(stage), render(info), frame(info), … })
+```
+
+- `game.js` exports `{ id, kind: "turns" | "realtime", players: [min, max], modes: ["solo", "local", "online"],
+  setup({ players }), input(state, seat, move), result(state), … }`; turn-based games add `turn(state)`, real-time
+  games `tick(state, dt)` and `join`/`leave`. The full list is at the top of `shared/kit.js`.
+- The kit builds the home screen (name, Solo / Same phone / Create / Join), the lobby, the player bar, Leave, game
+  over, Play again and (with `leaderboard`) the Top 10, and runs the game: on the phone for solo and one-phone play;
+  online turn-based through Firebase rooms (the state is JSON in `state.g`, the player on turn writes each move and the
+  rules refuse anyone else); online real-time on the game server, which runs the same `game.js` (list it in
+  `worker/src/games.js` with `kitGame(...)`).
+- The page draws `info.view` in `render(info)` (or every frame in `frame(info)` for real-time games) and plays with
+  `info.act(move)`. `projects/tanks/` is the real-time example; `tests/fixtures/kit-turns/` a minimal turn-based one.
+- Not yet in the kit: hidden per-player data for turn-based games (use rooms.js private data directly, as Five Line
+  does), turn timers and teams. Games that need those still use rooms.js directly, as below.
+
 ## The engine, in short
 
 A room is one object at `rooms/<CODE>`:

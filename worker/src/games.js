@@ -10,6 +10,7 @@
 //   view(state, seat) → object      what to send that player (10 times a second)
 //   timeUp?(state)                  the game has run for 2 hours: end it
 import probe from "./games/probe.js";
-import tanks from "./games/tanks.js";
+import { kitGame } from "./kit.js";
+import tanks from "../../projects/tanks/game.js";
 
-export const GAMES = { probe, tanks };
+export const GAMES = { probe, tanks: kitGame(tanks) };
