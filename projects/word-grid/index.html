@@ -219,6 +219,7 @@
           <button id="share">Share link</button>
           <button class="secondary" id="copy">Copy code</button>
         </div>
+        <div class="seated" id="seated"></div>
         <p class="hint center" id="waiting-note"></p>
         <button id="start-btn" hidden>Start game</button>
       </div>
@@ -231,7 +232,6 @@
         <div class="stat" id="time-box"><span>Time</span><b id="time">3:00</b></div>
         <div class="stat"><span>Score</span><b id="score">0</b></div>
         <div class="stat"><span>Words</span><b id="count">0</b></div>
-        <button class="secondary" id="end">End</button>
       </div>
       <div class="word" id="word" aria-live="polite"></div>
       <div class="board" id="board" data-small-ok role="application" aria-label="Letter grid. Drag across letters, or type a word and press Enter.">
@@ -239,6 +239,7 @@
         <svg class="trail" viewBox="0 0 5 5" aria-hidden="true"><polyline id="trail"></polyline></svg>
       </div>
       <ul class="words" id="found"></ul>
+      <div class="row"><button class="secondary" id="end">End</button></div>
     </section>
 
     <section id="result" hidden>
@@ -782,6 +783,8 @@
     function renderLobby() {
       renderPlayers();
       $("waiting-code").textContent = seat.code;
+      const hostSeat = rooms.seatOf(room, room.host);
+      $("seated").innerHTML = seated(room).map((s) => `<div><span class="chip">${label(s)}${s === hostSeat ? " (host)" : ""}</span></div>`).join("");
       const count = rooms.playerCount(room);
       const host = room.host === seat.backend.uid;
       $("start-btn").hidden = !host;

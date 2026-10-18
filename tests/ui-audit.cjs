@@ -9,6 +9,8 @@
 //            the games page card; the home screen's sections are online first (Play friends online, Join a room), then
 //            Same phone, then Solo; Create room, Join, Share link, Copy code, Start game, Play here / Play solo, Leave
 //            and Play again are worded the same in every game
+//   layout   the lobby: code, Share link then Copy code, who's here with the (host), "N of M here"; the game: player bar
+//            and status line above the board, hint under it, Leave last
 // Run after the build: node tests/ui-audit.cjs [game…]   Prints every problem; exits 1 if there are any.
 const { chromium } = (() => {
   for (const m of ['playwright', 'playwright-core']) { try { return require(m); } catch {} }
@@ -28,6 +30,7 @@ const server = http.createServer((req, res) => {
 });
 const ALL = fs.readdirSync(SITE).filter((d) => fs.existsSync(path.join(SITE, d, 'index.html')) && !['shared'].includes(d));
 const ONLY = process.argv.slice(2);
+const QUICK = !!process.env.QUICK; // light 390 only, for a quick look
 
 // The games page's card titles, by folder.
 const CARDS = {};
@@ -121,6 +124,34 @@ function audit({ card }) {
       else last = r;
     }
   }
+  // Layout: the lobby and game screens in the standard order (DESIGN.md).
+  const top = (el) => el.getBoundingClientRect().top;
+  const buttons = [...document.querySelectorAll('main button, main a.home-link')].filter((b) => shown(b) && !b.closest('dialog, [role="dialog"], .sheet, [data-small-ok]'));
+  const leaveBtn = buttons.find((b) => b.tagName === 'BUTTON' && b.textContent.trim() === 'Leave');
+  if (leaveBtn) {
+    const after = buttons.filter((b) => b !== leaveBtn && top(b) > top(leaveBtn) + 4);
+    if (after.length) out.push(`layout: ${label(leaveBtn)} isn't last (below it: ${after.slice(0, 3).map(label).join(', ')})`);
+  }
+  const big = [...document.querySelectorAll('.bigcode')].find(shown);
+  if (shown(big)) {
+    const share = document.getElementById('share'), copy = document.getElementById('copy');
+    if (!(shown(share) && shown(copy) && top(share) > top(big) && Math.abs(top(share) - top(copy)) < 4 && share.getBoundingClientRect().left < copy.getBoundingClientRect().left)) out.push('layout: lobby needs Share link then Copy code side by side, under the code');
+    const seated = document.getElementById('seated');
+    if (!shown(seated) || !seated.textContent.trim()) out.push("layout: lobby has no who's-here list (#seated)");
+    else if (!/\(host\)/.test(seated.textContent)) out.push("layout: who's here doesn't mark the host \"(host)\"");
+    const scr = big.closest('section, .card, main') || document.body;
+    if (!/\b\d+ of \d+ here\b/.test(scr.textContent)) out.push('layout: lobby has no "N of M here" line');
+  } else if (shown(document.getElementById('home')) === false && leaveBtn) {
+    // The game screen: player bar, status, board, hint, controls, Leave.
+    const board = [...document.querySelectorAll('[data-small-ok], canvas')].find(shown);
+    const status = document.getElementById('status');
+    const players = document.getElementById('players');
+    if (board && shown(status) && top(status) > top(board)) out.push('layout: the status line is below the board');
+    if (board && top(leaveBtn) < top(board)) out.push('layout: Leave is above the board (it goes last, under the controls)');
+    if (board && shown(players) && top(players) > top(board)) out.push('layout: the player bar is below the board');
+    const hint = document.getElementById('hint');
+    if (board && shown(hint) && hint.textContent.trim() && top(hint) < top(board)) out.push('layout: the hint is above the board');
+  }
   return out;
 }
 
@@ -130,7 +161,7 @@ function audit({ card }) {
   const problems = {};
   const note = (game, screen, list) => { for (const p of list) { const k = `${game} · ${p}`; (problems[k] ||= new Set()).add(screen); } };
   for (const game of (ONLY.length ? ONLY : ALL)) {
-    for (const scheme of ['light', 'dark']) for (const width of [320, 390]) {
+    for (const scheme of QUICK ? ['light'] : ['light', 'dark']) for (const width of QUICK ? [390] : [320, 390]) {
       const ctx = await b.newContext({ viewport: { width, height: 760 }, colorScheme: scheme, hasTouch: true });
       await ctx.route('**/*', (r) => (new URL(r.request().url()).hostname === 'localhost' ? r.continue() : r.abort()));
       const errs = [];
@@ -150,12 +181,12 @@ function audit({ card }) {
           if (await h.isVisible('#my-name').catch(() => false)) await h.fill('#my-name', 'Jun');
           await h.click('#create'); await h.waitForTimeout(700);
           note(game, `lobby ${tag}`, await h.evaluate(audit, { card: CARDS[game] }));
-          const code = ((await h.textContent('#waiting-code').catch(() => '')) || '').trim();
+          const code = await h.evaluate(() => ([...document.querySelectorAll('.bigcode')].find((e) => e.getClientRects().length)?.textContent || '').trim());
           if (code) {
             const q = await open();
             if (await q.isVisible('#my-name').catch(() => false)) await q.fill('#my-name', 'Bo');
             await q.fill('#join-code', code).catch(() => {}); await q.click('#join').catch(() => {}); await q.waitForTimeout(700);
-            if (await h.isVisible('#start-btn').catch(() => false)) await h.click('#start-btn').catch(() => {});
+            for (const s of ['#start-btn', '#start']) if (await h.isVisible(s).catch(() => false)) { await h.click(s).catch(() => {}); break; }
             await h.waitForTimeout(900);
             note(game, `online ${tag}`, await h.evaluate(audit, { card: CARDS[game] }));
           }
