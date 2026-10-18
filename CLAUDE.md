@@ -58,7 +58,7 @@ The user usually works from their phone, so keep replies short and end with the 
   large), no sideways scroll or cut-off text, icon-only buttons labelled, no JavaScript errors. Game boards and racks
   are marked `data-small-ok` (their pieces size themselves). `npm run rules` checks the database rules on the Firebase emulator (CI runs
   it); `npm run e2e` plays the online games on the real Firebase SDK + emulator in headless Chromium, one file per game
-  in `tests/e2e/<name>.cjs` (`engine.cjs` for room features); `E2E=wall-race,engine npm run e2e` runs only some. On
+  in `tests/e2e/<name>.cjs` (more as `<name>-<what>.cjs`, e.g. `tanks-smooth.cjs`: a slow phone network) (`engine.cjs` for room features); `E2E=wall-race,engine npm run e2e` runs only some. On
   PRs, CI's `e2e` job runs only the tests for the games the PR changes (`tests/pick-e2e.mjs`), or all of them when
   `shared/`, the rules, the build or the test setup change; it isn't a required check.
 - `.github/workflows/pages.yml`: builds and smoke-tests every push and PR (the `build` check `main` requires) and runs the rules test; from `main` it
