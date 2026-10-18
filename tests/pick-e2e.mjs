@@ -1,6 +1,6 @@
 // Picks which end-to-end tests (tests/e2e/<name>.cjs) a PR needs, from the files it changes, and prints
 // `tests=<comma list>` for GitHub Actions (empty: nothing to run).
-//   projects/<game>/…          → that game's test, if it has one
+//   projects/<game>/…          → that game's tests, if it has any (<game>.cjs, <game>-<more>.cjs)
 //   tests/e2e/<name>.cjs       → that test
 //   shared code, the game server, rules, build, the test runner, its fixtures or packages, the workflow → every test
 // Run: node tests/pick-e2e.mjs <base ref>   (e.g. origin/main)
@@ -18,7 +18,7 @@ const pick = new Set();
 for (const f of changed) {
   if (EVERYTHING.some((re) => re.test(f))) { all.forEach((n) => pick.add(n)); break; }
   const game = f.match(/^projects\/([a-z0-9-]+)\//)?.[1];
-  if (game && all.includes(game)) pick.add(game);
+  if (game) for (const n of all) if (n === game || n.startsWith(`${game}-`)) pick.add(n);
   const test = f.match(/^tests\/e2e\/([a-z0-9-]+)\.cjs$/)?.[1];
   if (test && existsSync(join(here, "e2e", `${test}.cjs`))) pick.add(test);
 }

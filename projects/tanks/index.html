@@ -48,10 +48,15 @@
 
     // Tanks on the game kit: the kit runs the screens and the game (here for solo, on the game server online);
     // this page draws the battlefield, reads the pad and Fire button, and drives this player's own tank.
-    const { U, N, CELL, TANK, BRICK, STEEL, WATER, TREES, BASE_X, BASE_Y, PLAYER_SPEED } = sim;
+    const { U, N, CELL, TANK, BRICK, STEEL, WATER, TREES, BASE_X, BASE_Y, PLAYER_SPEED, SHELL_SPEED, DIRS } = sim;
     const KIND_COLOURS = ["#a9adb5", "#d9dce2", "#c08a5a", "#6f7484"];
     const ARMOUR_COLOURS = ["#6f7484", "#c75b5b", "#b9a04a", "#7f9d6a", "#6f7484"]; // by hits left
-    const INTERP_MS = 110;   // online, other things are drawn this far in the past, between two server updates
+    // Online, everything but this player's own tank and shell is drawn a little in the past, between two server
+    // updates, so it moves smoothly. How far depends on the network: updates come 10 times a second, but on a phone
+    // some arrive late; drawing far enough back that the next one is (nearly) always in already avoids the freeze and
+    // jump of running out of them. It grows quickly when updates come late, and shrinks slowly when they're on time.
+    const DELAY_MIN = 110, DELAY_MAX = 350;
+    const EXTRAPOLATE_MS = 150; // past the newest update, things carry on the way they were going for this long
     const SEND_MS = 66;      // own tank to the server about 15 times a second (while it changes)
 
     let canvas, ctx, ground, gctx, px = 1, groundKey = "", hudEl, controlsEl, hintEl;
@@ -59,27 +64,42 @@
     let lastSent = { at: 0, key: "" }, lastFire = 0;
     let effects = [], seenBooms = new Set(), mapCache = { key: "", bricks: null };
     let heldDir = null, firing = false;
+    let delay = DELAY_MIN;
+    // Online, this player's shell flies here from the moment Fire is pressed (the server's copy, drawn in the past, is
+    // hidden): { x, y, d, speed }, and the line it flew along, to hide the server's copy until that lands too.
+    let myShell = null, myLine = null;
     const keysDown = [];
 
     // ---------- the world on screen ----------
-    // The battlefield at the moment to draw: online, INTERP_MS ago (by the server's clock), between the two updates
-    // either side of it, so others move smoothly; this player's own tank is where this device has driven it.
+    // How far back to draw others (see DELAY_MIN): late updates (beyond the quickest seen) plus the longest gap
+    // between them, over the last second or so.
+    function delayFor(snaps, clockOff) {
+      if (snaps.length < 4) return DELAY_MIN;
+      const late = snaps.map((x) => x.recv - x.at - clockOff).sort((p, q) => p - q);
+      let gap = 0;
+      for (let i = 1; i < snaps.length; i++) gap = Math.max(gap, snaps[i].at - snaps[i - 1].at);
+      return Math.max(DELAY_MIN, Math.min(DELAY_MAX, late[Math.floor(late.length * 0.9)] + gap + 15));
+    }
+
+    // The battlefield at the moment to draw: online, `delay` ago (by the server's clock), between the two updates
+    // either side of it (or carried on a little past the newest); this player's own tank is where this device has
+    // driven it. Shells fly straight at a known speed, so they're drawn from their last known spot, stopping at walls.
     function worldOf(info, now) {
       const snaps = info.snaps;
       if (!snaps.length) return null;
-      const t = now - info.clockOff - (info.mode === "online" ? INTERP_MS : 0);
-      let a = snaps[snaps.length - 1], b = a;
+      const t = now - info.clockOff - (info.mode === "online" ? delay : 0);
+      let a = snaps.length > 1 ? snaps[snaps.length - 2] : snaps[0], b = snaps[snaps.length - 1];
       for (let i = snaps.length - 1; i > 0; i--) { if (snaps[i - 1].at <= t) { a = snaps[i - 1]; b = snaps[i]; break; } }
-      const k = b.at > a.at ? Math.max(0, Math.min(1, (t - a.at) / (b.at - a.at))) : 1;
+      const span = b.at - a.at;
+      const k = span > 0 ? Math.max(0, Math.min(1 + EXTRAPOLATE_MS / span, (t - a.at) / span)) : 1;
       const mix = (p, q) => (Math.hypot(q[0] - p[0], q[1] - p[1]) > 16 ? q : [p[0] + (q[0] - p[0]) * k, p[1] + (q[1] - p[1]) * k]);
       const av = a.v, v = b.v;
-      const ea = new Map(av.e.map((x) => [x[0], x])), sa = new Map(av.s.map((x) => [x[0], x]));
+      const ea = new Map(av.e.map((x) => [x[0], x]));
       const enemies = v.e.map((e) => {
         const p = ea.get(e[0]);
         const [x, y] = p ? mix([p[2], p[3]], [e[2], e[3]]) : [e[2], e[3]];
         return { id: e[0], kind: e[1], x, y, d: e[4], hp: e[5], flash: !!e[7] };
       });
-      const shells = v.s.map((s) => { const p = sa.get(s[0]); const [x, y] = p ? mix([p[1], p[2]], [s[1], s[2]]) : [s[1], s[2]]; return { x, y }; });
       const tanks = Object.entries(v.tanks).map(([key, q]) => {
         const p = av.tanks[key];
         const [x, y] = p && p[6] === q[6] ? mix([p[0], p[1]], [q[0], q[1]]) : [q[0], q[1]];
@@ -88,8 +108,30 @@
       const own = tanks.find((x) => x.seat === info.me);
       if (own && me && me.alive) Object.assign(own, { x: me.x, y: me.y, d: me.d });
       if (mapCache.key !== v.b + v.w) mapCache = { key: v.b + v.w, bricks: sim.decBricks(v.b, v.w) };
-      return { wave: v.w, lives: v.l, left: v.n, base: !!v.base, layout: sim.layoutFor(v.w), bricks: mapCache.bricks, tanks, enemies, shells,
+      const world = { wave: v.w, lives: v.l, left: v.n, base: !!v.base, layout: sim.layoutFor(v.w), bricks: mapCache.bricks, tanks, enemies, shells: [],
         booms: v.bo.map((x) => ({ id: x[0], x: x[1], y: x[2], big: !!x[3] })), banner: v.banner, over: v.over };
+      // Shells: from the newest update that has each one (newer ones also cover those that hit something just before),
+      // flown on to time t, or back along their line if t is before that update. One that would hit something by t is gone.
+      const seen = new Set(), targets = [...enemies, ...tanks.filter((x) => x.alive)];
+      for (const snap of info.mode === "online" ? [b, a] : [b]) {
+        for (const [id, x, y, d, speed] of snap.v.s) {
+          if (seen.has(id)) continue;
+          seen.add(id);
+          const dt = (t - snap.at) / 1000;
+          const shell = { x, y, d, speed };
+          if (dt < 0) {
+            shell.x += DIRS[d][0] * speed * dt; shell.y += DIRS[d][1] * speed * dt;
+            // Back along its line, a new shell may not have left its tank yet (a flying one never overlaps a tank).
+            if (targets.some((q) => sim.overlap(shell.x - 1, shell.y - 1, 2, q.x, q.y, TANK))) continue;
+          }
+          else if (dt > 0 && sim.flyShell(world, shell, Math.min(dt, 0.4), targets)) continue;
+          // This player's own shell is drawn by this device (myShell), so its copy here is left out.
+          if (myLine && d === myLine.d && Math.abs((d % 2 ? shell.y : shell.x) - myLine.across) < 1.5) continue;
+          world.shells.push(shell);
+        }
+      }
+      if (myShell) world.shells.push(myShell);
+      return world;
     }
 
     // Own tank: follow the game when it was hit, respawned, a new game started, or it didn't accept a move.
@@ -105,6 +147,11 @@
     // ---------- every frame ----------
     function frame(info) {
       syncMe(info);
+      if (info.mode === "online") {
+        const want = delayFor(info.snaps, info.clockOff);
+        // Grows at up to a fifth of real time (so the picture slows a little), shrinks at a twentieth.
+        delay = want > delay ? Math.min(want, delay + info.dt * 1000 * 0.2) : Math.max(want, delay - info.dt * 1000 * 0.05);
+      }
       const world = worldOf(info, info.now);
       if (!world) return;
       controlsEl.hidden = !!info.over;
@@ -120,8 +167,23 @@
         if (info.now - lastSent.at >= gap && (key !== lastSent.key || info.now - lastSent.at > 1000)) {
           if (info.act({ t: "me", x: +me.x.toFixed(2), y: +me.y.toFixed(2), d: me.d, m: me.moving ? 1 : 0, life: me.life })) lastSent = { at: info.now, key };
         }
-        if (firing && info.now - lastFire > (info.mode === "online" ? 250 : 0)) { lastFire = info.now; info.act({ t: "fire" }); }
+        if (info.mode !== "online") { if (firing) info.act({ t: "fire" }); }
+        // Online, one shell at a time, shown flying at once. The next can go once this one has landed: the server's copy
+        // lands about as much later as the next Fire takes to reach it.
+        else if (firing && !myShell && info.now - lastFire > 250 && info.act({ t: "fire" })) {
+          lastFire = info.now;
+          myShell = { x: me.x + 4 + DIRS[me.d][0] * 4, y: me.y + 4 + DIRS[me.d][1] * 4, d: me.d, speed: SHELL_SPEED };
+          myLine = { d: me.d, across: me.d % 2 ? myShell.y : myShell.x, until: Infinity };
+        }
       }
+      // This player's shell flies on, until it hits a wall or an enemy (the server says what it broke) or the game ends.
+      if (myShell && (world.over || !me?.alive || sim.flyShell(world, myShell, info.dt, world.enemies))) {
+        myShell = null;
+        // The server's copy lands about as much later as it's drawn in the past: keep it hidden until then.
+        myLine.until = info.now + delay + 150;
+      }
+      if (myShell && !world.shells.includes(myShell)) world.shells.push(myShell);
+      if (myLine && !myShell && info.now > myLine.until) myLine = null;
       draw(world, info.now);
       hud(world, info);
     }
@@ -249,6 +311,7 @@
       ground = document.createElement("canvas"); gctx = ground.getContext("2d"); groundKey = "";
       hudEl = stage.querySelector("#hud"); controlsEl = stage.querySelector("#controls"); hintEl = stage.querySelector("#tank-hint");
       me = null; effects = []; seenBooms = new Set(); hudText = ""; lastSent = { at: 0, key: "" };
+      myShell = null; myLine = null; delay = DELAY_MIN;
       const resize = () => {
         const size = Math.round((canvas.getBoundingClientRect().width || 300) * Math.min(devicePixelRatio || 1, 3));
         if (canvas.width !== size) { canvas.width = canvas.height = ground.width = ground.height = size; groundKey = ""; }
