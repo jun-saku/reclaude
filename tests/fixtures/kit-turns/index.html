@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kit turns test</title>
+  <link rel="stylesheet" href="../shared/kit.css">
+</head>
+<body>
+  <main><a class="home-link" href="../games/">‹ All games</a></main>
+  <script type="module">
+    // A turn-based game on the kit, for tests/e2e/kit.cjs: the board is nine buttons.
+    import { start } from "../shared/kit.js";
+    import game from "./game.js";
+    let cells = [];
+    start(game, {
+      title: "Kit turns",
+      setup(stage) {
+        stage.innerHTML = `<div id="board" style="display:grid;grid-template-columns:repeat(3,64px);gap:4px;justify-content:center">${"<button></button>".repeat(9)}</div>`;
+        cells = [...stage.querySelectorAll("button")];
+      },
+      render(info) {
+        cells.forEach((b, i) => { b.textContent = info.view.board[i] === "-" ? "" : info.view.board[i]; b.onclick = null; b.disabled = !info.myTurn; });
+        cells.forEach((b, i) => b.addEventListener("click", () => info.act({ cell: i }), { once: true }));
+      },
+    });
+  </script>
+</body>
+</html>

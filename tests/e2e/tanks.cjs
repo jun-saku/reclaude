@@ -1,4 +1,4 @@
-// End-to-end test, run by ../e2e.cjs (see there). Two players in a Tanks room: the lobby on the real Firebase SDK +
+// End-to-end test, run by ../e2e.cjs (see there). Two players in a Tanks room (a game kit game, shared/kit.js): the lobby on the real Firebase SDK +
 // emulator, the game on the game server (worker/, run locally): tanks, enemies, waves, a player going away without
 // pausing anyone, coming back, game over, Play again and saving a score.
 module.exports = async ({ page, ok, BASE, out }) => {
@@ -13,8 +13,8 @@ module.exports = async ({ page, ok, BASE, out }) => {
   ok(await wait(H, () => !document.getElementById('start-btn').disabled), 'the host can start once a friend joins');
   ok(await P.isHidden('#start-btn'), 'only the host has a Start button');
   await H.click('#start-btn');
-  ok(await wait(H, () => window.__tanks.status === 'connected') && await wait(P, () => window.__tanks.status === 'connected'), 'both players connect to the game server');
-  ok(await wait(P, () => Object.keys(window.__tanks.latest?.tanks || {}).length === 2), 'the server has both tanks');
+  ok(await wait(H, () => window.__kit.status === 'connected') && await wait(P, () => window.__kit.status === 'connected'), 'both players connect to the game server');
+  ok(await wait(P, () => Object.keys(window.__kit.latest?.v.tanks || {}).length === 2), 'the server has both tanks');
 
   // P drives up: P's own tank moves straight away, and the host sees it through the server.
   await wait(P, () => window.__tanks.me?.alive);
@@ -33,33 +33,33 @@ module.exports = async ({ page, ok, BASE, out }) => {
 
   // P's shell is the server's: firing straight up from P's spot hits bricks or flies off; the server counts it.
   await P.evaluate(() => window.__tanks.fire(true)); await P.waitForTimeout(400); await P.evaluate(() => window.__tanks.fire(false));
-  ok(await wait(H, () => window.__tanks.world().shells.length > 0 || window.__tanks.latest.bo.length > 0, null, 3000), "P's shot shows up for the host");
+  ok(await wait(H, () => window.__tanks.world().shells.length > 0 || window.__kit.latest.v.bo.length > 0, null, 3000), "P's shot shows up for the host");
 
   // P goes away (screen off, signal lost): the game carries on for the host, without a pause.
-  await P.evaluate(() => window.__tanks.disconnect());
-  ok(await wait(H, () => !window.__tanks.latest.tanks[1], null, 8000), "when P goes away, P's tank leaves the field for the host");
+  await P.evaluate(() => window.__kit.disconnect());
+  ok(await wait(H, () => !window.__kit.latest.v.tanks[1], null, 8000), "when P goes away, P's tank leaves the field for the host");
   const a = await enemyAt(H); await H.waitForTimeout(1500); const b = await enemyAt(H);
   ok(a !== b, 'and the enemies keep moving for the host (no pause)');
-  await P.evaluate(() => window.__tanks.reconnect());
-  ok(await wait(P, () => window.__tanks.status === 'connected' && window.__tanks.me?.alive) && await wait(H, () => !!window.__tanks.latest.tanks[1]), 'P comes back into the same game');
+  await P.evaluate(() => window.__kit.reconnect());
+  ok(await wait(P, () => window.__kit.status === 'connected' && window.__tanks.me?.alive) && await wait(H, () => !!window.__kit.latest.v.tanks[1]), 'P comes back into the same game');
 
   // The wave is cleared: wave 2 for everyone.
-  await H.evaluate(() => window.__tanks.dev('clear'));
+  await H.evaluate(() => window.__kit.dev('clear'));
   ok(await wait(P, () => window.__tanks.world().wave === 2) && await wait(H, () => window.__tanks.world().wave === 2), 'a cleared wave starts wave 2 for everyone');
 
   // The host leaves: the game goes on for P.
   await H.click('#leave');
-  ok(await wait(P, () => !window.__tanks.latest.tanks[0], null, 8000), "when the host leaves, the host's tank goes");
+  ok(await wait(P, () => !window.__kit.latest.v.tanks[0], null, 8000), "when the host leaves, the host's tank goes");
   ok(await wait(P, () => window.__tanks.world().enemies.length > 0, null, 12000), 'and the game goes on for P');
 
   // Game over (the eagle falls), then P saves the team's score and starts again.
-  await P.evaluate(() => window.__tanks.dev('base'));
-  ok(await wait(P, () => !!window.__tanks.latest.over && !document.getElementById('over').hidden, null, 8000), 'the eagle falling ends the game');
+  await P.evaluate(() => window.__kit.dev('base'));
+  ok(await wait(P, () => !!window.__kit.latest.over && !document.getElementById('over').hidden, null, 8000), 'the eagle falling ends the game');
   const text = await P.textContent('#over-text');
   ok(/cleared 1 wave/.test(text), `the result counts waves cleared (${text})`);
   await P.click('#save-btn');
   ok(await wait(P, () => /Saved/.test(document.getElementById('save-msg').textContent), null, 10000), `the score saves to the Top 10 (${await P.textContent('#save-msg')})`);
   await P.screenshot({ path: `${out}/tanks-over.png` });
   await P.click('#rematch');
-  ok(await wait(P, () => !window.__tanks.latest.over && window.__tanks.world().wave === 1 && window.__tanks.me?.alive && document.getElementById('over').hidden), 'Play again starts a new game');
+  ok(await wait(P, () => !window.__kit.latest.over && window.__tanks.world().wave === 1 && window.__tanks.me?.alive && document.getElementById('over').hidden), 'Play again starts a new game');
 };

@@ -53,18 +53,26 @@ cpSync(join(ROOT, "site"), OUT, { recursive: true });
 // Code shared between projects, imported as ../shared/<file>.
 cpSync(join(ROOT, "shared"), join(OUT, "shared"), { recursive: true });
 // Cache-busting: links to shared files get ?v=<content hash>, so a browser holding an old copy
-// (say, from playing another game) fetches the new one as soon as it changes.
+// (say, from playing another game) fetches the new one as soon as it changes. Shared files link to each other the
+// same way (../shared/<file>, which from /shared/ is the folder itself), so those links are stamped too, and a file's
+// hash covers the stamped links in it: a change to rooms.js also changes kit.js's version, which imports it. That
+// also keeps one copy of each module in the browser, whether a page or another shared file imports it.
+const SHARED_LINK = /(\.\.\/shared\/)([\w.-]+)(?![\w.?-])/g;
+const sharedText = {};
+for (const f of readdirSync(join(ROOT, "shared"))) sharedText[f] = readFileSync(join(ROOT, "shared", f), "utf8");
 const version = {};
-for (const f of readdirSync(join(ROOT, "shared"))) {
-  version[f] = createHash("sha256").update(readFileSync(join(ROOT, "shared", f))).digest("hex").slice(0, 10);
+const stampText = (text) => text.replace(SHARED_LINK, (m, pre, file) => (version[file] ? `${pre}${file}?v=${version[file]}` : m));
+for (let pass = 0; pass < 8; pass++) { // until links between shared files settle (they don't loop)
+  for (const [f, text] of Object.entries(sharedText)) version[f] = createHash("sha256").update(stampText(text)).digest("hex").slice(0, 10);
 }
+for (const [f, text] of Object.entries(sharedText)) if (/\.(js|mjs)$/.test(f)) writeFileSync(join(OUT, "shared", f), stampText(text));
 function stamp(dir) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, e.name);
     if (e.isDirectory()) { stamp(full); continue; }
     if (!/\.(html|js|mjs)$/.test(e.name)) continue;
     const text = readFileSync(full, "utf8");
-    const out = text.replace(/(\.\.\/shared\/)([\w.-]+)(?![\w.?-])/g, (m, pre, file) => (version[file] ? `${pre}${file}?v=${version[file]}` : m));
+    const out = stampText(text);
     if (out !== text) writeFileSync(full, out);
   }
 }
