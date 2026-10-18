@@ -10,7 +10,7 @@
   <style>
     :root {
       --border: #e3e1dc;
-      --felt: #2f7a52;
+      --felt: #276644;
       --felt-dark: #256443;
       --felt-text: #f1f7f3;
       --card: #ffffff;
@@ -44,7 +44,7 @@
     header { display: flex; align-items: center; gap: 8px; }
     h1 { margin-right: auto; }
     .score { min-width: 58px; padding: 5px 8px; border-radius: 10px; background: var(--border); text-align: center; line-height: 1.15; }
-    .score span { display: block; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+    .score span { display: block; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
     .score b { font-size: 1.05rem; font-variant-numeric: tabular-nums; }
     .menu { padding: 0 12px; align-self: stretch; font-size: 1.2rem; }
 
@@ -61,7 +61,7 @@
       grid-template-rows: auto 1fr;
       gap: 6px;
     }
-    .seat-label { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; opacity: 0.85; display: flex; gap: 6px; align-items: center; }
+    .seat-label { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; display: flex; gap: 6px; align-items: center; }
     .seat-label.turn { opacity: 1; color: #ffd66b; }
     .seat-label.turn::after { content: "●"; font-size: 0.6rem; }
     .north { grid-column: 1 / 4; display: flex; flex-direction: column; gap: 4px; align-items: center; }
@@ -84,7 +84,7 @@
     .center .note { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; font-size: 0.85rem; opacity: 0.85; padding: 0 4px; }
 
     .auction { width: 100%; border-collapse: collapse; font-size: 0.9rem; table-layout: fixed; }
-    .auction th { font-size: 0.7rem; font-weight: 700; opacity: 0.8; padding: 2px 0; }
+    .auction th { font-size: 0.75rem; font-weight: 700; padding: 2px 0; }
     .auction th.vul { color: #ff9a9a; }
     .auction td { text-align: center; padding: 2px 0; font-weight: 600; }
     .auction .r { color: #ff9a9a; }
@@ -123,6 +123,8 @@
 
     .bidbox { display: flex; flex-direction: column; gap: 6px; }
     .bidbox[hidden] { display: none; }
+    /* Seven level buttons fit a 320 px screen only below 44 px wide; they stay 44 px tall. */
+    .levels button { min-height: 44px; }
     .bidrow { display: grid; gap: 6px; }
     .levels { grid-template-columns: repeat(7, 1fr); }
     .strains { grid-template-columns: repeat(5, 1fr); }
@@ -240,7 +242,7 @@
         <div class="side east" id="east"></div>
       </section>
       <div class="bidbox" id="bidbox" hidden>
-        <div class="bidrow levels" id="levels"></div>
+        <div class="bidrow levels" id="levels" data-small-ok></div>
         <div class="bidrow strains" id="strains"></div>
         <div class="bidrow calls">
           <button class="pass" data-call="P">Pass</button>
@@ -270,6 +272,7 @@
     // room seat of whoever acts next: the player on turn, the declarer for dummy, or the host for computers.
     const GAME = "bridge";
     const SYM = ["♣", "♦", "♥", "♠", "NT"];
+    const STRAIN_NAME = ["clubs", "diamonds", "hearts", "spades", "no trump"];
     const NAMES = ["North", "East", "South", "West"];
     const SHORT = ["N", "E", "S", "W"];
     const RANK = { 10: "10", 11: "J", 12: "Q", 13: "K", 14: "A" };
@@ -886,7 +889,8 @@
         const v = pickedLevel ? bidNum(pickedLevel, s) : -1;
         const en = on && pickedLevel && v >= min;
         const lbl = pickedLevel ? pickedLevel + SYM[s] : SYM[s];
-        return `<button data-strain="${s}" class="${isRed(s) ? "red" : ""}${hl !== null && pickedLevel && v === hl ? " hint" : ""}" ${en ? "" : "disabled"}>${lbl}</button>`;
+        const name = (pickedLevel ? pickedLevel + " " : "") + STRAIN_NAME[s];
+        return `<button data-strain="${s}" aria-label="${name}" class="${isRed(s) ? "red" : ""}${hl !== null && pickedLevel && v === hl ? " hint" : ""}" ${en ? "" : "disabled"}>${lbl}</button>`;
       }).join("");
       for (const b of document.querySelectorAll("[data-call]")) {
         const c = b.dataset.call;
@@ -914,7 +918,7 @@
       const list = rooms.seatList(r);
       const count = rooms.playerCount(r);
       $("seated").innerHTML = list.map((uid, s) => uid
-        ? `<div><span class="dot${rooms.isOnline(r, s) ? " on" : ""}"></span>${s === seat.seat ? "You" : esc(rooms.nameOf(r, s))}${s === seat.seat && rooms.nameOf(r, s) !== `P${s + 1}` ? ` (${esc(rooms.nameOf(r, s))})` : ""}${s === 0 ? " · host" : ""}</div>` : "").join("");
+        ? `<div><span class="dot${rooms.isOnline(r, s) ? " on" : ""}"></span>${s === seat.seat ? "You" : esc(rooms.nameOf(r, s))}${s === seat.seat && rooms.nameOf(r, s) !== `P${s + 1}` ? ` (${esc(rooms.nameOf(r, s))})` : ""}${s === 0 ? " (host)" : ""}</div>` : "").join("");
       const host = isHost();
       $("pairing").hidden = !(host && count === 2);
       for (const b of document.querySelectorAll("#pairing button")) b.setAttribute("aria-pressed", String(b.dataset.pair === pairing));
@@ -925,7 +929,7 @@
       $("seating").hidden = !host && count < 2;
       $("start").hidden = !host;
       $("start").disabled = count < 2;
-      $("lobby-note").textContent = host ? (count < 4 ? `${count} of 4 here. Start now or wait for more.` : "Everyone's here.") : "Waiting for the host to start…";
+      $("lobby-note").textContent = host ? (count < 4 ? `${count} of 4 here. Start now or wait for more.` : "4 of 4 here. Everyone's in.") : `${count} of 4 here. Waiting for the host to start…`;
     }
 
     // ---------- Sheets ----------

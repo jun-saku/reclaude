@@ -108,7 +108,8 @@
           <button id="share">Share link</button>
           <button class="secondary" id="copy">Copy code</button>
         </div>
-        <p class="muted" style="font-size: 0.9rem">Waiting for them to join…</p>
+        <div class="seated" id="seated"></div>
+        <p class="muted" style="font-size: 0.9rem">1 of 2 here. Waiting for a friend to join…</p>
       </div>
 
       <p class="status" id="status" aria-live="polite"></p>
@@ -298,6 +299,8 @@
 
       els.waiting.hidden = r.status !== "waiting";
       els.waitingCode.textContent = code;
+      // Who's here: only the host until the friend joins (the game starts then).
+      $("seated").innerHTML = local ? "" : `<div>${chip(side, "You (host)", true)}</div>`;
       els.board.hidden = r.status === "waiting";
 
       const winLine = r.line ? r.line.split("").map(Number) : [];

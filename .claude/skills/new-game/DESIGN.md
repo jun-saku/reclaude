@@ -47,8 +47,10 @@ and 390 px; it must report 0 problems before a game PR is ready.
 
 ## Lobby (waiting room)
 
-- The room code big in the middle, then ✓ `Share link` (primary) and ✓ `Copy code` (secondary).
-- Who's here: a list of names with a coloured dot each, and how many of how many ("2 of 4 here").
+- ✓ The room code big in the middle (`.bigcode`), then ✓ `Share link` (primary) and ✓ `Copy code` (secondary) side by
+  side under it.
+- ✓ Who's here: a list (`#seated`) of the players, the host marked `(host)`, and ✓ how many of how many
+  ("2 of 4 here.") for everyone, host or not.
 - The host's ✓ `Start game` / `Start with 3 players` (disabled as `Waiting for friends…` until enough have joined);
   everyone else reads `Waiting for the host to start…`.
 - ✓ `Leave` at the bottom (secondary). A host leaving a waiting room closes it.
@@ -56,13 +58,13 @@ and 390 px; it must report 0 problems before a game PR is ready.
 ## Game screen (interface)
 
 Top to bottom:
-1. Player bar: a chip per player (colour, name, online dot, score if any); the player on turn has a coloured ring.
+1. ✓ Player bar (`#players`): a chip per player (colour, name, online dot, score if any); the player on turn has a coloured ring.
    Online, the room code sits at the right.
-2. Status line (bold, centred): the turn line, timer, or result. One line, it never jumps the board around.
+2. ✓ Status line (`#status`, bold, centred, above the board): the turn line, timer, or result. One line, it never jumps the board around.
 3. The board, as wide as the screen allows (max 480 px), square cells.
-4. Hint line (muted, small): what to do next, in one sentence.
+4. ✓ Hint line (`#hint`, muted, small, under the board): what to do next, in one sentence.
 5. The player's own controls (their hand, rack, tool buttons): primary action first.
-6. ✓ `Leave` (secondary), last.
+6. ✓ `Leave` (secondary), last, under the board and controls.
 
 Game over replaces the status line with a card: the result as its heading, the score or reason under it, then
 ✓ `Play again` (primary; online it shows who's ready: `Play again (Bo is ready)`), then the Top 10 save if any.

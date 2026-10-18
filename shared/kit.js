@@ -298,7 +298,7 @@ export function start(game, ui = {}) {
     $("start-btn").hidden = !host;
     $("start-btn").disabled = count < need;
     $("start-btn").textContent = count < need ? "Waiting for friends…" : `Start with ${count} players`;
-    $("waiting-note").textContent = `${count} of ${room.seats} here. ${host ? "Start when everyone's in." : "The host starts the game."}`;
+    $("waiting-note").textContent = `${count} of ${room.seats} here. ${host ? "Start when everyone's in." : "Waiting for the host to start…"}`;
     $("over").hidden = true;
   }
 
