@@ -8,6 +8,8 @@ toys) built by Claude from a phone, each published at its own link.
 
 ## Projects
 
+- [Doodle Guess](https://reclaude.junsaku.dev/doodle/): take turns drawing a secret word while everyone else races to guess it,
+  2–10 players online with a room code
 - [Tanks](https://reclaude.junsaku.dev/tanks/): Battle City-style co-op, defending the eagle from waves of enemy tanks, solo or 2–4 players online with a room code, with a Top 10 for waves cleared
 - [Word Tiles](https://reclaude.junsaku.dev/word-tiles/): build crossing words on a 15×15 board with letter tiles, premium squares and a 172k-word list, 2–4 players online with a room code or on one phone
 - [Word Grid](https://reclaude.junsaku.dev/word-grid/): swipe across touching letters to find words in 3 minutes, with a daily board for everyone, a random board any time, Top 10s for both, and online rooms for 2–6 players on the same board

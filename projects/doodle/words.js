@@ -1,0 +1,28 @@
+// Things to draw: easy to sketch in a minute, known to everyone; lowercase letters, at most one space.
+export const WORDS = [
+  "apple", "banana", "cherry", "grapes", "lemon", "pear", "pineapple", "strawberry", "watermelon", "carrot", "corn",
+  "mushroom", "pumpkin", "potato", "tomato", "bread", "cake", "cookie", "donut", "egg", "hamburger", "hot dog",
+  "ice cream", "pizza", "popcorn", "sandwich", "sushi", "taco", "cheese", "candy", "lollipop", "cat", "dog", "fish",
+  "bird", "duck", "chicken", "cow", "pig", "horse", "sheep", "rabbit", "mouse", "frog", "snake", "turtle", "snail",
+  "spider", "bee", "butterfly", "ant", "ladybug", "octopus", "shark", "whale", "dolphin", "crab", "jellyfish",
+  "penguin", "owl", "eagle", "parrot", "flamingo", "giraffe", "elephant", "lion", "tiger", "zebra", "monkey", "bear",
+  "panda", "koala", "kangaroo", "camel", "crocodile", "dinosaur", "dragon", "unicorn", "bat", "fox", "wolf", "deer",
+  "hedgehog", "house", "castle", "tent", "igloo", "bridge", "tower", "lighthouse", "windmill", "church", "school",
+  "hospital", "barn", "fence", "door", "window", "ladder", "chair", "table", "bed", "sofa", "lamp", "clock",
+  "mirror", "bathtub", "toilet", "umbrella", "key", "lock", "candle", "bell", "box", "bucket", "broom", "car", "bus",
+  "truck", "bicycle", "motorbike", "train", "airplane", "helicopter", "rocket", "boat", "ship", "submarine",
+  "tractor", "skateboard", "scooter", "sun", "moon", "star", "cloud", "rain", "rainbow", "snowman", "snowflake",
+  "lightning", "tornado", "volcano", "mountain", "island", "beach", "river", "waterfall", "tree", "flower", "rose",
+  "cactus", "leaf", "forest", "palm tree", "grass", "phone", "computer", "television", "camera", "robot", "guitar",
+  "piano", "drum", "trumpet", "violin", "microphone", "headphones", "radio", "book", "pencil", "scissors", "glue",
+  "backpack", "calendar", "envelope", "gift", "balloon", "kite", "crown", "ring", "necklace", "glasses", "hat",
+  "shoe", "sock", "shirt", "dress", "jacket", "scarf", "glove", "boot", "belt", "tie", "button", "ball", "football",
+  "basketball", "tennis", "bowling", "golf", "trophy", "medal", "dice", "puzzle", "yoyo", "hammer", "saw", "axe",
+  "shovel", "rake", "wrench", "screwdriver", "magnet", "battery", "light bulb", "plug", "rope", "chain", "anchor",
+  "pirate", "ghost", "witch", "vampire", "zombie", "angel", "king", "queen", "knight", "princess", "wizard", "alien",
+  "astronaut", "clown", "chef", "doctor", "eye", "ear", "nose", "mouth", "hand", "foot", "tooth", "heart", "brain",
+  "skeleton", "hair", "beard", "baby", "teacher", "farmer", "swimming", "running", "dancing", "sleeping", "cooking",
+  "fishing", "camping", "painting", "singing", "jumping", "smile", "kiss", "hug", "fire", "smoke", "bubble",
+  "shadow", "map", "compass", "treasure", "flag", "sword", "shield", "bow", "arrow", "spaceship", "planet", "comet",
+  "toothbrush", "soap", "towel", "pillow", "blanket", "teddy bear"
+];
