@@ -151,7 +151,7 @@ export class GameRoom extends DurableObject {
       this.lastSend = now;
       for (const [socket, c] of this.conns) {
         if (c.seat === null) continue;
-        if (!send(socket, { t: "s", at: now, ...this.mod.view(this.state, c.seat) })) this.onClose(socket);
+        if (!send(socket, { t: "s", at: now, ...this.mod.view(this.state, c.seat, c) })) this.onClose(socket);
       }
     }
   }

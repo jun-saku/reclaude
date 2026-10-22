@@ -2,7 +2,9 @@
 // solo play. Players send { t: "in", m: move } (the game's own messages), { t: "again" } (Play again, once the game
 // is over) and, on the local test server only, { t: "dev", m } (test shortcuts, game.dev). Everyone gets
 // { round, again, here, over, v }: the round (it changes when a new game starts), who wants to play again, who's
-// connected, the result (game.result) and their own view (game.view).
+// connected, the result (game.result) and their own view (game.view); and f, the new part of the game's feed
+// (game.feed, see shared/feed.js) since that connection's last update.
+import { feedPart } from "../../shared/feed.js";
 const seatsOf = (map) => Object.keys(map).map(Number).sort((a, b) => a - b);
 const playersIn = (room) => Array.from({ length: room.seats || 0 }, (_, i) => i).filter((i) => room.players?.[`s${i}`]).length;
 
@@ -28,7 +30,17 @@ export function kitGame(game) {
       } else if (msg.t === "dev" && dev) game.dev?.(st.s, msg.m, seat);
     },
     tick(st, dt) { if (!game.result(st.s)) game.tick?.(st.s, dt); },
-    view: (st, seat) => ({ round: st.round, again: seatsOf(st.again), here: seatsOf(st.here), over: game.result(st.s), v: game.view ? game.view(st.s, seat) : st.s }),
+    view(st, seat, conn = {}) {
+      const msg = { round: st.round, again: seatsOf(st.again), here: seatsOf(st.here), over: game.result(st.s), v: game.view ? game.view(st.s, seat) : st.s };
+      if (game.feed) {
+        const f = game.feed(st.s);
+        // A new game (Play again) starts a new list even if the game reuses its ids.
+        const [part, had] = feedPart(f && { id: `${st.round}:${f.id}`, items: f.items }, conn.feed);
+        conn.feed = had;
+        if (part) msg.f = part;
+      }
+      return msg;
+    },
     timeUp(st) { game.timeUp?.(st.s); },
   };
 }
