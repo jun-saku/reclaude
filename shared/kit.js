@@ -31,6 +31,7 @@
 //   render(info)         the view changed: draw it (turns: after every move; realtime: every update)
 //   frame?(info)         every animation frame while playing (realtime games drive and draw here)
 //   status?(info) → text  the line above the board (default: whose turn it is)
+//   chip?(seat, info) → HTML  extra for that player's chip in the player bar (a score, an icon); escape any text
 //   resultText?(result, info) → { title, text }
 // info: { mode: "solo" | "local" | "online", kind, me (this player's seat), seats, view, over (result or null),
 //   turn, myTurn, act(move), name(seat), snaps (realtime: recent { at, recv, v }), clockOff, status, now, dt,
@@ -277,7 +278,7 @@ export function start(game, ui = {}) {
     // Players: who's here, whose turn it is
     const seats = mode === "online" ? rooms.seatList(room).flatMap((u, s) => (u ? [s] : [])) : i.seats;
     const here = (s) => (mode !== "online" ? true : realtime ? i.seats.includes(s) : rooms.isOnline(room, s));
-    const players = mode === "solo" ? "" : seats.map((s) => `<span class="chip${i.turn === s && !i.over ? " turn" : ""}${here(s) ? "" : " out"}" style="--pc: var(--p${s % 4})"><span class="disc"></span>${name(s)}${mode === "online" ? `<span class="dot${here(s) ? " on" : ""}"></span>` : ""}</span>`).join("");
+    const players = mode === "solo" ? "" : seats.map((s) => `<span class="chip${i.turn === s && !i.over ? " turn" : ""}${here(s) ? "" : " out"}" style="--pc: var(--p${s % 4})"><span class="disc"></span>${name(s)}${ui.chip?.(s, i) ?? ""}${mode === "online" ? `<span class="dot${here(s) ? " on" : ""}"></span>` : ""}</span>`).join("");
     if ($("players").innerHTML !== players) $("players").innerHTML = players;
     if (waiting) { chromeKey = ""; return renderLobby(); }
     // The line above the board
