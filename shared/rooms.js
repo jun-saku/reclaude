@@ -420,6 +420,32 @@ export async function setMyName(raw, inRoom = null) {
   if (inRoom && !inRoom.backend.local && name) await inRoom.backend.update(inRoom.code, { [`names/${seatKey(inRoom.seat)}`]: name });
   return name;
 }
+// The waiting room's "Your name" field: put before the list of who's here (`before`), it renames this player for
+// everyone as they type. Someone who came by a shared link without a name yet starts there. seatOf() → the page's
+// current { backend, code, seat }.
+export function lobbyName(before, seatOf) {
+  if (!before || before.parentNode.querySelector(".lobby-name")) return;
+  const row = document.createElement("label");
+  row.className = "name-row lobby-name";
+  row.innerHTML = `<span>Your name</span><input maxlength="${ROOM_NAME_MAX}" autocomplete="nickname" spellcheck="false" enterkeyhint="done" placeholder="So friends know it's you">`;
+  const input = row.querySelector("input");
+  input.value = myName();
+  let timer = 0;
+  const save = () => {
+    clearTimeout(timer);
+    const s = seatOf(), name = cleanRoomName(input.value);
+    if (!s || !name) return;
+    setMyName(name, s).catch(() => {});
+    // The home screen's name box too, or it would bring back the old name next time.
+    const home = document.getElementById("my-name");
+    if (home && home !== input) home.value = name;
+  };
+  input.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(save, 600); });
+  input.addEventListener("change", save);
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") input.blur(); });
+  before.before(row);
+  if (!myName()) setTimeout(() => { if (row.offsetParent) input.focus(); }, 300);
+}
 const withName = (room, seat) => { const n = myName(); if (n) room.names = { ...(room.names || {}), [seatKey(seat)]: n }; return room; };
 
 // ---------- rooms ----------

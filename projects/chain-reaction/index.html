@@ -489,8 +489,15 @@
     });
 
     // Opening a shared link (?room=CODE) joins straight away.
+    // The waiting room lets players set their name (someone who came by a link hasn't had the chance).
+    rooms.lobbyName(document.getElementById("seated"), () => seat);
     const linked = rooms.roomFromUrl();
-    if (linked) { $("join-code").value = linked.toUpperCase(); joinRoom(linked); }
+    // A full room starts at once (no waiting room), so someone new to the game picks a name before joining.
+    if (linked) {
+      $("join-code").value = linked.toUpperCase();
+      if (rooms.myName()) joinRoom(linked);
+      else { $("home-error").textContent = "Pick a name, then tap Join."; $("my-name").focus(); }
+    }
 
     // Hooks for automated tests.
     window.__cr = { rooms, play, move, canPlace, alive, get room() { return room; }, get seat() { return seat; }, get animating() { return !!anim; } };

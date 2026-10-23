@@ -1211,6 +1211,8 @@
     setInterval(() => { if (mode === "online" && room) render(); }, 5000);
 
     // Opening a shared link (?room=CODE) joins straight away; otherwise the menu (a saved solo game is one tap away).
+    // The waiting room lets players set their name (someone who came by a link hasn't had the chance).
+    rooms.lobbyName(document.getElementById("seated"), () => seat);
     const linked = rooms.roomFromUrl();
     if (linked) { $("join-code").value = linked; joinRoom(linked); }
     else goHome();

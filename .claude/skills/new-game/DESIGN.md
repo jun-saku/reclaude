@@ -53,6 +53,8 @@ and 390 px; it must report 0 problems before a game PR is ready.
   ("2 of 4 here.") for everyone, host or not.
 - The host's ✓ `Start game` / `Start with 3 players` (disabled as `Waiting for friends…` until enough have joined);
   everyone else reads `Waiting for the host to start…`.
+- `Your name` (`rooms.lobbyName`): a friend who came straight in by a shared link can still set their name. A game
+  that starts the moment the room is full (no waiting room) asks for a name before joining by link instead.
 - ✓ `Leave` at the bottom (secondary). A host leaving a waiting room closes it.
 
 ## Game screen (interface)

@@ -975,6 +975,8 @@
     // ---------- start ----------
     renderHome();
     await loadWords();
+    // The waiting room lets players set their name (someone who came by a link hasn't had the chance).
+    rooms.lobbyName(document.getElementById("seated"), () => seat);
     const linked = rooms.roomFromUrl();
     if (words && linked) {
       // A shared link (?room=CODE), or a reload in a room: join, or rejoin the same seat.

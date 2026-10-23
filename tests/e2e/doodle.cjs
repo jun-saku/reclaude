@@ -18,6 +18,11 @@ module.exports = async ({ page, ok, BASE, out }) => {
   const code = (await H.textContent('#waiting-code')).trim();
   const join = async (name) => { const p = await page(URL); await p.fill('#my-name', name); await p.fill('#join-code', code); await p.click('#join'); await p.waitForSelector('#waiting:not([hidden])', { timeout: 15000 }); return p; };
   const B = await join('Bo'), C = await join('Cy');
+  // Renaming in the waiting room (a friend who came by a link hasn't set a name yet): everyone sees the new name.
+  await C.fill('.lobby-name input', 'Cyd'); await C.press('.lobby-name input', 'Enter');
+  ok(await wait(H, () => /Cyd/.test(document.getElementById('seated').textContent)), 'a player can change their name in the waiting room');
+  await C.fill('.lobby-name input', 'Cy'); await C.press('.lobby-name input', 'Enter');
+  await wait(H, () => /\bCy\b/.test(document.getElementById('seated').textContent));
   ok(await wait(H, () => !document.getElementById('start-btn').disabled), 'the host can start with friends in');
   await H.click('#start-btn');
   const all = [H, B, C];
