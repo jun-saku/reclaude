@@ -367,6 +367,8 @@
     });
 
     // Opening a shared link (?room=CODE) joins straight away.
+    // The waiting room shows a QR code of its link, for friends in the same place.
+    rooms.lobbyQR(document.getElementById("seated"), () => seat);
     const linked = rooms.roomFromUrl();
     if (linked) { els.joinCode.value = linked.toUpperCase(); joinRoom(linked); }
 

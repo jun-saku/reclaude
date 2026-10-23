@@ -604,7 +604,7 @@
           if (st && st.played.length && by !== mine) hint = `${label(by)} put down ${st.played.length} tile${st.played.length === 1 ? "" : "s"} (yellow).`;
         }
         const left = rooms.turnLeft(r);
-        if (left !== null) status += ` <span class="clock${left <= 10 ? " low" : ""}">${left ? `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}` : "time's up"}</span>`;
+        status += rooms.timeBar(left, r.turnSecs, 10);
       } else if (typeof r.left === "number") status = r.left === mine ? "You left this game" : `${label(r.left)} left. ${r.winner === "draw" ? "Game over" : r.winner === mine ? "You win! 🎉" : `${label(r.winner)} wins`}`;
       else if (r.winner === "draw") status = "Pool's empty: it's a tie";
       else if (r.winner === mine) status = "You win! 🎉";
@@ -722,7 +722,9 @@
       setTimeout(() => ($("copy").textContent = "Copy code"), 1500);
     });
 
-    // The waiting room lets players set their name (someone who came by a link hasn't had the chance).
+    // The waiting room: a QR code of its link (for friends in the same place), and a name field (someone who came by
+    // a link hasn't had the chance to set one).
+    rooms.lobbyQR(document.getElementById("seated"), () => seat);
     rooms.lobbyName(document.getElementById("seated"), () => seat);
     const linked = rooms.roomFromUrl();
     if (linked) { $("join-code").value = linked; joinRoom(linked); }

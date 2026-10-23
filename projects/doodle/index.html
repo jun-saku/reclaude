@@ -12,8 +12,8 @@
   <style>
     .hud { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
     .hud .turn, .hud .clock { font-size: 0.9rem; font-weight: 600; color: var(--muted); white-space: nowrap; min-width: 4.5em; }
-    .hud .clock { text-align: right; }
-    .hud .clock.low { color: var(--danger); }
+    .timer { min-height: 6px; margin-top: -6px; }
+    .timer .timebar { max-width: none; margin: 0; }
     .word { flex: 1; text-align: center; font-weight: 800; font-size: 1.25rem; letter-spacing: 0.12em; white-space: pre; overflow: hidden; text-overflow: ellipsis; }
     .word small { font-size: 0.75rem; font-weight: 600; letter-spacing: 0; color: var(--muted); }
     .paper { position: relative; width: 100%; aspect-ratio: 1; border-radius: 12px; border: 1px solid var(--line); background: #fff; overflow: hidden; }
@@ -53,8 +53,8 @@
     <a class="home-link" href="../games/">‹ All games</a>
   </main>
   <script type="module">
-    import { start } from "../shared/kit.js";
-    import game, { GRID, COLOURS, SIZES } from "./game.js";
+    import { start, rooms } from "../shared/kit.js";
+    import game, { GRID, COLOURS, SIZES, PICK_S, DRAW_S } from "./game.js";
 
     // Doodle Guess on the game kit: the kit runs the rooms and the game server runs the rules (game.js); this page
     // draws the paper from the game's feed, lets the drawer draw, and everyone else guess.
@@ -68,7 +68,7 @@
     let paper = { id: null, strokes: [], items: 0 };
     let queue = [];            // others' points still to draw: [{ stroke, from, to }]
     let pen = null, unsent = [], lastSend = 0, nextId = 0;
-    let lastInfo = null, chatKey = "", coverKey = "";
+    let lastInfo = null, chatKey = "", coverKey = "", barKey = "";
 
     // ---------- the paper ----------
     function resize() {
@@ -196,10 +196,10 @@
 
     function hud(info) {
       const v = info.view, me = info.me, drawer = v.drawer;
-      const low = v.phase === "draw" && v.left <= 10;
       els.turn.textContent = v.turn ? `${v.turn} / ${Math.max(v.turn, v.turns)}` : "";
-      els.clock.textContent = v.phase === "draw" || v.phase === "pick" ? `⏱ ${v.left}` : "";
-      els.clock.classList.toggle("low", low);
+      // The timer: a bar under the word, redrawn when the seconds change (it runs smoothly in between).
+      const bar = v.phase === "draw" ? rooms.timeBar(v.left, DRAW_S, 10) : v.phase === "pick" ? rooms.timeBar(v.left, PICK_S, 5) : "";
+      if (bar !== barKey) { barKey = bar; els.bar.innerHTML = bar; }
       els.word.innerHTML = v.word ? esc(v.word.toUpperCase()) : v.mask ? `${esc(v.mask.split("").join(" "))} <small>(${v.mask.replace(/ /g, "").length})</small>` : "";
       // The cover over the paper: waiting, picking a word, the end of a turn.
       let cover = "", key = `${v.phase}|${drawer}|${v.turn}|${v.choices.join()}`;
@@ -235,7 +235,8 @@
     // ---------- setup ----------
     function setup(stage) {
       stage.innerHTML = `
-        <div class="hud"><span class="turn" id="d-turn"></span><span class="word" id="d-word" aria-live="polite"></span><span class="clock" id="d-clock"></span></div>
+        <div class="hud"><span class="turn" id="d-turn"></span><span class="word" id="d-word" aria-live="polite"></span><span class="clock"></span></div>
+        <div class="timer" id="d-bar"></div>
         <div class="paper" id="d-wrap" data-small-ok>
           <canvas id="paper" aria-label="Drawing"></canvas>
           <div class="cover" id="d-cover" hidden></div>
@@ -254,10 +255,10 @@
         </form>
         <ul class="chat" id="d-chat" aria-live="polite"></ul>`;
       const $ = (id) => stage.querySelector(`#${id}`);
-      els = { canvas: $("paper"), wrap: $("d-wrap"), cover: $("d-cover"), tools: $("d-tools"), turn: $("d-turn"), word: $("d-word"), clock: $("d-clock"),
+      els = { canvas: $("paper"), wrap: $("d-wrap"), cover: $("d-cover"), tools: $("d-tools"), turn: $("d-turn"), word: $("d-word"), bar: $("d-bar"),
         guessForm: $("d-guess-form"), guess: $("d-guess"), chat: $("d-chat") };
       ctx = els.canvas.getContext("2d");
-      paper = { id: null, strokes: [], items: 0 }; queue = []; pen = null; unsent = []; chatKey = coverKey = "";
+      paper = { id: null, strokes: [], items: 0 }; queue = []; pen = null; unsent = []; chatKey = coverKey = barKey = "";
       new ResizeObserver(resize).observe(els.canvas);
       els.canvas.addEventListener("pointerdown", penDown);
       els.canvas.addEventListener("pointermove", penMove);
