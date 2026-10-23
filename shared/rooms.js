@@ -429,6 +429,17 @@ export async function setMyName(raw, inRoom = null) {
   if (inRoom && !inRoom.backend.local && name) await inRoom.backend.update(inRoom.code, { [`names/${seatKey(inRoom.seat)}`]: name });
   return name;
 }
+// The room code (`el`, which the page keeps filling in) moves up to the right of the page's title, saving a line
+// above the board.
+export function codeInTitle(el) {
+  const h1 = document.querySelector("main h1");
+  if (!el || !h1 || el.closest(".title-row")) return;
+  const row = document.createElement("div");
+  row.className = "title-row";
+  h1.before(row);
+  row.append(h1, el);
+}
+
 // The waiting room's QR code of the room's link, put before the list of who's here (`before`): friends in the same
 // place scan the host's screen instead of being sent the link. seatOf() → the page's current { backend, code, seat };
 // the code drawn follows it (checked twice a second, while the waiting room shows).

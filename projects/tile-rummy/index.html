@@ -724,6 +724,7 @@
 
     // The waiting room: a QR code of its link (for friends in the same place), and a name field (someone who came by
     // a link hasn't had the chance to set one).
+    rooms.codeInTitle(document.getElementById("room-label"));
     rooms.lobbyQR(document.getElementById("seated"), () => seat);
     rooms.lobbyName(document.getElementById("seated"), () => seat);
     const linked = rooms.roomFromUrl();

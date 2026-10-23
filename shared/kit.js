@@ -55,7 +55,7 @@ export function start(game, ui = {}) {
   const main = document.querySelector("main") || document.body.appendChild(document.createElement("main"));
   const localPlayers = modes.includes("local") ? range(maxP - Math.max(2, minP) + 1).map((i) => i + Math.max(2, minP)) : [];
   main.insertAdjacentHTML("beforeend", `
-    <div class="kit-title"><h1>${ui.logo || ""}${esc(ui.title || game.id)}</h1>${ui.leaderboard ? '<button class="trophy" id="trophy" aria-label="Top 10 leaderboard" aria-haspopup="dialog">🏆</button>' : ""}</div>
+    <div class="kit-title"><h1>${ui.logo || ""}${esc(ui.title || game.id)}</h1><div class="code" id="room-label"></div>${ui.leaderboard ? '<button class="trophy" id="trophy" aria-label="Top 10 leaderboard" aria-haspopup="dialog">🏆</button>' : ""}</div>
     <section id="home">
       ${online || ui.leaderboard ? `<div class="card"><label class="name-row"><span>Your name</span>
         <input id="my-name" maxlength="12" autocomplete="nickname" spellcheck="false" placeholder="So friends know it's you"></label></div>` : ""}
@@ -76,7 +76,7 @@ export function start(game, ui = {}) {
       ${ui.howTo ? `<details class="card rules"><summary>How to play</summary>${ui.howTo}</details>` : ""}
     </section>
     <section id="game" hidden>
-      <div class="bar"><div class="players" id="players"></div><div class="code" id="room-label"></div></div>
+      <div class="bar"><div class="players" id="players"></div></div>
       <div class="card" id="waiting" hidden>
         <p class="muted" style="text-align: center">Send this code to your friends</p>
         <p class="bigcode" id="waiting-code"></p>

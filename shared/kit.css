@@ -2,7 +2,9 @@
    adds its own styles for its board:
      <link rel="stylesheet" href="../shared/base.css">
      <link rel="stylesheet" href="../shared/kit.css"> */
-.kit-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.kit-title { display: flex; align-items: center; gap: 10px; }
+.kit-title h1 { flex: 1; min-width: 0; }
+.kit-title .code { flex: none; white-space: nowrap; }
 h1 svg { width: 1.1em; height: 1.1em; }
 .trophy { background: var(--soft); color: var(--text); padding: 8px 12px; font-size: 1.1rem; }
 .status { font-size: 1.1rem; }
@@ -15,3 +17,4 @@ h1 svg { width: 1.1em; height: 1.1em; }
 #seated:has(> :nth-child(5)) .chip { font-size: 0.8rem; }
 .over h2 { font-size: 1.3rem; }
 .over .save { align-self: stretch; }
+.bar:has(> .players:empty:only-child) { display: none; }
