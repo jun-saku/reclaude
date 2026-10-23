@@ -9,5 +9,9 @@ h1 svg { width: 1.1em; height: 1.1em; }
 #game > .hint:empty, #status:empty { display: none; }
 #stage { display: flex; flex-direction: column; gap: 12px; }
 .over { align-items: center; text-align: center; }
+/* The waiting room's list of who's here: two columns once there are five or more. */
+#seated:has(> :nth-child(5)) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+#seated .chip { max-width: 100%; white-space: normal; overflow-wrap: break-word; border-radius: 12px; }
+#seated:has(> :nth-child(5)) .chip { font-size: 0.8rem; }
 .over h2 { font-size: 1.3rem; }
 .over .save { align-self: stretch; }

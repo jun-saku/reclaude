@@ -31,6 +31,7 @@
 //   render(info)         the view changed: draw it (turns: after every move; realtime: every update)
 //   frame?(info)         every animation frame while playing (realtime games drive and draw here)
 //   status?(info) → text  the line above the board (default: whose turn it is)
+//   turn?({ view, me }) → seat  realtime: whose chip gets the ring (e.g. who's drawing); turn-based games use game.turn
 //   chip?(seat, info) → HTML  extra for that player's chip in the player bar (a score, an icon); escape any text
 //   resultText?(result, info) → { title, text }
 // info: { mode: "solo" | "local" | "online", kind, me (this player's seat), seats, view, over (result or null),
@@ -243,9 +244,10 @@ export function start(game, ui = {}) {
   function info(now = Date.now(), dt = 0) {
     const e = engine;
     const over = e.over();
-    const turn = e.turn();
+    const view = e.view();
+    const turn = e.turn() ?? (view != null ? ui.turn?.({ view, me: e.me }) ?? null : null);
     return {
-      mode, kind: game.kind, me: e.me, seats: e.seats, view: e.view(), over, turn,
+      mode, kind: game.kind, me: e.me, seats: e.seats, view, over, turn,
       myTurn: !over && turn === e.me, act: (m) => e.act(m), name, snaps: e.snaps, clockOff: e.clockOff ?? 0,
       status: e.status, now, dt, room, feed: e.feed ?? null,
     };
@@ -278,8 +280,17 @@ export function start(game, ui = {}) {
     // Players: who's here, whose turn it is
     const seats = mode === "online" ? rooms.seatList(room).flatMap((u, s) => (u ? [s] : [])) : i.seats;
     const here = (s) => (mode !== "online" ? true : realtime ? i.seats.includes(s) : rooms.isOnline(room, s));
-    const players = mode === "solo" ? "" : seats.map((s) => `<span class="chip${i.turn === s && !i.over ? " turn" : ""}${here(s) ? "" : " out"}" style="--pc: var(--p${s % 4})"><span class="disc"></span>${name(s)}${ui.chip?.(s, i) ?? ""}${mode === "online" ? `<span class="dot${here(s) ? " on" : ""}"></span>` : ""}</span>`).join("");
-    if ($("players").innerHTML !== players) $("players").innerHTML = players;
+    // (In the waiting room the list of who's here shows them, so the bar stays empty.)
+    const players = mode === "solo" || waiting ? "" : seats.map((s) => `<span class="chip${i.turn === s && !i.over ? " turn" : ""}${here(s) ? "" : " out"}" style="--pc: var(--p${s % 10})"><span class="disc"></span>${name(s)}${ui.chip?.(s, i) ?? ""}${mode === "online" ? `<span class="dot${here(s) ? " on" : ""}"></span>` : ""}</span>`).join("");
+    if ($("players").innerHTML !== players) {
+      $("players").innerHTML = players;
+      // A long row scrolls sideways: bring whoever's on turn into view.
+      const bar = $("players"), on = bar.querySelector(".turn");
+      if (on && bar.scrollWidth > bar.clientWidth) {
+        const left = bar.scrollLeft + on.getBoundingClientRect().left - bar.getBoundingClientRect().left - 8;
+        bar.scrollTo({ left: Math.max(0, left), behavior: "smooth" });
+      }
+    }
     if (waiting) { chromeKey = ""; return renderLobby(); }
     // The line above the board
     let status = ui.status?.(i);
@@ -301,7 +312,7 @@ export function start(game, ui = {}) {
   function renderLobby() {
     const seats = rooms.seatList(room), count = rooms.playerCount(room), host = seat.seat === 0;
     $("waiting-code").textContent = seat.code;
-    $("seated").innerHTML = seats.map((uid, s) => uid ? `<div><span class="chip" style="--pc: var(--p${s % 4})"><span class="disc"></span>${name(s)}${s === seat.seat && rooms.nameOf(room, s) !== `P${s + 1}` ? ` (${esc(rooms.nameOf(room, s))})` : ""}${s === 0 ? " (host)" : ""}</span></div>` : "").join("");
+    $("seated").innerHTML = seats.map((uid, s) => uid ? `<div><span class="chip" style="--pc: var(--p${s % 10})"><span class="disc"></span>${name(s)}${s === seat.seat && rooms.nameOf(room, s) !== `P${s + 1}` ? ` (${esc(rooms.nameOf(room, s))})` : ""}${s === 0 ? " (host)" : ""}</span></div>` : "").join("");
     const need = Math.max(2, minP);
     $("start-btn").hidden = !host;
     $("start-btn").disabled = count < need;
