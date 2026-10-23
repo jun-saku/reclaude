@@ -781,6 +781,8 @@
     });
 
     // Opening a shared link (?room=CODE) joins straight away.
+    // The waiting room lets players set their name (someone who came by a link hasn't had the chance).
+    rooms.lobbyName(document.getElementById("seated"), () => seat);
     const linked = rooms.roomFromUrl();
     if (linked) { $("join-code").value = linked.toUpperCase(); joinRoom(linked); }
 

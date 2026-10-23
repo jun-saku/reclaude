@@ -722,6 +722,8 @@
       setTimeout(() => ($("copy").textContent = "Copy code"), 1500);
     });
 
+    // The waiting room lets players set their name (someone who came by a link hasn't had the chance).
+    rooms.lobbyName(document.getElementById("seated"), () => seat);
     const linked = rooms.roomFromUrl();
     if (linked) { $("join-code").value = linked; joinRoom(linked); }
 

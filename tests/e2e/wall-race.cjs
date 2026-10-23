@@ -5,6 +5,9 @@ module.exports = async ({ page, ok, statusIs, BASE, out }) => {
   const W1 = await page(WR); await W1.click('#create'); await W1.waitForSelector('#waiting:not([hidden])', { timeout: 15000 });
   const wcode = (await W1.textContent('#waiting-code')).trim();
   const W2 = await page(WR + '&room=' + wcode);
+  // By a shared link with no name yet: the code's filled in and it asks for a name; then Join.
+  ok(await W2.inputValue('#join-code') !== '' && /Pick a name/.test(await W2.textContent('#home-error')), 'a link opened with no name asks for one first');
+  await W2.fill('#my-name', 'Bo'); await W2.click('#join');
   await W1.waitForSelector('#board:not([hidden])', { timeout: 15000 }); await W2.waitForSelector('#board:not([hidden])', { timeout: 15000 });
   ok(await W2.evaluate(() => document.getElementById('board').style.transform === 'rotate(180deg)'), `wall race: room ${wcode} starts when the second player joins; their board is turned`);
   // Each player first places a wall in front of the other, then heads straight for their goal (shortest path).
@@ -34,7 +37,7 @@ module.exports = async ({ page, ok, statusIs, BASE, out }) => {
   const reached = wpos.map((p, s) => (s === 0 ? p < 9 : p >= 72));
   ok(wr.status === 'done' && typeof wr.winner === 'number' && reached[wr.winner] && !reached[1 - wr.winner] && wr.board.replace(/-/g, '').length === 2 && wr.state.walls === '9,9',
     `the rules accept walls and moves; the first to the far side wins (${wturns} moves, seat ${wr.winner} at ${wpos[wr.winner]})`);
-  ok(await statusIs([W1, W2][wr.winner], 'You win! 🎉') && await statusIs([W1, W2][1 - wr.winner], `P${wr.winner + 1} wins`), 'both players are told who won');
+  ok(await statusIs([W1, W2][wr.winner], 'You win! 🎉') && await statusIs([W1, W2][1 - wr.winner], `${wr.winner === 1 ? "Bo" : "P1"} wins`), 'both players are told who won');
   await W2.waitForTimeout(500); await W2.screenshot({ path: `${out}/e2e-wr.png` });
   await W1.click('#rematch'); await W2.click('#rematch');
   await W1.waitForFunction(() => window.__wr.room.round === 1 && window.__wr.room.status === 'playing' && window.__wr.room.turn === 1, null, { timeout: 8000 });

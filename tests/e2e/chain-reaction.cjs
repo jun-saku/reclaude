@@ -5,6 +5,9 @@ module.exports = async ({ page, ok, statusIs, BASE, out }) => {
   const CR1 = await page(CR); await CR1.click('#create'); await CR1.waitForSelector('#waiting:not([hidden])', { timeout: 15000 });
   const crcode = (await CR1.textContent('#waiting-code')).trim();
   const CR2 = await page(CR + '&room=' + crcode);
+  // By a shared link with no name yet: the code's filled in and it asks for a name; then Join.
+  ok(await CR2.inputValue('#join-code') !== '' && /Pick a name/.test(await CR2.textContent('#home-error')), 'a link opened with no name asks for one first');
+  await CR2.fill('#my-name', 'Bo'); await CR2.click('#join');
   await CR1.waitForSelector('#board:not([hidden])', { timeout: 15000 }); await CR2.waitForSelector('#board:not([hidden])', { timeout: 15000 });
   ok(true, `chain reaction: room ${crcode} starts when the second player joins`);
   ok(await CR1.evaluate(() => { const s = window.__cr.play('01' + '--'.repeat(52) + '11', 0, 0); return s.length === 2 && s[1].startsWith('--') && s[1].slice(2, 4) === '01' && s[1].slice(12, 14) === '01'; }),
@@ -32,11 +35,11 @@ module.exports = async ({ page, ok, statusIs, BASE, out }) => {
   await CR2.waitForFunction(() => !window.__cr.animating, null, { timeout: 30000 });
   ok(await CR2.evaluate(() => { const b = window.__cr.room.board; return [...document.querySelectorAll('.cell')].every((el, i) => el.querySelectorAll('.orb').length === Math.min(3, b[2 * i] === '-' ? 0 : Number(b[2 * i + 1]))); }),
     'the other phone plays the bursts out and ends on the same board');
-  ok(await statusIs([CR1, CR2][crr.winner], 'You win! 🎉') && await statusIs([CR1, CR2][1 - crr.winner], `P${crr.winner + 1} wins`), 'both players are told who won');
+  ok(await statusIs([CR1, CR2][crr.winner], 'You win! 🎉') && await statusIs([CR1, CR2][1 - crr.winner], `${crr.winner === 1 ? "Bo" : "P1"} wins`), 'both players are told who won');
   await CR2.screenshot({ path: `${out}/e2e-cr.png` });
   await CR1.click('#rematch'); await CR2.click('#rematch');
   await CR1.waitForFunction(() => window.__cr.room.round === 1 && window.__cr.room.status === 'playing' && window.__cr.room.turn === 1, null, { timeout: 8000 });
   ok(true, 'play again starts a new game once both tapped, and the other player goes first');
   CR2.once('dialog', (d) => d.accept()); await CR2.click('#leave'); await CR2.waitForSelector('#home:not([hidden])', { timeout: 8000 });
-  ok(await statusIs(CR1, 'P2 left. You win! 🎉'), 'leaving mid-game forfeits to the other player');
+  ok(await statusIs(CR1, 'Bo left. You win! 🎉'), 'leaving mid-game forfeits to the other player');
 };
