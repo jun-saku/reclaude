@@ -397,7 +397,7 @@
         else if (myTurn() && !moved[r.turn]) hint = "Tap any empty cell to start.";
         else if (myTurn()) hint = "Tap an empty cell or one of yours.";
         const left = rooms.turnLeft(r);
-        if (left !== null) status += ` <span class="clock${left <= 5 ? " low" : ""}">${left ? `0:${String(left).padStart(2, "0")}` : "time's up"}</span>`;
+        status += rooms.timeBar(left, r.turnSecs, 5);
       } else if (typeof r.left === "number") {
         status = r.left === mine ? "You left this game" : `${label(r.left)} left. ${r.winner === "draw" ? "Game over" : r.winner === mine ? "You win! 🎉" : `${label(r.winner)} wins`}`;
       } else if (local()) status = `${COLOURS[r.winner]} wins! 🎉`;
@@ -489,7 +489,9 @@
     });
 
     // Opening a shared link (?room=CODE) joins straight away.
-    // The waiting room lets players set their name (someone who came by a link hasn't had the chance).
+    // The waiting room: a QR code of its link (for friends in the same place), and a name field (someone who came by
+    // a link hasn't had the chance to set one).
+    rooms.lobbyQR(document.getElementById("seated"), () => seat);
     rooms.lobbyName(document.getElementById("seated"), () => seat);
     const linked = rooms.roomFromUrl();
     // A full room starts at once (no waiting room), so someone new to the game picks a name before joining.

@@ -101,6 +101,15 @@ export function nameOf(room, seat) {
   return room?.names?.[seatKey(seat)] || `P${seat + 1}`;
 }
 // Seconds left on the current turn, or null when the room has no timer or no game is on.
+// A turn timer as a bar that empties as the seconds go (red for the last `low` of them), or "time's up": HTML for the
+// line above the board. It runs smoothly on its own between the page's once-a-second redraws.
+export function timeBar(left, total, low = 10) {
+  if (left === null || !total) return "";
+  if (left <= 0) return ` <span class="clock low">time's up</span>`;
+  const from = Math.max(0, Math.min(1, left / total));
+  return `<span class="timebar${left <= low ? " low" : ""}" role="timer" aria-label="${left} seconds left"><i style="--from: ${from.toFixed(3)}; animation-duration: ${left}s"></i></span>`;
+}
+
 export function turnLeft(room, now = Date.now()) {
   if (!room?.turnSecs || room.status !== "playing" || typeof room.turnAt !== "number") return null;
   return Math.max(0, Math.ceil((room.turnAt + room.turnSecs * 1000 - now) / 1000));
@@ -420,6 +429,34 @@ export async function setMyName(raw, inRoom = null) {
   if (inRoom && !inRoom.backend.local && name) await inRoom.backend.update(inRoom.code, { [`names/${seatKey(inRoom.seat)}`]: name });
   return name;
 }
+// The waiting room's QR code of the room's link, put before the list of who's here (`before`): friends in the same
+// place scan the host's screen instead of being sent the link. seatOf() → the page's current { backend, code, seat };
+// the code drawn follows it (checked twice a second, while the waiting room shows).
+export function lobbyQR(before, seatOf) {
+  if (!before || before.parentNode.querySelector(".lobby-qr")) return;
+  const box = document.createElement("div");
+  box.className = "lobby-qr";
+  box.hidden = true;
+  before.before(box);
+  let drawn = "";
+  const draw = async () => {
+    const code = seatOf()?.code;
+    if (!code || code === drawn || !before.offsetParent) return;
+    drawn = code;
+    const { qrcode } = await import("../shared/qrcode.js");
+    const qr = qrcode(0, "M");
+    qr.addData(shareUrl(code));
+    qr.make();
+    const n = qr.getModuleCount();
+    let d = "";
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (qr.isDark(y, x)) d += `M${x + 2} ${y + 2}h1v1h-1z`;
+    box.innerHTML = `<svg viewBox="0 0 ${n + 4} ${n + 4}" role="img" aria-label="QR code: scan to join room ${code}"><rect width="100%" height="100%" fill="#fff"/><path d="${d}" fill="#111"/></svg><span class="muted">Or scan to join</span>`;
+    box.hidden = false;
+  };
+  draw();
+  setInterval(draw, 500);
+}
+
 // The waiting room's "Your name" field: put before the list of who's here (`before`), it renames this player for
 // everyone as they type. Someone who came by a shared link without a name yet starts there. seatOf() → the page's
 // current { backend, code, seat }.
@@ -432,7 +469,7 @@ export function lobbyName(before, seatOf) {
   input.value = myName();
   let timer = 0;
   const save = () => {
-    clearTimeout(timer);
+    clearTimeout(timer); timer = 0;
     const s = seatOf(), name = cleanRoomName(input.value);
     if (!s || !name) return;
     setMyName(name, s).catch(() => {});
@@ -441,6 +478,9 @@ export function lobbyName(before, seatOf) {
     if (home && home !== input) home.value = name;
   };
   input.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(save, 600); });
+  // The name may have been set since the page opened (on the home screen, before creating the room): follow it,
+  // except while the player is typing here.
+  setInterval(() => { if (document.activeElement !== input && !timer && input.value !== myName()) input.value = myName(); }, 500);
   input.addEventListener("change", save);
   input.addEventListener("keydown", (e) => { if (e.key === "Enter") input.blur(); });
   before.before(row);

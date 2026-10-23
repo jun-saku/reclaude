@@ -103,6 +103,8 @@ input, select { font: inherit; touch-action: manipulation; }
 .seg button[aria-pressed="true"] { background: var(--panel); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
 
 /* Lobby */
+.lobby-qr { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 0.9rem; }
+.lobby-qr svg { width: 148px; height: 148px; border-radius: 10px; border: 1px solid var(--line); }
 .bigcode { font-size: 2.6rem; font-weight: 800; letter-spacing: 0.25em; text-align: center; margin: 0; }
 .seated { display: flex; flex-direction: column; gap: 6px; }
 .seated div { display: flex; align-items: center; gap: 8px; }
@@ -123,5 +125,11 @@ input, select { font: inherit; touch-action: manipulation; }
 .code b { font-size: 1.05rem; letter-spacing: 0.15em; color: var(--text); }
 .clock { font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 600; }
 .clock.low { color: var(--danger); }
+/* rooms.timeBar(): the turn timer, a bar under the status line that empties as the seconds go */
+.timebar { display: block; height: 6px; max-width: 240px; margin: 6px auto 0; border-radius: 3px; background: var(--soft); overflow: hidden; }
+.timebar i { display: block; height: 100%; width: calc(var(--from) * 100%); background: var(--accent); animation: timebar linear forwards; }
+.timebar.low i { background: var(--danger); }
+@keyframes timebar { to { width: 0; } }
+@media (prefers-reduced-motion: reduce) { .timebar i { animation: none; } }
 .status { text-align: center; font-size: 1.15rem; font-weight: 700; min-height: 1.5em; margin: 0; }
 .hint { text-align: center; font-size: 0.9rem; color: var(--muted); min-height: 1.3em; margin: 0; }

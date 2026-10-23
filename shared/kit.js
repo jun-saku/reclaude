@@ -498,8 +498,9 @@ export function start(game, ui = {}) {
     try { await navigator.clipboard.writeText(seat.code); $("copy").textContent = "Copied"; } catch { prompt("Room code:", seat.code); }
     setTimeout(() => ($("copy").textContent = "Copy code"), 1500);
   });
-  // The waiting room lets players set their name (someone who came by a link hasn't had the chance).
-  if (online) rooms.lobbyName($("seated"), () => seat);
+  // The waiting room: a QR code of its link (for friends in the same place), and a name field (someone who came by
+  // a link hasn't had the chance to set one).
+  if (online) { rooms.lobbyQR($("seated"), () => seat); rooms.lobbyName($("seated"), () => seat); }
   // Opening a shared link (?room=CODE) joins straight away.
   const linked = online && rooms.roomFromUrl();
   if (linked) { $("join-code").value = linked.toUpperCase(); joinRoom(linked); }
