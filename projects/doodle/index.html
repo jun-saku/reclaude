@@ -321,6 +321,7 @@
       kit,
       get paper() { return paper; },
       draw(points) { // the drawer draws a stroke through these grid points, as a finger would
+        lastInfo = kit.info || lastInfo;
         if (!myTurnToDraw()) return false;
         pen = { pointer: -1, s: { id: nextId++, c: colour, w: size, pts: [] } };
         paper.strokes.push(pen.s);
