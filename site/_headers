@@ -7,3 +7,7 @@
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+
+# The service worker is checked for updates on every visit, so a new site reaches installed apps straight away.
+/sw.js
+  Cache-Control: no-cache

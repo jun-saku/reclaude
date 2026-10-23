@@ -16,7 +16,10 @@ The user usually works from their phone, so keep replies short and end with the 
 - `projects/<name>/`: one project. `index.html` is required; add any other files it needs
   (images, sounds, extra scripts) next to it.
 - `projects/_template/`: starting point for new projects.
-- `site/`: files copied to the site root (`404.html`, and `games/`: the landing page).
+- `site/`: files copied to the site root (`404.html`, and `games/`: the landing page), and what makes the site an
+  installable app: `manifest.webmanifest`, `icons/` and `sw.js` (the service worker: pages from the network first,
+  so always the newest site, and from its copy when offline; versioned shared files kept; other sites never
+  touched). The build adds the manifest, icons and the worker's registration to every page in a folder.
 - `shared/`: code used by several projects, published at `/shared/` and imported as `../shared/<file>`.
   `shared/rooms.js` is the multiplayer room system: 2–10 seats, teams, auto-start or a host-started lobby, codes, share
   links, presence, player names (`myName`/`setMyName`/`nameOf`, remembered per device), an optional turn timer
