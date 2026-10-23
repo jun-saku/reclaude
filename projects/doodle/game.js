@@ -12,6 +12,8 @@ export const SIZES = [3, 8, 18];       // pen widths in grid units
 const MAX_POINTS = 60;                 // per piece of a stroke
 const MAX_ITEMS = 3000;                // per drawing
 const MAX_CHAT = 30;
+export const REACTIONS = ["😂", "👏", "🤯", "😍", "🙈"];
+const REACT_GAP = 0.6, REACT_SHOW = 3;  // seconds between one player's reactions; how long they're sent for
 
 const norm = (t) => String(t).toLowerCase().replace(/[^a-z ]/g, "").replace(/\s+/g, " ").trim();
 // One letter off (missing, extra or wrong): "close!".
@@ -41,6 +43,7 @@ export function newGame(players, rand = Math.random) {
     order: [], here: {}, drawn: {}, scores: {},
     phase: "wait", drawer: null, choices: [], word: "", left: 0, turnNo: 0,
     guessed: {}, gained: {}, shown: [], items: [], lastStroke: -1, chat: [], chatNo: 0, over: null,
+    clock: 0, reacts: [], reactNo: 0, reactedAt: {},
   };
 }
 
@@ -95,6 +98,8 @@ function finish(g) {
 }
 
 export function tick(g, dt) {
+  g.clock += dt;
+  if (g.reacts.length && g.clock - g.reacts[0].at > REACT_SHOW) g.reacts = g.reacts.filter((r) => g.clock - r.at <= REACT_SHOW);
   if (g.over || g.phase === "wait") return;
   g.left -= dt;
   if (g.phase === "draw") {
@@ -136,6 +141,14 @@ export function input(g, seat, m) {
     g.items.push([m.t === "undo" ? "u" : "c"]);
     return true;
   }
+  if (m.t === "react") {
+    // An emoji everyone sees float up for a moment (at most one every REACT_GAP seconds each).
+    if (!isInt(m.e, 0, REACTIONS.length - 1) || !g.here[seat] || g.clock - (g.reactedAt[seat] ?? -1e9) < REACT_GAP) return false;
+    g.reactedAt[seat] = g.clock;
+    g.reacts.push({ n: g.reactNo++, s: seat, e: m.e, at: g.clock });
+    if (g.reacts.length > 20) g.reacts.shift();
+    return true;
+  }
   if (m.t === "guess") {
     const text = typeof m.text === "string" ? m.text.slice(0, 40).replace(/[<>&]/g, "").trim() : "";
     if (!text || seat === g.drawer || seat in g.guessed || !g.here[seat]) return false;
@@ -165,6 +178,7 @@ export function view(g, seat) {
     word: knows ? g.word : "", mask: g.phase === "draw" && !knows ? mask : "",
     scores: g.scores, guessed: Object.keys(g.guessed).map(Number), gained: g.phase === "reveal" ? g.gained : {},
     chat: g.chat.filter((c) => !c.close || c.s === seat).slice(-10),
+    reacts: g.reacts.map(({ n, s, e }) => ({ n, s, e })),
   };
 }
 
@@ -178,7 +192,7 @@ export default {
   feed: (g) => ({ id: g.turnNo, items: g.items }),
   result: (g) => g.over,
   save: (g) => { const { rand, ...rest } = g; return rest; },
-  load: (saved) => ({ ...saved, rand: Math.random }),
+  load: (saved) => ({ clock: 0, reacts: [], reactNo: 0, reactedAt: {}, ...saved, rand: Math.random }),
   timeUp(g) { if (!g.over) finish(g); },
   // Shortcuts for the tests (the local test server only takes them): "skip" ends the current phase now.
   dev(g, what) { if (what === "skip" && !g.over && g.phase !== "wait") { g.left = 0; tick(g, 0); } },

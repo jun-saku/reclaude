@@ -62,6 +62,10 @@ module.exports = async ({ page, ok, BASE, out }) => {
   ok(await wait(G2, () => window.__doodle.paper.strokes.length === 3), 'Undo takes the last stroke away for everyone');
   await D.screenshot({ path: `${out}/doodle-drawer.png` }); await G1.screenshot({ path: `${out}/doodle-guesser.png` });
 
+  // A reaction floats up on everyone's paper, with who sent it.
+  await G1.click('[data-react="0"]');
+  ok(await wait(D, () => /😂/.test(document.getElementById('d-floats').textContent)) && await wait(G2, () => document.getElementById('d-floats').children.length > 0), 'a reaction floats up for everyone');
+  ok(await D.isHidden('#d-reacts'), 'the drawer, busy drawing, gets the tools instead of the reaction buttons');
   // Guesses: a wrong one everyone sees, a close one only its guesser sees, then a right one.
   await G1.fill('#d-guess', 'definitely not it'); await G1.press('#d-guess', 'Enter');
   ok(await wait(G2, () => /definitely not it/.test(document.getElementById('d-chat').textContent)), 'a wrong guess shows in everyone\'s chat');
@@ -81,6 +85,8 @@ module.exports = async ({ page, ok, BASE, out }) => {
   ok(await wait(D, () => window.__kit.info.view.phase === 'reveal'), 'once everyone has it, the turn ends');
   ok(await wait(G2, (w) => document.getElementById('d-cover').textContent.includes(w), word), 'and everyone sees the word');
   ok((await view(D)).scores[drawerSeat] === 100, 'the drawer scores for each player who got it');
+  ok(await G1.evaluate(() => document.querySelectorAll('#d-cover .board tr').length) === 3 && /\+/.test(await G1.textContent('#d-cover .board')), 'the end of the turn shows everyone\'s points, with what the turn added');
+  await G1.screenshot({ path: `${out}/doodle-reveal.png` });
 
   // The pen moves on to someone else, with a fresh page.
   await H.evaluate(() => window.__kit.dev('skip'));

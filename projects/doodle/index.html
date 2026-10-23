@@ -26,7 +26,21 @@
     .cover h2 { font-size: 1.2rem; }
     .cover .choices { display: flex; flex-direction: column; gap: 8px; width: min(100%, 260px); }
     .cover .choices button { font-size: 1.1rem; }
-    .cover .gains { display: flex; flex-direction: column; gap: 2px; font-size: 0.95rem; }
+    .cover .board { width: min(100%, 280px); border-collapse: collapse; font-size: 0.95rem; }
+    .cover .board td { padding: 3px 6px; text-align: left; }
+    .cover .board td.n { text-align: right; font-variant-numeric: tabular-nums; }
+    .cover .board .plus { color: #1f7a47; font-weight: 700; }
+    .cover .board tr.me td { font-weight: 700; }
+    /* Reactions: a row of emoji, and the ones people send floating up over the paper. */
+    .reacts { display: flex; justify-content: center; gap: 6px; }
+    .reacts button { flex: 1; max-width: 64px; padding: 6px 0; font-size: 1.35rem; background: var(--soft); }
+    .floats { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+    .floats span { position: absolute; bottom: 4%; font-size: 2rem; animation: float-up 1.8s ease-out forwards; }
+    .floats small { display: block; font-size: 0.65rem; font-weight: 700; text-align: center; color: #1d1d1f; }
+    @keyframes float-up { from { transform: translateY(0) scale(0.6); opacity: 0; } 15% { opacity: 1; transform: translateY(-10%) scale(1); } to { transform: translateY(-260%); opacity: 0; } }
+    @media (prefers-reduced-motion: reduce) { .floats span { animation-duration: 1.2s; animation-name: fade; } @keyframes fade { to { opacity: 0; } } }
+    /* Small phones: the chat shows only its newest 3 lines, so the paper and controls fit. */
+    @media (max-height: 760px) { .chat li:nth-child(n + 4) { display: none; } .chat { min-height: 0; } }
     .cover .reveal { font-size: 1.6rem; font-weight: 800; letter-spacing: 0.04em; }
     .tools { display: flex; flex-direction: column; gap: 8px; }
     .swatches { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; }
@@ -54,7 +68,7 @@
   </main>
   <script type="module">
     import { start, rooms } from "../shared/kit.js";
-    import game, { GRID, COLOURS, SIZES, PICK_S, DRAW_S } from "./game.js";
+    import game, { GRID, COLOURS, SIZES, PICK_S, DRAW_S, REACTIONS } from "./game.js";
 
     // Doodle Guess on the game kit: the kit runs the rooms and the game server runs the rules (game.js); this page
     // draws the paper from the game's feed, lets the drawer draw, and everyone else guess.
@@ -68,7 +82,7 @@
     let paper = { id: null, strokes: [], items: 0 };
     let queue = [];            // others' points still to draw: [{ stroke, from, to }]
     let pen = null, unsent = [], lastSend = 0, nextId = 0;
-    let lastInfo = null, chatKey = "", coverKey = "", barKey = "";
+    let lastInfo = null, chatKey = "", coverKey = "", barKey = "", seenReact = -1;
 
     // ---------- the paper ----------
     function resize() {
@@ -207,17 +221,36 @@
       else if (v.phase === "pick" && drawer === me) cover = `<h2>Pick a word to draw</h2><div class="choices">${v.choices.map((w, i) => `<button data-pick="${i}">${esc(w)}</button>`).join("")}</div>`;
       else if (v.phase === "pick") cover = `<h2>${info.name(drawer)} is picking a word…</h2>`;
       else if (v.phase === "reveal") {
-        key += JSON.stringify(v.gained);
-        const gains = Object.entries(v.gained).sort((a, b) => b[1] - a[1]).map(([s, n]) => `<span>${info.name(Number(s))} +${n}</span>`).join("");
-        cover = `<p class="muted">The word was</p><p class="reveal">${esc(v.word)}</p><div class="gains">${gains || "<span>Nobody got it.</span>"}</div>`;
+        key += JSON.stringify(v.gained) + JSON.stringify(v.scores);
+        // Everyone's points so far, with what this turn added.
+        const rows = Object.entries(v.scores).map(([s, n]) => [Number(s), n]).sort((a, b) => b[1] - a[1]).map(([s, n]) => {
+          const plus = v.gained[s] ? `<span class="plus">+${v.gained[s]}</span>` : "";
+          return `<tr${s === me ? ' class="me"' : ""}><td>${s === drawer ? "✏️ " : ""}${info.name(s)}</td><td class="n">${plus}</td><td class="n">${n}</td></tr>`;
+        }).join("");
+        const nobody = Object.keys(v.gained).length ? "" : `<p class="muted">Nobody got it this time.</p>`;
+        cover = `<p class="muted">The word was</p><p class="reveal">${esc(v.word)}</p>${nobody}<table class="board">${rows}</table>`;
       }
       if (key !== coverKey) { coverKey = key; els.cover.innerHTML = cover; els.cover.hidden = !cover; }
       // Tools for the drawer; the guess box for everyone else.
       const drawing = v.phase === "draw" && drawer === me;
       els.tools.hidden = !drawing;
+      els.reacts.hidden = drawing || !!info.over || v.phase === "wait";
+      // Reactions: each new one floats up over the paper, with who sent it.
+      const reacts = v.reacts || [];
+      if (reacts.length && Math.max(...reacts.map((r) => r.n)) < seenReact) seenReact = -1; // a new game numbers them afresh
+      for (const r of reacts) {
+        if (r.n <= seenReact) continue;
+        seenReact = r.n;
+        const f = document.createElement("span");
+        f.style.left = `${8 + Math.random() * 76}%`;
+        f.innerHTML = `${REACTIONS[r.e] || ""}<small>${r.s === me ? "You" : info.name(r.s)}</small>`;
+        f.addEventListener("animationend", () => f.remove());
+        els.floats.append(f);
+      }
       const got = v.guessed.includes(me);
       els.guessForm.hidden = drawing || drawer === me || info.over;
       els.guess.disabled = got;
+      els.guessForm.querySelector("button").disabled = got;
       els.guess.placeholder = got ? "You got it!" : v.phase === "draw" ? "Type your guess" : "Say something";
       // Chat
       const k = JSON.stringify(v.chat);
@@ -240,6 +273,7 @@
         <div class="paper" id="d-wrap" data-small-ok>
           <canvas id="paper" aria-label="Drawing"></canvas>
           <div class="cover" id="d-cover" hidden></div>
+          <div class="floats" id="d-floats" aria-hidden="true"></div>
         </div>
         <div class="tools" id="d-tools" hidden>
           <div class="swatches" data-small-ok>${COLOURS.map((c, i) => `<button style="background:${c}" data-colour="${i}" aria-label="Colour ${i + 1}" aria-pressed="${i === colour}"></button>`).join("")}</div>
@@ -249,16 +283,18 @@
             <button class="secondary" id="d-clear">Clear</button>
           </div>
         </div>
+        <div class="reacts" id="d-reacts">${REACTIONS.map((e, i) => `<button class="secondary" data-react="${i}" aria-label="React ${e}">${e}</button>`).join("")}</div>
         <form class="guess" id="d-guess-form" autocomplete="off">
           <input id="d-guess" maxlength="40" enterkeyhint="send" aria-label="Your guess" placeholder="Type your guess">
           <button type="submit">Send</button>
         </form>
         <ul class="chat" id="d-chat" aria-live="polite"></ul>`;
       const $ = (id) => stage.querySelector(`#${id}`);
-      els = { canvas: $("paper"), wrap: $("d-wrap"), cover: $("d-cover"), tools: $("d-tools"), turn: $("d-turn"), word: $("d-word"), bar: $("d-bar"),
+      els = { canvas: $("paper"), wrap: $("d-wrap"), cover: $("d-cover"), tools: $("d-tools"), turn: $("d-turn"), word: $("d-word"), bar: $("d-bar"), floats: $("d-floats"), reacts: $("d-reacts"),
         guessForm: $("d-guess-form"), guess: $("d-guess"), chat: $("d-chat") };
       ctx = els.canvas.getContext("2d");
-      paper = { id: null, strokes: [], items: 0 }; queue = []; pen = null; unsent = []; chatKey = coverKey = barKey = "";
+      paper = { id: null, strokes: [], items: 0 }; queue = []; pen = null; unsent = []; chatKey = coverKey = barKey = ""; seenReact = -1;
+      els.reacts.addEventListener("click", (e) => { const b = e.target.closest("[data-react]"); if (b) lastInfo?.act({ t: "react", e: Number(b.dataset.react) }); });
       new ResizeObserver(resize).observe(els.canvas);
       els.canvas.addEventListener("pointerdown", penDown);
       els.canvas.addEventListener("pointermove", penMove);
