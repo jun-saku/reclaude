@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#161618" media="(prefers-color-scheme: dark)">
+  <title>Doodle Guess</title>
+  <meta name="description" content="Take turns drawing a secret word while everyone else races to guess it. 2–10 players online.">
+  <link rel="stylesheet" href="../shared/base.css">
+  <link rel="stylesheet" href="../shared/kit.css">
+  <style>
+    .hud { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
+    .hud .turn, .hud .clock { font-size: 0.9rem; font-weight: 600; color: var(--muted); white-space: nowrap; min-width: 4.5em; }
+    .hud .clock { text-align: right; }
+    .hud .clock.low { color: var(--danger); }
+    .word { flex: 1; text-align: center; font-weight: 800; font-size: 1.25rem; letter-spacing: 0.12em; white-space: pre; overflow: hidden; text-overflow: ellipsis; }
+    .word small { font-size: 0.75rem; font-weight: 600; letter-spacing: 0; color: var(--muted); }
+    .paper { position: relative; width: 100%; aspect-ratio: 1; border-radius: 12px; border: 1px solid var(--line); background: #fff; overflow: hidden; }
+    #paper { display: block; width: 100%; height: 100%; touch-action: none; }
+    .paper.mine #paper { cursor: crosshair; }
+    .cover {
+      position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+      padding: 16px; text-align: center; background: rgba(247, 246, 243, 0.94); color: #1d1d1f;
+    }
+    .cover h2 { font-size: 1.2rem; }
+    .cover .choices { display: flex; flex-direction: column; gap: 8px; width: min(100%, 260px); }
+    .cover .choices button { font-size: 1.1rem; }
+    .cover .gains { display: flex; flex-direction: column; gap: 2px; font-size: 0.95rem; }
+    .cover .reveal { font-size: 1.6rem; font-weight: 800; letter-spacing: 0.04em; }
+    .tools { display: flex; flex-direction: column; gap: 8px; }
+    .swatches { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; }
+    .swatches button { min-height: 36px; padding: 0; border-radius: 8px; border: 2px solid var(--line); }
+    .swatches button[aria-pressed="true"] { outline: 3px solid var(--accent); outline-offset: 1px; }
+    .pens { display: flex; gap: 6px; }
+    .pens button { flex: 1; padding: 8px 4px; }
+    .pens .size { display: inline-block; border-radius: 50%; background: currentColor; vertical-align: middle; }
+    .pens button[aria-pressed="true"] { outline: 3px solid var(--accent); outline-offset: -3px; }
+    .guess { display: flex; gap: 8px; }
+    .guess input { flex: 1; min-width: 0; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--text); }
+    .chat { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; font-size: 0.95rem; min-height: 5em; }
+    .chat li { overflow-wrap: anywhere; }
+    .chat b { font-weight: 650; }
+    .chat .ok { color: var(--good); font-weight: 650; }
+    .chat .close { color: var(--accent); }
+    .chat .sys { color: var(--muted); }
+    .score { font-variant-numeric: tabular-nums; color: var(--muted); }
+    #status:empty { display: none; }
+  </style>
+</head>
+<body>
+  <main>
+    <a class="home-link" href="../games/">‹ All games</a>
+  </main>
+  <script type="module">
+    import { start } from "../shared/kit.js";
+    import game, { GRID, COLOURS, SIZES } from "./game.js";
+
+    // Doodle Guess on the game kit: the kit runs the rooms and the game server runs the rules (game.js); this page
+    // draws the paper from the game's feed, lets the drawer draw, and everyone else guess.
+    const SEND_MS = 60;        // the drawer's strokes go out about 16 times a second
+    const REPLAY_MS = 100;     // others' strokes arrive about every 100 ms; each piece is drawn out over that long
+
+    const esc = (t) => String(t).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+    let els = {}, ctx = null, scale = 1;
+    let colour = 0, size = 1;
+    // The drawing: strokes [{ id, c, w, pts: [x, y, …] }] from the feed (or, for the drawer, from their own pen).
+    let paper = { id: null, strokes: [], items: 0 };
+    let queue = [];            // others' points still to draw: [{ stroke, from, to }]
+    let pen = null, unsent = [], lastSend = 0, nextId = 0;
+    let lastInfo = null, chatKey = "", coverKey = "";
+
+    // ---------- the paper ----------
+    function resize() {
+      const r = els.canvas.getBoundingClientRect();
+      const size = Math.max(1, Math.round(r.width * Math.min(devicePixelRatio || 1, 3)));
+      if (els.canvas.width !== size) { els.canvas.width = els.canvas.height = size; redraw(); }
+    }
+    function segment(s, i) {
+      // Points i-1 → i of stroke s (a dot when i is its first point).
+      const p = s.pts, k = scale;
+      ctx.strokeStyle = ctx.fillStyle = COLOURS[s.c];
+      ctx.lineWidth = SIZES[s.w] * k;
+      if (i === 0) { ctx.beginPath(); ctx.arc(p[0] * k, p[1] * k, SIZES[s.w] * k / 2, 0, 7); ctx.fill(); return; }
+      ctx.beginPath(); ctx.moveTo(p[i * 2 - 2] * k, p[i * 2 - 1] * k); ctx.lineTo(p[i * 2] * k, p[i * 2 + 1] * k); ctx.stroke();
+    }
+    function redraw() {
+      if (!ctx) return;
+      scale = els.canvas.width / GRID;
+      ctx.lineCap = ctx.lineJoin = "round";
+      ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, els.canvas.width, els.canvas.height);
+      queue = [];
+      for (const s of paper.strokes) for (let i = 0; i < s.pts.length / 2; i++) segment(s, i);
+    }
+    // Feed items onto the strokes: [id, c, w, x, y, …] a piece of a stroke, ["u"] undo, ["c"] clear.
+    // Returns true if the whole paper needs drawing again.
+    function apply(item, live) {
+      if (item[0] === "c") { paper.strokes = []; return true; }
+      if (item[0] === "u") { paper.strokes.pop(); return true; }
+      const [id, c, w, ...pts] = item;
+      let s = paper.strokes.at(-1);
+      if (!s || s.id !== id) { s = { id, c, w, pts: [] }; paper.strokes.push(s); }
+      const from = s.pts.length / 2;
+      s.pts.push(...pts);
+      if (live) queue.push({ s, from, to: s.pts.length / 2 });
+      return false;
+    }
+    // Everyone but the drawer: follow the feed. New pieces are drawn out over REPLAY_MS, so lines flow as drawn.
+    function follow(feed, dt) {
+      if (!feed) return;
+      if (feed.id !== paper.id) { paper = { id: feed.id, strokes: [], items: 0 }; redraw(); }
+      let again = false;
+      for (; paper.items < feed.items.length; paper.items++) again = apply(feed.items[paper.items], true) || again;
+      if (again) return redraw();
+      // Draw the queue at a pace that empties it in about REPLAY_MS.
+      const total = queue.reduce((n, q) => n + q.to - q.from, 0);
+      let budget = Math.max(1, Math.ceil(total * dt * 1000 / REPLAY_MS));
+      ctx.lineCap = ctx.lineJoin = "round";
+      while (budget > 0 && queue.length) {
+        const q = queue[0];
+        segment(q.s, q.from++); budget--;
+        if (q.from >= q.to) queue.shift();
+      }
+      if (total > 200) { while (queue.length) { const q = queue.shift(); for (let i = q.from; i < q.to; i++) segment(q.s, i); } } // far behind: catch up
+    }
+
+    // ---------- the drawer's pen ----------
+    const gridPoint = (e) => {
+      const r = els.canvas.getBoundingClientRect();
+      const x = Math.round(((e.clientX - r.left) / r.width) * GRID), y = Math.round(((e.clientY - r.top) / r.height) * GRID);
+      return [Math.max(0, Math.min(GRID - 1, x)), Math.max(0, Math.min(GRID - 1, y))];
+    };
+    const myTurnToDraw = () => lastInfo?.view?.phase === "draw" && lastInfo.view.drawer === lastInfo.me;
+    function penDown(e) {
+      if (!myTurnToDraw()) return;
+      els.canvas.setPointerCapture(e.pointerId);
+      pen = { pointer: e.pointerId, s: { id: nextId++, c: colour, w: size, pts: [] } };
+      paper.strokes.push(pen.s);
+      addPoint(gridPoint(e));
+      e.preventDefault();
+    }
+    function addPoint([x, y]) {
+      const p = pen.s.pts;
+      if (p.length && p.at(-2) === x && p.at(-1) === y) return;
+      p.push(x, y);
+      unsent.push(x, y);
+      ctx.lineCap = ctx.lineJoin = "round";
+      segment(pen.s, p.length / 2 - 1);
+      if (unsent.length >= 100) flush();
+    }
+    function penMove(e) {
+      if (!pen || e.pointerId !== pen.pointer) return;
+      for (const ev of e.getCoalescedEvents?.() || [e]) addPoint(gridPoint(ev));
+    }
+    function penUp(e) { if (pen && e.pointerId === pen.pointer) { flush(); pen = null; } }
+    // Send what's been drawn since the last piece; a stroke's pieces after the first start from its previous point, so
+    // the line joins up.
+    function flush() {
+      if (!pen || !unsent.length) return;
+      const s = pen.s, n = unsent.length / 2, all = s.pts.length / 2;
+      const p = all > n ? [s.pts[(all - n - 1) * 2], s.pts[(all - n - 1) * 2 + 1], ...unsent] : unsent;
+      // At most 60 points a piece; each further piece starts again from the last point of the one before.
+      for (let from = 0; ; from -= 2) {
+        const to = Math.min(p.length, from + 120);
+        lastInfo.act({ t: "line", id: s.id, c: s.c, w: s.w, p: p.slice(from, to) });
+        if (to === p.length) break;
+        from = to;
+      }
+      unsent = []; lastSend = performance.now();
+    }
+
+    // ---------- every frame ----------
+    function frame(info) {
+      lastInfo = info;
+      const v = info.view;
+      if (!v || !ctx) return;
+      resize();
+      const drawing = myTurnToDraw();
+      els.wrap.classList.toggle("mine", drawing);
+      // The drawer draws from their own pen; after a reload mid-turn, they pick up the drawing from the feed.
+      if (drawing && paper.id === info.feed?.id) {
+        if (pen && performance.now() - lastSend > SEND_MS) flush();
+        paper.items = info.feed.items.length;
+      } else {
+        if (drawing && info.feed) {
+          paper = { id: info.feed.id, strokes: [], items: 0 };
+          for (const it of info.feed.items) { apply(it, false); if (typeof it[0] === "number") nextId = Math.max(nextId, it[0] + 1); }
+          paper.items = info.feed.items.length;
+          redraw();
+        }
+        else follow(info.feed, info.dt);
+        if (!drawing) pen = null;
+      }
+      hud(info);
+    }
+
+    function hud(info) {
+      const v = info.view, me = info.me, drawer = v.drawer;
+      const low = v.phase === "draw" && v.left <= 10;
+      els.turn.textContent = v.turn ? `${v.turn} / ${Math.max(v.turn, v.turns)}` : "";
+      els.clock.textContent = v.phase === "draw" || v.phase === "pick" ? `⏱ ${v.left}` : "";
+      els.clock.classList.toggle("low", low);
+      els.word.innerHTML = v.word ? esc(v.word.toUpperCase()) : v.mask ? `${esc(v.mask.split("").join(" "))} <small>(${v.mask.replace(/ /g, "").length})</small>` : "";
+      // The cover over the paper: waiting, picking a word, the end of a turn.
+      let cover = "", key = `${v.phase}|${drawer}|${v.turn}|${v.choices.join()}`;
+      if (v.phase === "wait") cover = `<h2>Waiting for another player…</h2>`;
+      else if (v.phase === "pick" && drawer === me) cover = `<h2>Pick a word to draw</h2><div class="choices">${v.choices.map((w, i) => `<button data-pick="${i}">${esc(w)}</button>`).join("")}</div>`;
+      else if (v.phase === "pick") cover = `<h2>${info.name(drawer)} is picking a word…</h2>`;
+      else if (v.phase === "reveal") {
+        key += JSON.stringify(v.gained);
+        const gains = Object.entries(v.gained).sort((a, b) => b[1] - a[1]).map(([s, n]) => `<span>${info.name(Number(s))} +${n}</span>`).join("");
+        cover = `<p class="muted">The word was</p><p class="reveal">${esc(v.word)}</p><div class="gains">${gains || "<span>Nobody got it.</span>"}</div>`;
+      }
+      if (key !== coverKey) { coverKey = key; els.cover.innerHTML = cover; els.cover.hidden = !cover; }
+      // Tools for the drawer; the guess box for everyone else.
+      const drawing = v.phase === "draw" && drawer === me;
+      els.tools.hidden = !drawing;
+      const got = v.guessed.includes(me);
+      els.guessForm.hidden = drawing || drawer === me || info.over;
+      els.guess.disabled = got;
+      els.guess.placeholder = got ? "You got it!" : v.phase === "draw" ? "Type your guess" : "Say something";
+      // Chat
+      const k = JSON.stringify(v.chat);
+      if (k !== chatKey) {
+        chatKey = k;
+        els.chat.innerHTML = v.chat.map((c) => {
+          const who = `<b>${info.name(c.s)}</b>`;
+          if (c.word) return `<li class="sys">The word was <b>${esc(c.word)}</b>.</li>`;
+          if (c.ok) return `<li class="ok">✓ ${info.name(c.s)} got it!</li>`;
+          return `<li${c.close ? ' class="close"' : ""}>${who}: ${esc(c.text)}${c.close ? " (close!)" : ""}</li>`;
+        }).reverse().join("");
+      }
+    }
+
+    // ---------- setup ----------
+    function setup(stage) {
+      stage.innerHTML = `
+        <div class="hud"><span class="turn" id="d-turn"></span><span class="word" id="d-word" aria-live="polite"></span><span class="clock" id="d-clock"></span></div>
+        <div class="paper" id="d-wrap" data-small-ok>
+          <canvas id="paper" aria-label="Drawing"></canvas>
+          <div class="cover" id="d-cover" hidden></div>
+        </div>
+        <div class="tools" id="d-tools" hidden>
+          <div class="swatches" data-small-ok>${COLOURS.map((c, i) => `<button style="background:${c}" data-colour="${i}" aria-label="Colour ${i + 1}" aria-pressed="${i === colour}"></button>`).join("")}</div>
+          <div class="pens">
+            ${SIZES.map((s, i) => `<button class="secondary" data-size="${i}" aria-label="${["Thin", "Medium", "Thick"][i]} pen" aria-pressed="${i === size}"><span class="size" style="width:${4 + i * 6}px;height:${4 + i * 6}px"></span></button>`).join("")}
+            <button class="secondary" id="d-undo">Undo</button>
+            <button class="secondary" id="d-clear">Clear</button>
+          </div>
+        </div>
+        <form class="guess" id="d-guess-form" autocomplete="off">
+          <input id="d-guess" maxlength="40" enterkeyhint="send" aria-label="Your guess" placeholder="Type your guess">
+          <button type="submit">Send</button>
+        </form>
+        <ul class="chat" id="d-chat" aria-live="polite"></ul>`;
+      const $ = (id) => stage.querySelector(`#${id}`);
+      els = { canvas: $("paper"), wrap: $("d-wrap"), cover: $("d-cover"), tools: $("d-tools"), turn: $("d-turn"), word: $("d-word"), clock: $("d-clock"),
+        guessForm: $("d-guess-form"), guess: $("d-guess"), chat: $("d-chat") };
+      ctx = els.canvas.getContext("2d");
+      paper = { id: null, strokes: [], items: 0 }; queue = []; pen = null; unsent = []; chatKey = coverKey = "";
+      new ResizeObserver(resize).observe(els.canvas);
+      els.canvas.addEventListener("pointerdown", penDown);
+      els.canvas.addEventListener("pointermove", penMove);
+      for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) els.canvas.addEventListener(ev, penUp);
+      els.canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+      els.cover.addEventListener("click", (e) => { const b = e.target.closest("[data-pick]"); if (b) lastInfo?.act({ t: "pick", i: Number(b.dataset.pick) }); });
+      stage.querySelector(".swatches").addEventListener("click", (e) => {
+        const b = e.target.closest("[data-colour]"); if (!b) return;
+        colour = Number(b.dataset.colour);
+        for (const o of stage.querySelectorAll("[data-colour]")) o.setAttribute("aria-pressed", String(o === b));
+      });
+      for (const b of stage.querySelectorAll("[data-size]")) b.addEventListener("click", () => {
+        size = Number(b.dataset.size);
+        for (const o of stage.querySelectorAll("[data-size]")) o.setAttribute("aria-pressed", String(o === b));
+      });
+      $("d-undo").addEventListener("click", () => { if (!myTurnToDraw() || !paper.strokes.length) return; flush(); pen = null; paper.strokes.pop(); lastInfo.act({ t: "undo" }); redraw(); });
+      $("d-clear").addEventListener("click", () => { if (!myTurnToDraw() || !paper.strokes.length) return; pen = null; unsent = []; paper.strokes = []; lastInfo.act({ t: "clear" }); redraw(); });
+      els.guessForm.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const text = els.guess.value.trim();
+        if (text && lastInfo?.act({ t: "guess", text })) els.guess.value = "";
+      });
+      resize();
+    }
+
+    const kit = start(game, {
+      title: "Doodle Guess",
+      logo: `<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1" y="1" width="14" height="14" rx="3" fill="#fff" stroke="#bbb"/><path d="M3.5 11.5c2-4 3.5-6 5-4.5s-1 4 1 4 2.5-3 3-5" fill="none" stroke="var(--p2)" stroke-width="1.6" stroke-linecap="round"/><path d="M10.5 2.5l3 3-5.5 5.5-3.3.4.4-3.3z" fill="var(--p0)"/></svg>`,
+      onlineText: "Create a room for 2–10 players and send the code or link. Take turns drawing; everyone else guesses.",
+      howTo: `<ul>
+        <li>Each turn one player draws and everyone else guesses. The pen goes round the room.</li>
+        <li>The drawer picks one of three words, then has 80 seconds. No letters or numbers in the drawing!</li>
+        <li>Type guesses in the box. The quicker you get it, the more points (up to 300); the drawer gets 50 for each player who gets it.</li>
+        <li>Nearly right? Only you see "close!". Letters show up as hints at half and a quarter time.</li>
+        <li>Up to 4 players draw twice each, more than 4 once. Most points wins.</li>
+      </ul>`,
+      setup,
+      frame,
+      status: (info) => {
+        const v = info.view;
+        if (!v || info.over) return undefined;
+        if (v.phase === "draw") return v.drawer === info.me ? "Your turn to draw" : `${info.name(v.drawer)} is drawing`;
+        if (v.phase === "pick") return v.drawer === info.me ? "Your turn to draw" : `${info.name(v.drawer)} is up next`;
+        if (v.phase === "reveal") return "Time's up";
+        return "";
+      },
+      chip: (s, info) => {
+        const v = info.view;
+        if (!v) return "";
+        return ` <span class="score">${v.drawer === s && !info.over ? "✏️ " : ""}${v.scores?.[s] ?? 0}</span>`;
+      },
+      resultText: (r, info) => {
+        const top = r.ranked.map((s, i) => `${i + 1}. ${info.name(s)} ${r.scores[s]}`).join(" · ");
+        const title = r.winner === "draw" ? "It's a draw!" : r.winner === info.me ? "You win! 🎉" : `${info.name(r.winner)} wins!`;
+        return { title, text: top };
+      },
+    });
+
+    // Hooks for automated tests (with window.__kit).
+    window.__doodle = {
+      kit,
+      get paper() { return paper; },
+      draw(points) { // the drawer draws a stroke through these grid points, as a finger would
+        lastInfo = kit.info || lastInfo;
+        if (!myTurnToDraw()) return false;
+        pen = { pointer: -1, s: { id: nextId++, c: colour, w: size, pts: [] } };
+        paper.strokes.push(pen.s);
+        for (let i = 0; i < points.length; i += 2) addPoint([points[i], points[i + 1]]);
+        flush(); pen = null;
+        return true;
+      },
+    };
+  </script>
+</body>
+</html>

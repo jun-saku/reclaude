@@ -13,5 +13,6 @@
 import probe from "./games/probe.js";
 import { kitGame } from "./kit.js";
 import tanks from "../../projects/tanks/game.js";
+import doodle from "../../projects/doodle/game.js";
 
-export const GAMES = { probe, tanks: kitGame(tanks) };
+export const GAMES = { probe, tanks: kitGame(tanks), doodle: kitGame(doodle) };

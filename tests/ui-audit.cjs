@@ -175,7 +175,8 @@ function audit({ card }) {
         // A hand-over screen (one phone, hidden hands) hides the game; tap through it once.
         for (const sel of ['#reveal', '#show-hand', '#ready', '.cover button']) if (await p.isVisible(sel).catch(() => false)) { await p.click(sel).catch(() => {}); await p.waitForTimeout(300); note(game, `one phone (revealed) ${tag}`, await p.evaluate(audit, { card: CARDS[game] })); break; }
       }
-      if (game !== 'tanks') {
+      // (Real-time games play on the game server, which isn't running here: their online screens are in the e2e tests.)
+      if (!(await p.evaluate(() => window.__kit?.game?.kind === 'realtime'))) {
         const h = await open();
         if (await h.isVisible('#create').catch(() => false)) {
           if (await h.isVisible('#my-name').catch(() => false)) await h.fill('#my-name', 'Jun');
