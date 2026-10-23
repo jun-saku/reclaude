@@ -41,8 +41,8 @@ module.exports = async ({ page, ok, BASE }) => {
       if (await H.evaluate(() => !!window.__kit.info.over)) break;
       const v = await view(H);
       lastTurn = v.turn; turns++;
-      const views = await Promise.all(ps.map(view));
-      if (!views.every((x) => x.drawer === v.drawer && x.turn === v.turn)) problems.push(`turn ${v.turn}: players disagree on who draws`);
+      // Every phone catches up (an update or two; after Play again the old game may still be showing for a moment).
+      for (const p of ps) if (!(await wait(p, (w) => { const x = window.__kit.info?.view; return !!x && x.drawer === w.drawer && x.turn === w.turn; }, { drawer: v.drawer, turn: v.turn }, 3000))) problems.push(`turn ${v.turn}: players disagree on who draws`);
       const D = ps.find((p) => seatOf.get(p) === v.drawer);
       if (!D) { problems.push(`turn ${v.turn}: the drawer isn't here`); break; }
       if (v.turn === leaveOn) {
