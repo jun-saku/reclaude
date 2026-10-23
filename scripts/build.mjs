@@ -77,6 +77,21 @@ function stamp(dir) {
   }
 }
 for (const name of built) stamp(join(OUT, name));
+// A game's own modules (./game.js, ./words.js, ./sim.js…) get ?v=<content hash> too, so a page never runs with an
+// older copy of one held by the browser or the offline copy (the page then fails to start: a name it imports is
+// missing). Like shared files, a module's hash covers the stamped links in it (game.js changes when words.js does).
+const LOCAL_LINK = /(["'])\.\/([\w.-]+\.m?js)\1/g;
+for (const name of built) {
+  const dir = join(OUT, name);
+  const files = readdirSync(dir).filter((f) => /\.(html|js|mjs)$/.test(f));
+  const text = Object.fromEntries(files.map((f) => [f, readFileSync(join(dir, f), "utf8")]));
+  const ver = {};
+  const stampLocal = (t) => t.replace(LOCAL_LINK, (m, q, file) => (ver[file] ? `${q}./${file}?v=${ver[file]}${q}` : m));
+  for (let pass = 0; pass < 8; pass++) {
+    for (const f of files) if (/\.m?js$/.test(f)) ver[f] = createHash("sha256").update(stampLocal(text[f])).digest("hex").slice(0, 10);
+  }
+  for (const f of files) { const out = stampLocal(text[f]); if (out !== text[f]) writeFileSync(join(dir, f), out); }
+}
 
 // Content-Security-Policy, added to every page as a <meta> tag: scripts may only come from this site, the page's own
 // inline scripts (by hash, so injected ones can't run), Firebase's SDK folder and reCAPTCHA's (App Check), and pages
