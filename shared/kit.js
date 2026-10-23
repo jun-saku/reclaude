@@ -19,6 +19,8 @@
 //   input(state, seat, move) → false?   apply a move (return false to refuse it); realtime: any message from a player
 //   tick?(state, dt)                    realtime: advance by dt seconds
 //   view?(state, seat) → what that seat sees (default: the state)
+//   feed?(state) → { id, items }        realtime: a growing list (a drawing's strokes): items are only ever added, a
+//                                       new id starts a new list. Sent a piece at a time (shared/feed.js), as info.feed
 //   result(state) → null | { winner?: seat | "draw", score?: number, … }   the game is over
 //   save?/load?, dev?(state, msg), timeUp?(state)   realtime extras (see worker/src/kit.js)
 //
@@ -29,12 +31,15 @@
 //   render(info)         the view changed: draw it (turns: after every move; realtime: every update)
 //   frame?(info)         every animation frame while playing (realtime games drive and draw here)
 //   status?(info) → text  the line above the board (default: whose turn it is)
+//   chip?(seat, info) → HTML  extra for that player's chip in the player bar (a score, an icon); escape any text
 //   resultText?(result, info) → { title, text }
 // info: { mode: "solo" | "local" | "online", kind, me (this player's seat), seats, view, over (result or null),
-//   turn, myTurn, act(move), name(seat), snaps (realtime: recent { at, recv, v }), clockOff, status, now, dt }.
+//   turn, myTurn, act(move), name(seat), snaps (realtime: recent { at, recv, v }), clockOff, status, now, dt,
+//   feed (realtime: { id, items } or null; the same items array grows, a new id is a new list) }.
 // act(move) plays a move (turns: only on your turn) or sends a message to the game (realtime).
 import * as rooms from "../shared/rooms.js";
 import { topTen } from "../shared/leaderboard.js";
+import { feedJoin } from "../shared/feed.js";
 
 export { rooms };
 
@@ -142,6 +147,7 @@ export function start(game, ui = {}) {
       },
       dev: (m) => game.dev?.(s, m, 0),
       get state() { return s; },
+      get feed() { const f = game.feed?.(s); return f ? { id: `${round}:${f.id}`, items: f.items } : null; },
       leave() {},
     };
     return e;
@@ -192,7 +198,7 @@ export function start(game, ui = {}) {
   function realtimeEngine() {
     let conn = null, why = "", connecting = false;
     const e = {
-      snaps: [], status: "connecting", clockOff: null,
+      snaps: [], status: "connecting", clockOff: null, feed: null,
       get me() { return seat.seat; },
       get seats() { return e.latest()?.here || []; },
       latest: () => e.snaps[e.snaps.length - 1] || null,
@@ -212,7 +218,9 @@ export function start(game, ui = {}) {
             onState(msg) {
               const recv = Date.now(), off = recv - msg.at;
               e.clockOff = e.clockOff === null ? off : Math.min(off, e.clockOff + 2);
-              e.snaps.push({ ...msg, recv });
+              const { f, ...rest } = msg;
+              e.feed = feedJoin(e.feed, f);
+              e.snaps.push({ ...rest, recv });
               if (e.snaps.length > 12) e.snaps.shift();
               changed();
             },
@@ -239,7 +247,7 @@ export function start(game, ui = {}) {
     return {
       mode, kind: game.kind, me: e.me, seats: e.seats, view: e.view(), over, turn,
       myTurn: !over && turn === e.me, act: (m) => e.act(m), name, snaps: e.snaps, clockOff: e.clockOff ?? 0,
-      status: e.status, now, dt, room,
+      status: e.status, now, dt, room, feed: e.feed ?? null,
     };
   }
   function name(s) {
@@ -270,7 +278,7 @@ export function start(game, ui = {}) {
     // Players: who's here, whose turn it is
     const seats = mode === "online" ? rooms.seatList(room).flatMap((u, s) => (u ? [s] : [])) : i.seats;
     const here = (s) => (mode !== "online" ? true : realtime ? i.seats.includes(s) : rooms.isOnline(room, s));
-    const players = mode === "solo" ? "" : seats.map((s) => `<span class="chip${i.turn === s && !i.over ? " turn" : ""}${here(s) ? "" : " out"}" style="--pc: var(--p${s % 4})"><span class="disc"></span>${name(s)}${mode === "online" ? `<span class="dot${here(s) ? " on" : ""}"></span>` : ""}</span>`).join("");
+    const players = mode === "solo" ? "" : seats.map((s) => `<span class="chip${i.turn === s && !i.over ? " turn" : ""}${here(s) ? "" : " out"}" style="--pc: var(--p${s % 4})"><span class="disc"></span>${name(s)}${ui.chip?.(s, i) ?? ""}${mode === "online" ? `<span class="dot${here(s) ? " on" : ""}"></span>` : ""}</span>`).join("");
     if ($("players").innerHTML !== players) $("players").innerHTML = players;
     if (waiting) { chromeKey = ""; return renderLobby(); }
     // The line above the board

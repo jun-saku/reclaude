@@ -17,7 +17,8 @@ one Durable Object per room, at `wss://play.reclaude.junsaku.dev`. Turn-based ga
 ## A game on the server
 
 Kit games (`shared/kit.js`): list the game's own `projects/<name>/game.js` in `src/games.js` as `kitGame(game)`
-(`src/kit.js`), and the server runs the same rules as the page. Tanks is one.
+(`src/kit.js`), and the server runs the same rules as the page. Tanks is one. A kit game with a growing list (a drawing's strokes) gives it as `feed(state)`: each
+connection is sent only the new part of it, and all of it when it connects (`shared/feed.js`).
 
 Other games: a game is a module in `src/games/` listed in `src/games.js` (see there for the functions it provides). The server
 advances it in steps of 1/30 s and sends each player its `view`. Check every input: players can send anything.

@@ -30,6 +30,7 @@ jobs:
       - run: node scripts/build.mjs
       # The game server's sign-in check (worker/src/auth.js), with test-signed tokens. No dependencies.
       - run: node tests/worker-auth.test.mjs
+      - run: node tests/feed.test.mjs
       # Smoke test of every page (tests/smoke.cjs): part of the required build check. Uses the runner's own Chrome.
       - name: Smoke test
         run: |
