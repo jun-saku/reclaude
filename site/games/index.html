@@ -71,6 +71,12 @@
     .tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
     .tags span { font-size: 0.75rem; font-weight: 650; padding: 2px 8px; border-radius: 999px; background: var(--soft); color: var(--muted); }
     @media (prefers-reduced-motion: reduce) { .game { transition: none; } }
+    .install { margin: 20px 0 0; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; }
+    .install button {
+      font: inherit; font-weight: 650; border: 0; border-radius: 12px; padding: 12px 18px; min-height: 44px; cursor: pointer;
+      background: var(--soft); color: var(--text);
+    }
+    .install p { margin: 0; font-size: 0.9rem; color: var(--muted); }
     .fine { margin: 24px 4px 0; font-size: 0.75rem; color: var(--muted); }
     .fine a { color: inherit; }
   </style>
@@ -199,7 +205,29 @@
           <div class="tags"><span>Solo</span><span>Top 10</span></div></div>
       </a></li>
     </ul>
+    <div class="install" id="install" hidden>
+      <button id="install-btn">📲 Install as an app</button>
+      <p id="install-help"></p>
+    </div>
     <p class="fine">Online play is protected by reCAPTCHA: the Google <a href="https://policies.google.com/privacy">Privacy Policy</a> and <a href="https://policies.google.com/terms">Terms of Service</a> apply.</p>
   </main>
+  <script>
+    // "Install as an app": Android and desktop Chrome offer it themselves (beforeinstallprompt); on an iPhone or iPad
+    // it's Share, then Add to Home Screen. Hidden once it runs as an app.
+    (() => {
+      const box = document.getElementById("install"), btn = document.getElementById("install-btn"), help = document.getElementById("install-help");
+      const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+      if (standalone) return;
+      let offer = null;
+      addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); offer = e; box.hidden = false; help.textContent = "Opens full screen from your home screen; games you've played work offline."; });
+      addEventListener("appinstalled", () => { box.hidden = true; });
+      const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+      if (ios) { box.hidden = false; help.textContent = ""; }
+      btn.addEventListener("click", async () => {
+        if (offer) { offer.prompt(); await offer.userChoice.catch(() => {}); offer = null; box.hidden = true; return; }
+        help.textContent = "Tap the Share button, then “Add to Home Screen”.";
+      });
+    })();
+  </script>
 </body>
 </html>

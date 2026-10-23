@@ -443,14 +443,18 @@ export function lobbyQR(before, seatOf) {
     const code = seatOf()?.code;
     if (!code || code === drawn || !before.offsetParent) return;
     drawn = code;
-    const { qrcode } = await import("../shared/qrcode.js");
-    const qr = qrcode(0, "M");
-    qr.addData(shareUrl(code));
-    qr.make();
-    const n = qr.getModuleCount();
+    // Only the dark squares reach the page (as an SVG path); a link too long for a QR code just shows none.
+    let qr;
+    try {
+      const { qrcode } = await import("../shared/qrcode.js");
+      qr = qrcode(0, "M");
+      qr.addData(shareUrl(code));
+      qr.make();
+    } catch (err) { console.warn("No QR code:", err); return; }
+    const n = qr.getModuleCount(), q = 4; // a 4-square white margin, as the QR standard asks, so phones read it easily
     let d = "";
-    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (qr.isDark(y, x)) d += `M${x + 2} ${y + 2}h1v1h-1z`;
-    box.innerHTML = `<svg viewBox="0 0 ${n + 4} ${n + 4}" role="img" aria-label="QR code: scan to join room ${code}"><rect width="100%" height="100%" fill="#fff"/><path d="${d}" fill="#111"/></svg><span class="muted">Or scan to join</span>`;
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (qr.isDark(y, x)) d += `M${x + q} ${y + q}h1v1h-1z`;
+    box.innerHTML = `<svg viewBox="0 0 ${n + 2 * q} ${n + 2 * q}" role="img" aria-label="QR code: scan to join room ${code}"><rect width="100%" height="100%" fill="#fff"/><path d="${d}" fill="#111"/></svg><span class="muted">Or scan to join</span>`;
     box.hidden = false;
   };
   draw();

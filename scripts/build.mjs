@@ -8,13 +8,13 @@
 
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { join } from "node:path";
+import { dirname, join, relative, sep } from "node:path";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 const OUT = join(ROOT, "_site");
 const PROJECTS = join(ROOT, "projects");
 const NAME_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
-const RESERVED = new Set(["404", "assets", "games", "shared"]);
+const RESERVED = new Set(["404", "assets", "games", "icons", "shared"]);
 
 rmSync(OUT, { recursive: true, force: true });
 mkdirSync(OUT);
@@ -106,7 +106,20 @@ function addCsp(dir) {
     const full = join(dir, e.name);
     if (e.isDirectory()) { addCsp(full); continue; }
     if (!e.name.endsWith(".html")) continue;
-    const html = readFileSync(full, "utf8");
+    let html = readFileSync(full, "utf8");
+    // Every page in a folder (the games and the games page) can install the site as an app: the manifest, icons and
+    // the service worker (site/manifest.webmanifest, site/icons/, site/sw.js). Paths are relative, like everything.
+    const up = relative(dirname(full), OUT);
+    if (up) {
+      const r = up.split(sep).join("/") + "/";
+      html = html.replace(/<meta charset="utf-8">/i, (m) => `${m}
+  <link rel="manifest" href="${r}manifest.webmanifest">
+  <link rel="icon" href="${r}icons/favicon-32.png" type="image/png">
+  <link rel="apple-touch-icon" href="${r}icons/apple-touch-icon.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <script type="module">if ("serviceWorker" in navigator) navigator.serviceWorker.register("${r}sw.js").catch(() => {});</script>`);
+    }
     const hashes = [...html.matchAll(/<script\b(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)]
       .map((m) => `'sha256-${createHash("sha256").update(m[1]).digest("base64")}'`);
     const policy = Object.entries(CSP)
