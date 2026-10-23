@@ -2,12 +2,19 @@
    adds its own styles for its board:
      <link rel="stylesheet" href="../shared/base.css">
      <link rel="stylesheet" href="../shared/kit.css"> */
-.kit-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.kit-title { display: flex; align-items: center; gap: 10px; }
+.kit-title h1 { flex: 1; min-width: 0; }
+.kit-title .code { flex: none; white-space: nowrap; }
 h1 svg { width: 1.1em; height: 1.1em; }
 .trophy { background: var(--soft); color: var(--text); padding: 8px 12px; font-size: 1.1rem; }
 .status { font-size: 1.1rem; }
 #game > .hint:empty, #status:empty { display: none; }
 #stage { display: flex; flex-direction: column; gap: 12px; }
 .over { align-items: center; text-align: center; }
+/* The waiting room's list of who's here: two columns once there are five or more. */
+#seated:has(> :nth-child(5)) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+#seated .chip { max-width: 100%; white-space: normal; overflow-wrap: break-word; border-radius: 12px; }
+#seated:has(> :nth-child(5)) .chip { font-size: 0.8rem; }
 .over h2 { font-size: 1.3rem; }
 .over .save { align-self: stretch; }
+.bar:has(> .players:empty:only-child) { display: none; }
