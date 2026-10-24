@@ -3,12 +3,14 @@
 //   const me = await core.signIn()                  { id }: anonymous at first, remembered on this device
 //   await core.signedIn()                           { id } if this device already signed in, else null (signs no one up)
 //   await core.myProfile()                          { display_name, avatar }, or null before they make one (signs in)
-//   await core.saveProfile({ display_name, avatar }) creates or updates it; throws a CoreError whose message can be shown
+//   await core.saveProfile({ display_name, avatar }) creates or updates it (and the games' name, rooms.myName); throws a
+//                                                   CoreError whose message can be shown
 //   core.cleanName(text)                            the name as the database takes it, or "" if it can't be one
 // It connects to the live project; on this machine (localhost, 127.0.0.1) to a local Supabase (`supabase start`,
 // which the security policy allows too); with ?backend=fake to nothing: this browser's storage only, for the UI tests.
 import { createClient } from "../shared/supabase-js.js";
 import { rememberMe } from "../shared/me.js";
+import { ROOM_NAME_MAX, myName, setMyName } from "../shared/rooms.js";
 
 const LIVE = { url: "https://xikukwpayubiyxcnlwme.supabase.co", key: "sb_publishable_Qqo7Kh391E381GR_zy9DVg_JImDyTVy" };
 // The local stack's demo key: the same on every machine, public like the live one.
@@ -100,10 +102,23 @@ async function fakeSignIn() {
 // ---------- API ----------
 export const signIn = () => (fake ? fakeSignIn() : supabaseSignIn());
 export const signedIn = async () => (fake ? (fakeRead().id ? { id: fakeRead().id } : null) : supabaseSignedIn());
-// Both keep this device's copy of the name and avatar (shared/me.js: the profile icon on every page) up to date.
+// The profile name as the games take it (up to ROOM_NAME_MAX UTF-16 units, as rooms.js and the Firebase rules count):
+// a longer one is cut at a word break if it can be, and never inside an emoji.
+function gameName(name) {
+  if (name.length <= ROOM_NAME_MAX) return name;
+  const space = name.slice(0, ROOM_NAME_MAX + 1).lastIndexOf(" ");
+  if (space > 0) return name.slice(0, space);
+  let cut = name.slice(0, ROOM_NAME_MAX);
+  if (/[\ud800-\udbff]$/.test(cut)) cut = cut.slice(0, -1);
+  return cut;
+}
+
+// Both keep this device's copy of the name and avatar (shared/me.js: the profile icon on every page) up to date, and
+// the name the games use (rooms.myName, every game's "Your name"): saving sets it, loading fills it in if it's empty.
 export async function myProfile() {
   const profile = fake ? fakeRead().profile || null : await supabaseMyProfile();
   rememberMe(profile);
+  if (profile && !myName()) setMyName(gameName(profile.display_name));
   return profile;
 }
 export async function saveProfile({ display_name, avatar }) {
@@ -112,4 +127,5 @@ export async function saveProfile({ display_name, avatar }) {
   const row = { display_name: name, avatar: cleanAvatar(avatar) };
   if (fake) { const db = fakeRead(); db.profile = row; fakeWrite(db); } else await supabaseSaveProfile(row);
   rememberMe(row);
+  setMyName(gameName(name));
 }

@@ -496,6 +496,8 @@
         saveMsg.textContent = "";
         if (!nameInput.value) {
           try { nameInput.value = localStorage.getItem(NAME_KEY) || ""; } catch {}
+          // Else the name used across the games (your profile's, once you've saved one).
+          if (!nameInput.value) leaderboardApi().then((api) => { if (!nameInput.value) nameInput.value = api.cleanName(api.myName()); });
         }
       }
     }
