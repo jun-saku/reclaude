@@ -41,7 +41,7 @@
     }
 
     header { display: flex; align-items: center; gap: 8px; }
-    h1 { margin-right: auto; }
+    header > :last-child { margin-left: auto; }
     .score {
       min-width: 64px;
       padding: 6px 10px;
@@ -167,9 +167,12 @@
 </head>
 <body>
   <main class="game">
-    <a class="home-link" href="../games/">‹ All games</a>
-    <header>
+    <div class="title-bar">
+      <a class="home-link" href="../games/" aria-label="All games">‹</a>
       <h1>2048</h1>
+      <a class="me-link" href="../apps/profile/" aria-label="Your profile">👤</a>
+    </div>
+    <header>
       <div class="score"><span>Score</span><b id="score">0</b></div>
       <div class="score"><span>Best</span><b id="best">0</b></div>
       <button class="trophy" id="trophy" aria-label="Top 10 leaderboard" aria-haspopup="dialog">🏆</button>

@@ -42,7 +42,6 @@
     }
 
     header { display: flex; align-items: center; gap: 8px; }
-    h1 { margin-right: auto; }
     .score { min-width: 58px; padding: 5px 8px; border-radius: 10px; background: var(--border); text-align: center; line-height: 1.15; }
     .score span { display: block; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
     .score b { font-size: 1.05rem; font-variant-numeric: tabular-nums; }
@@ -185,12 +184,13 @@
 </head>
 <body>
   <main class="game">
-    <a class="home-link" href="../games/">‹ All games</a>
-    <header>
+    <header class="title-bar">
+      <a class="home-link" href="../games/" aria-label="All games">‹</a>
       <h1>Bridge</h1>
       <div class="score" id="usBox"><span>Us</span><b id="us">0</b></div>
       <div class="score" id="themBox"><span>Them</span><b id="them">0</b></div>
       <button class="secondary menu" id="menu" aria-label="Menu">☰</button>
+      <a class="me-link" href="../apps/profile/" aria-label="Your profile">👤</a>
     </header>
 
     <section id="home" hidden>

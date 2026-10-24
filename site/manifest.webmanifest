@@ -1,8 +1,8 @@
 {
-  "name": "reclaude games",
-  "short_name": "Games",
-  "description": "Small games to play on your phone, alone or with friends online.",
-  "start_url": "games/",
+  "name": "reclaude",
+  "short_name": "reclaude",
+  "description": "Small games and tools for your phone, alone or with friends.",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "background_color": "#f7f6f3",

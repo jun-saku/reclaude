@@ -433,7 +433,9 @@ export async function setMyName(raw, inRoom = null) {
 // above the board.
 export function codeInTitle(el) {
   const h1 = document.querySelector("main h1");
-  if (!el || !h1 || el.closest(".title-row")) return;
+  if (!el || !h1 || el.closest(".title-row, .title-bar")) return;
+  // A title row (.title-bar, base.css) already lines things up: the code goes right after the title.
+  if (h1.closest(".title-bar")) return h1.after(el);
   const row = document.createElement("div");
   row.className = "title-row";
   h1.before(row);

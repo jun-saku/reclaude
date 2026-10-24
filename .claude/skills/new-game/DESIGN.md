@@ -1,5 +1,9 @@
 # reclaude design standard
 
+Every page has the same title row: back `‹` (an icon-only link with an `aria-label` naming where it goes: "All
+games" from a game, "Home" from the games page and the apps), the title, and the profile icon at the right. The home
+page (`site/index.html`) has no back link.
+
 Every game looks and reads the same way around its board, so a player who knows one game knows them all. The look is
 one shared stylesheet, `shared/base.css`, which every game links; a game's own `<style>` only draws its board and
 pieces. Games on the kit (`shared/kit.js` + `kit.css`) also get the screens and wording for free; a game that builds
@@ -34,8 +38,10 @@ and 390 px; it must report 0 problems before a game PR is ready.
 
 ## Home screen (start and create rooms)
 
-- ✓ `‹ All games` link first, back to the games page (hidden once in a room or game: use Leave there).
-- `<h1>` title, then the 🏆 Top 10 button on the right if the game has a leaderboard.
+- ✓ The title row first (`.title-bar`): ✓ the back link `‹` (labelled "All games", to the games page), the `<h1>`
+  title, the 🏆 Top 10 button if the game has a leaderboard, and ✓ the profile icon (`.me-link`, labelled "Your
+  profile": your avatar, or 👤) at the right. Back and profile hide once in a room or game (use Leave there). If the
+  row can't fit at 320 px (2048's scores), the title row stays whole and the rest goes on the next row.
 - ✓ The name field, if any: label "Your name", placeholder `So friends know it's you`.
 - ✓ The sections, each a card with an `<h2>`, always in this order (skip the ones the game doesn't have):
   1. `Play friends online` (`Play a friend online` for 2-player games): room options (players, timer) as segmented
