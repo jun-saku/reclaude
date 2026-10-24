@@ -9,6 +9,8 @@ The user usually works from their phone, so keep replies short and end with the 
   (Cloudflare Pages custom domain; `https://reclaude.pages.dev/<name>/` is the same site).
 - `https://reclaude.junsaku.dev/games/`: the landing page (`site/games/index.html`), a card linking to each game.
   Non-games (the calculator) aren't listed. Projects don't link to each other.
+- `https://reclaude.junsaku.dev/apps/`: the social apps (`apps/index.html`, the list) and `/apps/<name>/` (from
+  `apps/<name>/`), on Supabase. Not linked from the games, and games don't link to them.
 - Anything else, including the root: the blank 404 page.
 
 ## Layout
@@ -49,6 +51,13 @@ The user usually works from their phone, so keep replies short and end with the 
   locally `cd worker && npm ci && npm run dev`, which the e2e tests start themselves.
 - `site/_headers`: Cloudflare response headers for every path (no framing by other sites, nosniff, referrer and
   permissions policies).
+- `apps/`: the social apps (see "Supabase"): `apps/index.html` lists them, `apps/<name>/index.html` is one app. They
+  use `shared/base.css` and the design standard like games, but link back with `‹ All apps` (`../`), not to the games,
+  and import `../../shared/<file>`, which the build stamps the same way.
+- `shared/core.js`: the apps' client: sign-in (anonymous, remembered per device) and the person's profile
+  (`core.profiles`). It loads `shared/supabase-js.js`, the Supabase client bundled into one file by
+  `scripts/vendor-supabase.mjs` (never edit it; update by changing the version there and running it). On localhost it
+  uses a local Supabase (`supabase start`), with `?backend=fake` this browser only (what the smoke test and UI audit use).
 - `scripts/new-project.mjs`: creates a project from the template.
 - `scripts/rules.mjs`: generates `firebase/database.rules.json` (room rules repeat per seat). Edit the rules there, never
   the JSON, then run `node scripts/rules.mjs`; `npm run rules` fails if the two don't match.
@@ -143,7 +152,7 @@ only its own `projects/<name>/` folder; engine changes to `shared/` or the rules
 - Project `xikukwpayubiyxcnlwme` (`https://xikukwpayubiyxcnlwme.supabase.co`, Singapore), anonymous sign-ins on.
   The publishable key (`sb_publishable_…`) is public by design, like the Firebase config; access is controlled by row
   level security. Never ask for, or put anywhere, the secret / `service_role` key or the database password.
-- Games stay on Firebase. Supabase is for the social side (profiles first, then apps such as Plan), one Postgres
+- Games stay on Firebase. Supabase is for the social side (`apps/`: profiles first, then apps such as Plan), one Postgres
   schema per module: `core` (shared by every app: `core.profiles` now) and later one schema per app, which refers to
   people only by `core.profiles.id` and never touches another app's schema. Core never refers to an app.
 - Everything is created by migrations in `supabase/migrations/` (never by hand in the dashboard), each with row level
@@ -156,6 +165,11 @@ only its own `projects/<name>/` folder; engine changes to `shared/` or the rules
   and fix mistakes with a new migration.
 - A new schema must also be added to the dashboard's exposed schemas (Settings → Data API) and to `[api] schemas` in
   `supabase/config.toml` before pages can reach it.
+- Pages reach Supabase only through `shared/core.js` (and later each app's own module next to it), and only signed-in
+  users can read anything. Opening a page must not sign anyone up: only an action that needs it (like saving a
+  profile, or opening the profile page) calls `core.signIn()`; elsewhere use `core.signedIn()`.
+- Testing an app for real: `supabase start` (the CLI and Docker), build, serve `_site` on localhost and drive it with
+  Playwright: the pages use the local stack there.
 
 ## Rules
 

@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#161618" media="(prefers-color-scheme: dark)">
+  <title>Profile</title>
+  <meta name="description" content="Your name and avatar, the same in every app.">
+  <link rel="stylesheet" href="../../shared/base.css">
+  <style>
+    .preview { display: flex; align-items: center; gap: 12px; }
+    .preview .avatar {
+      width: 56px; height: 56px; flex: none; display: grid; place-items: center; border-radius: 50%;
+      background: var(--soft); font-size: 1.9rem; line-height: 1;
+    }
+    .preview .name { font-size: 1.2rem; font-weight: 700; min-width: 0; overflow-wrap: anywhere; }
+    .preview .name.empty { color: var(--muted); font-weight: 600; }
+    .avatars { display: grid; grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)); gap: 6px; }
+    .avatars button { padding: 0; font-size: 1.5rem; background: var(--soft); color: var(--text); }
+    .avatars button.none { font-size: 0.95rem; }
+    .avatars button[aria-pressed="true"] { background: var(--panel); box-shadow: 0 0 0 3px var(--accent); }
+    .done { font-size: 0.95rem; text-align: center; }
+    .done:empty { display: none; }
+  </style>
+</head>
+<body>
+  <main>
+    <a class="home-link" href="../">‹ All apps</a>
+    <h1>Profile</h1>
+    <p class="muted" id="loading">Signing in…</p>
+
+    <section class="card" id="offline" hidden>
+      <p id="offline-text">Can't reach the server. Check your connection and try again.</p>
+      <button id="retry">Try again</button>
+    </section>
+
+    <section class="card" id="form" hidden>
+      <div class="preview" aria-hidden="true"><span class="avatar" id="preview-avatar">🙂</span><span class="name" id="preview-name"></span></div>
+      <label class="name-row"><span>Your name</span>
+        <input id="name" maxlength="24" autocomplete="nickname" enterkeyhint="done" placeholder="So friends know it's you"></label>
+      <h2 id="avatar-label">Avatar</h2>
+      <div class="avatars" id="avatars" role="group" aria-labelledby="avatar-label"></div>
+      <button id="save">Save</button>
+      <p class="error" id="error" role="alert"></p>
+      <p class="done" id="done" role="status"></p>
+    </section>
+
+    <p class="hint">Your profile is kept on this device. Clearing the browser's data starts a new one.</p>
+  </main>
+  <script type="module">
+    import * as core from "../../shared/core.js";
+    const $ = (id) => document.getElementById(id);
+    const AVATARS = [["🦊", "Fox"], ["🐼", "Panda"], ["🐸", "Frog"], ["🐯", "Tiger"], ["🐙", "Octopus"], ["🦄", "Unicorn"],
+      ["🐧", "Penguin"], ["🐢", "Turtle"], ["🦉", "Owl"], ["🐝", "Bee"], ["🌵", "Cactus"], ["🍄", "Mushroom"]];
+    let avatar = null;
+
+    for (const [emoji, label] of [...AVATARS, [null, "None"]]) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = emoji || "None";
+      if (emoji) b.setAttribute("aria-label", label); else b.className = "none";
+      b.dataset.avatar = emoji || "";
+      b.addEventListener("click", () => { avatar = emoji; show(); });
+      $("avatars").append(b);
+    }
+
+    function show() {
+      const name = core.cleanName($("name").value);
+      $("preview-avatar").textContent = avatar || "🙂";
+      $("preview-name").textContent = name || "Your name";
+      $("preview-name").classList.toggle("empty", !name);
+      for (const b of $("avatars").children) b.setAttribute("aria-pressed", String(b.dataset.avatar === (avatar || "")));
+      $("save").disabled = !name;
+      $("error").textContent = $("name").value.trim() && !name ? "That name can't be used. Try letters, numbers or emoji (up to 24)." : "";
+      $("done").textContent = "";
+    }
+
+    async function start() {
+      $("loading").hidden = false;
+      $("offline").hidden = $("form").hidden = true;
+      try {
+        await core.signIn();
+        const me = await core.myProfile();
+        $("name").value = me?.display_name || "";
+        avatar = me?.avatar || null;
+        $("form").hidden = false;
+        show();
+        $("save").textContent = me ? "Save" : "Create profile";
+      } catch (err) {
+        $("offline-text").textContent = err instanceof core.CoreError ? err.message : "Something went wrong. Try again.";
+        $("offline").hidden = false;
+      } finally {
+        $("loading").hidden = true;
+      }
+    }
+
+    $("name").addEventListener("input", show);
+    $("name").addEventListener("keydown", (e) => { if (e.key === "Enter" && !$("save").disabled) $("save").click(); });
+    $("retry").addEventListener("click", start);
+    $("save").addEventListener("click", async () => {
+      $("save").disabled = true;
+      $("error").textContent = "";
+      try {
+        await core.saveProfile({ display_name: $("name").value, avatar });
+        $("name").value = core.cleanName($("name").value);
+        show();
+        $("save").textContent = "Save";
+        $("done").textContent = "Saved ✓";
+      } catch (err) {
+        $("error").textContent = err instanceof core.CoreError ? err.message : "Something went wrong. Try again.";
+        $("save").disabled = false;
+      }
+    });
+
+    start();
+  </script>
+</body>
+</html>

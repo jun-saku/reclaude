@@ -1,7 +1,9 @@
 // Smoke test for every page in _site, run in CI as part of the required build check. It needs no per-game code:
 // it opens each project and the games page on a phone-sized screen and fails on JavaScript errors, blocked scripts
 // (Content-Security-Policy), sideways scroll, a game missing from the games page or missing its "All games" link,
-// or a same-device game that won't start. The network outside this machine is blocked, so it never touches Firebase.
+// or a same-device game that won't start; and the apps (/apps/ and /apps/<name>/, with ?backend=fake): errors, the
+// security policy, sideways scroll and their "‹ All apps" link. The network outside this machine is blocked, so it
+// never touches Firebase or Supabase.
 // Run: node scripts/build.mjs && node tests/smoke.cjs   (needs Playwright, or playwright-core plus CHROMIUM_PATH)
 const { chromium } = (() => {
   for (const m of ['playwright', 'playwright-core']) { try { return require(m); } catch {} }
@@ -31,13 +33,15 @@ const server = http.createServer((req, res) => {
 (async () => {
   if (!fs.existsSync(SITE)) { console.error('Run node scripts/build.mjs first.'); process.exit(1); }
   const projects = fs.readdirSync(SITE, { withFileTypes: true })
-    .filter((e) => e.isDirectory() && !['shared', 'games'].includes(e.name) && fs.existsSync(path.join(SITE, e.name, 'index.html')))
+    .filter((e) => e.isDirectory() && !['shared', 'games', 'apps'].includes(e.name) && fs.existsSync(path.join(SITE, e.name, 'index.html')))
     .map((e) => e.name).sort();
   const games = projects.filter((n) => !NOT_GAMES.has(n));
   await new Promise((r) => server.listen(PORT, r));
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
 
-  async function open(name) {
+  const apps = fs.existsSync(path.join(SITE, 'apps')) ? fs.readdirSync(path.join(SITE, 'apps'), { withFileTypes: true })
+    .filter((e) => e.isDirectory() && fs.existsSync(path.join(SITE, 'apps', e.name, 'index.html'))).map((e) => e.name).sort() : [];
+  async function open(name, query = '') {
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true });
     // Only this machine: no Firebase, no CDNs. Blocked requests are expected and not counted as errors.
     await ctx.route('**/*', (r) => (new URL(r.request().url()).hostname === 'localhost' ? r.continue() : r.abort('blockedbyclient')));
@@ -49,7 +53,7 @@ const server = http.createServer((req, res) => {
       if (/Content Security Policy/i.test(t)) problems.push(`blocked by the security policy: ${t.slice(0, 160)}`);
       else if (m.type() === 'error' && !/ERR_BLOCKED_BY_CLIENT|Failed to load resource/.test(t)) problems.push(`console error: ${t.slice(0, 160)}`);
     });
-    await page.goto(BASE + name + '/');
+    await page.goto(BASE + name + '/' + query);
     await page.waitForTimeout(400);
     return { ctx, page, problems };
   }
@@ -85,7 +89,21 @@ const server = http.createServer((req, res) => {
     await ctx.close();
   }
 
-  console.log(`\n${projects.length} projects and the games page checked. FAILS: ${fails}`);
+  // The apps: the list, and each app (on the stand-in backend: no Supabase here).
+  for (const name of fs.existsSync(path.join(SITE, 'apps', 'index.html')) ? ['apps', ...apps.map((a) => `apps/${a}`)] : []) {
+    const { ctx, page, problems } = await open(name, '?backend=fake');
+    await page.waitForTimeout(400);
+    const policy = await page.evaluate(() => !!document.querySelector('meta[http-equiv="Content-Security-Policy"]'));
+    ok(policy && !problems.length, `${name}: loads with the security policy and no errors ${problems.join(' | ')}`);
+    ok((await wide(page)) <= 390, `${name}: no sideways scroll at 390px (${await wide(page)}px)`);
+    if (name !== 'apps') {
+      const home = await page.$eval('.home-link', (a) => a.getAttribute('href')).catch(() => null);
+      ok(home === '../', `${name}: has the "‹ All apps" link to ../`);
+    }
+    await ctx.close();
+  }
+
+  console.log(`\n${projects.length} projects, the games page and ${apps.length} app(s) checked. FAILS: ${fails}`);
   await browser.close();
   server.close();
   process.exit(fails ? 1 : 0);
