@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#161618" media="(prefers-color-scheme: dark)">
-  <title>reclaude games</title>
+  <title>Games</title>
   <meta name="description" content="Small games to play on your phone, alone or with friends online.">
   <style>
     :root {
@@ -50,9 +50,22 @@
       max-width: 760px;
       padding: max(20px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
     }
-    header { padding: 8px 4px 20px; }
-    h1 { font-size: 2rem; line-height: 1.15; margin: 0 0 6px; letter-spacing: -0.02em; }
-    header p { margin: 0; color: var(--muted); }
+    header { padding: 0 0 20px; }
+    h1 { font-size: 2rem; line-height: 1.15; margin: 0; letter-spacing: -0.02em; }
+    header p { margin: 6px 4px 0; color: var(--muted); }
+    /* The title row, as on every page (shared/base.css): back home (‹), the title, your profile at the right. */
+    .title-bar { display: flex; align-items: center; gap: 6px; }
+    .title-bar h1 { flex: 1; min-width: 0; }
+    .home-link {
+      flex: none; display: inline-grid; place-items: center; width: 44px; height: 44px; margin-left: -10px;
+      color: var(--text); font-size: 2.1rem; line-height: 1; text-decoration: none; border-radius: 12px;
+    }
+    .me-link {
+      flex: none; display: inline-grid; place-items: center; width: 44px; height: 44px; border-radius: 50%;
+      background: var(--soft); font-size: 1.35rem; line-height: 1; text-decoration: none;
+    }
+    :is(.home-link, .me-link):active { opacity: 0.6; }
+    :is(.home-link, .me-link):focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
     .games { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr; gap: 12px; }
     @media (min-width: 640px) { .games { grid-template-columns: 1fr 1fr; } }
     .game {
@@ -71,12 +84,6 @@
     .tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
     .tags span { font-size: 0.75rem; font-weight: 650; padding: 2px 8px; border-radius: 999px; background: var(--soft); color: var(--muted); }
     @media (prefers-reduced-motion: reduce) { .game { transition: none; } }
-    .install { margin: 20px 0 0; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; }
-    .install button {
-      font: inherit; font-weight: 650; border: 0; border-radius: 12px; padding: 12px 18px; min-height: 44px; cursor: pointer;
-      background: var(--soft); color: var(--text);
-    }
-    .install p { margin: 0; font-size: 0.9rem; color: var(--muted); }
     .fine { margin: 24px 4px 0; font-size: 0.75rem; color: var(--muted); }
     .fine a { color: inherit; }
   </style>
@@ -84,7 +91,11 @@
 <body>
   <main>
     <header>
-      <h1>reclaude games</h1>
+      <div class="title-bar">
+        <a class="home-link" href="../" aria-label="Home">‹</a>
+        <h1>Games</h1>
+        <a class="me-link" href="../apps/profile/" aria-label="Your profile">👤</a>
+      </div>
       <p>Small games for your phone. Play alone, pass the phone around, or send friends a room code.</p>
     </header>
 
@@ -205,29 +216,7 @@
           <div class="tags"><span>Solo</span><span>Top 10</span></div></div>
       </a></li>
     </ul>
-    <div class="install" id="install" hidden>
-      <button id="install-btn">📲 Install as an app</button>
-      <p id="install-help"></p>
-    </div>
     <p class="fine">Online play is protected by reCAPTCHA: the Google <a href="https://policies.google.com/privacy">Privacy Policy</a> and <a href="https://policies.google.com/terms">Terms of Service</a> apply.</p>
   </main>
-  <script>
-    // "Install as an app": Android and desktop Chrome offer it themselves (beforeinstallprompt); on an iPhone or iPad
-    // it's Share, then Add to Home Screen. Hidden once it runs as an app.
-    (() => {
-      const box = document.getElementById("install"), btn = document.getElementById("install-btn"), help = document.getElementById("install-help");
-      const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
-      if (standalone) return;
-      let offer = null;
-      addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); offer = e; box.hidden = false; help.textContent = "Opens full screen from your home screen; games you've played work offline."; });
-      addEventListener("appinstalled", () => { box.hidden = true; });
-      const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-      if (ios) { box.hidden = false; help.textContent = ""; }
-      btn.addEventListener("click", async () => {
-        if (offer) { offer.prompt(); await offer.userChoice.catch(() => {}); offer = null; box.hidden = true; return; }
-        help.textContent = "Tap the Share button, then “Add to Home Screen”.";
-      });
-    })();
-  </script>
 </body>
 </html>

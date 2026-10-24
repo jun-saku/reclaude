@@ -32,9 +32,12 @@ and `firebase/database.rules.json` (who may write what). Read `CLAUDE.md` first;
    - `<link rel="stylesheet" href="../shared/base.css">` before the page's `<style>` (the template has it): the shared
      colours, page, buttons, cards, join form, player bar, status line and lobby. The page's `<style>` holds only its
      own board and pieces (and may override a colour token); don't restyle the shared parts.
-   - The `‹ All games` link (`<a class="home-link" href="../games/">`, styles included) first in `<main>`, copied from
-     any other game. It hides itself while `<section id="home">` (the start screen) is hidden, so players use Leave
-     in a room.
+   - The title row, first in `<main>`, copied from any other game (styles in base.css):
+     `<div class="title-bar"><a class="home-link" href="../games/" aria-label="All games">‹</a><h1>Title</h1>`
+     `<a class="me-link" href="../apps/profile/" aria-label="Your profile">👤</a></div>`: back to the games page, the
+     title, and the profile icon (the build fills in the player's avatar). Back and profile hide themselves while
+     `<section id="home">` (the start screen) is hidden, so players use Leave in a room. A kit game only needs the
+     `<a class="home-link" …>‹</a>` in `<main>`: the kit builds the row around it.
    - A same-phone mode, if the game has one, starts from a button with `id="local"` and hides `#home`.
    - Security policy (added by the build): scripts only in `<script>` blocks or files in the folder; no `onclick=`
      -style attributes (use `addEventListener`), no `eval`/`new Function`, no external sources beyond those allowed
@@ -57,7 +60,7 @@ and `firebase/database.rules.json` (who may write what). Read `CLAUDE.md` first;
 
 ```
 projects/<name>/game.js     the rules: no drawing, no network (the game server bundles it too)
-projects/<name>/index.html  ../shared/base.css and ../shared/kit.css stylesheets, the "‹ All games" link in <main>, and
+projects/<name>/index.html  ../shared/base.css and ../shared/kit.css stylesheets, the ‹ back link (.home-link) in <main>, and
                             start(game, { title, howTo, setup(stage), render(info), frame(info), … })
 ```
 

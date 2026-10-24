@@ -26,8 +26,10 @@
 </head>
 <body>
   <main>
-    <a class="home-link" href="../">‹ All apps</a>
-    <h1>Profile</h1>
+    <div class="title-bar">
+      <a class="home-link" href="../../" aria-label="Home">‹</a>
+      <h1>Profile</h1>
+    </div>
     <p class="muted" id="loading">Signing in…</p>
 
     <section class="card" id="offline" hidden>
@@ -54,6 +56,7 @@
     const AVATARS = [["🦊", "Fox"], ["🐼", "Panda"], ["🐸", "Frog"], ["🐯", "Tiger"], ["🐙", "Octopus"], ["🦄", "Unicorn"],
       ["🐧", "Penguin"], ["🐢", "Turtle"], ["🦉", "Owl"], ["🐝", "Bee"], ["🌵", "Cactus"], ["🍄", "Mushroom"]];
     let avatar = null;
+    let saved = null; // the profile as last loaded or saved: Save stays off until something differs
 
     for (const [emoji, label] of [...AVATARS, [null, "None"]]) {
       const b = document.createElement("button");
@@ -71,7 +74,7 @@
       $("preview-name").textContent = name || "Your name";
       $("preview-name").classList.toggle("empty", !name);
       for (const b of $("avatars").children) b.setAttribute("aria-pressed", String(b.dataset.avatar === (avatar || "")));
-      $("save").disabled = !name;
+      $("save").disabled = !name || (saved && name === saved.display_name && (avatar || null) === (saved.avatar || null));
       $("error").textContent = $("name").value.trim() && !name ? "That name can't be used. Try letters, numbers or emoji (up to 24)." : "";
       $("done").textContent = "";
     }
@@ -82,6 +85,7 @@
       try {
         await core.signIn();
         const me = await core.myProfile();
+        saved = me;
         $("name").value = me?.display_name || "";
         avatar = me?.avatar || null;
         $("form").hidden = false;
@@ -104,6 +108,7 @@
       try {
         await core.saveProfile({ display_name: $("name").value, avatar });
         $("name").value = core.cleanName($("name").value);
+        saved = { display_name: $("name").value, avatar };
         show();
         $("save").textContent = "Save";
         $("done").textContent = "Saved ✓";

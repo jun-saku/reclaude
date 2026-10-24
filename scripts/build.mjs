@@ -45,11 +45,10 @@ for (const e of readdirSync(PROJECTS, { withFileTypes: true })) {
   built.push(e.name);
 }
 
-// The social apps (on Supabase, see CLAUDE.md): apps/index.html, the list, at /apps/, and each apps/<name>/ at
-// /apps/<name>/, with the same rules as projects. "_" and "." folders are skipped.
+// The social apps (on Supabase, see CLAUDE.md): each apps/<name>/ at /apps/<name>/, with the same rules as projects.
+// (The home page, site/index.html, links to them.) "_" and "." folders are skipped.
 const apps = [];
 if (existsSync(APPS)) {
-  if (!existsSync(join(APPS, "index.html"))) errors.push("apps/: missing index.html (the list of apps)");
   for (const e of readdirSync(APPS, { withFileTypes: true })) {
     if (!e.isDirectory() || e.name.startsWith("_") || e.name.startsWith(".")) continue;
     if (!NAME_RE.test(e.name)) errors.push(`apps/${e.name}: name must be lowercase-kebab-case (it becomes the URL)`);
@@ -57,7 +56,7 @@ if (existsSync(APPS)) {
     else apps.push(e.name);
   }
   cpSync(APPS, join(OUT, "apps"), { recursive: true, filter: (src) => !relative(APPS, src).split(sep).some((p) => /^[_.]/.test(p)) });
-  built.push("apps", ...apps.map((a) => `apps/${a}`));
+  built.push(...apps.map((a) => `apps/${a}`));
 }
 
 if (errors.length) {
@@ -82,17 +81,17 @@ for (let pass = 0; pass < 8; pass++) { // until links between shared files settl
   for (const [f, text] of Object.entries(sharedText)) version[f] = createHash("sha256").update(stampText(text)).digest("hex").slice(0, 10);
 }
 for (const [f, text] of Object.entries(sharedText)) if (/\.(js|mjs)$/.test(f)) writeFileSync(join(OUT, "shared", f), stampText(text));
-function stamp(dir, shallow = false) { // shallow: this folder's files only (apps/: each app is stamped on its own)
+function stamp(dir) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, e.name);
-    if (e.isDirectory()) { if (!shallow) stamp(full); continue; }
+    if (e.isDirectory()) { stamp(full); continue; }
     if (!/\.(html|js|mjs)$/.test(e.name)) continue;
     const text = readFileSync(full, "utf8");
     const out = stampText(text);
     if (out !== text) writeFileSync(full, out);
   }
 }
-for (const name of built) stamp(join(OUT, name), name === "apps");
+for (const name of built) stamp(join(OUT, name));
 // A game's own modules (./game.js, ./words.js, ./sim.js…) get ?v=<content hash> too, so a page never runs with an
 // older copy of one held by the browser or the offline copy (the page then fails to start: a name it imports is
 // missing). Like shared files, a module's hash covers the stamped links in it (game.js changes when words.js does).
@@ -139,18 +138,21 @@ function addCsp(dir) {
     if (e.isDirectory()) { addCsp(full); continue; }
     if (!e.name.endsWith(".html")) continue;
     let html = readFileSync(full, "utf8");
-    // Every page in a folder (the games and the games page) can install the site as an app: the manifest, icons and
-    // the service worker (site/manifest.webmanifest, site/icons/, site/sw.js). Paths are relative, like everything.
+    // Every page (the games, the games page, the apps and the home page; not 404.html, which is served at any address)
+    // can install the site as an app: the manifest, icons and the service worker (site/manifest.webmanifest,
+    // site/icons/, site/sw.js). It also shows your avatar in the profile icon, if the page has one (shared/me.js).
+    // Paths are relative, like everything.
     const up = relative(dirname(full), OUT);
-    if (up) {
-      const r = up.split(sep).join("/") + "/";
+    if (up || e.name !== "404.html") {
+      const r = up ? up.split(sep).join("/") + "/" : "./";
       html = html.replace(/<meta charset="utf-8">/i, (m) => `${m}
   <link rel="manifest" href="${r}manifest.webmanifest">
   <link rel="icon" href="${r}icons/favicon-32.png" type="image/png">
   <link rel="apple-touch-icon" href="${r}icons/apple-touch-icon.png">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <script type="module">if ("serviceWorker" in navigator) navigator.serviceWorker.register("${r}sw.js").catch(() => {});</script>`);
+  <script type="module">import { showMe } from "${r}shared/me.js?v=${version["me.js"]}"; showMe();
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("${r}sw.js").catch(() => {});</script>`);
     }
     const hashes = [...html.matchAll(/<script\b(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)]
       .map((m) => `'sha256-${createHash("sha256").update(m[1]).digest("base64")}'`);

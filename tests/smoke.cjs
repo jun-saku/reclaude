@@ -1,8 +1,9 @@
 // Smoke test for every page in _site, run in CI as part of the required build check. It needs no per-game code:
 // it opens each project and the games page on a phone-sized screen and fails on JavaScript errors, blocked scripts
 // (Content-Security-Policy), sideways scroll, a game missing from the games page or missing its "All games" link,
-// or a same-device game that won't start; and the apps (/apps/ and /apps/<name>/, with ?backend=fake): errors, the
-// security policy, sideways scroll and their "‹ All apps" link. The network outside this machine is blocked, so it
+// or a same-device game that won't start; the home page (/) and its link to the games; the back links (‹: a game to
+// the games page, the games page and the apps home) and the profile icon on every game; and the apps
+// (/apps/<name>/, with ?backend=fake): errors, the security policy and sideways scroll. The network outside this machine is blocked, so it
 // never touches Firebase or Supabase.
 // Run: node scripts/build.mjs && node tests/smoke.cjs   (needs Playwright, or playwright-core plus CHROMIUM_PATH)
 const { chromium } = (() => {
@@ -53,7 +54,7 @@ const server = http.createServer((req, res) => {
       if (/Content Security Policy/i.test(t)) problems.push(`blocked by the security policy: ${t.slice(0, 160)}`);
       else if (m.type() === 'error' && !/ERR_BLOCKED_BY_CLIENT|Failed to load resource/.test(t)) problems.push(`console error: ${t.slice(0, 160)}`);
     });
-    await page.goto(BASE + name + '/' + query);
+    await page.goto(BASE + (name ? name + '/' : '') + query);
     await page.waitForTimeout(400);
     return { ctx, page, problems };
   }
@@ -68,6 +69,17 @@ const server = http.createServer((req, res) => {
     const missing = games.filter((g) => !targets.includes(g));
     ok(!missing.length, `games page: lists every game${missing.length ? ` (missing: ${missing.join(', ')}; add a card to site/games/index.html)` : ''}`);
     ok(!problems.length && (await wide(page)) <= 390, `games page: loads cleanly, no sideways scroll ${problems.join(' | ')}`);
+    ok((await page.$eval('.home-link', (a) => a.getAttribute('href')).catch(() => null)) === '../', 'games page: has the ‹ back link home (../)');
+    await ctx.close();
+  }
+
+  // The home page: a row to the games, and the profile icon.
+  {
+    const { ctx, page, problems } = await open('');
+    const policy = await page.evaluate(() => !!document.querySelector('meta[http-equiv="Content-Security-Policy"]'));
+    ok(policy && !problems.length && (await wide(page)) <= 390, `home page: loads with the security policy, no errors, no sideways scroll ${problems.join(' | ')}`);
+    ok(await page.$('a[href="games/"]') !== null, 'home page: links to the games (games/)');
+    ok((await page.$eval('.me-link', (a) => a.getAttribute('href')).catch(() => null)) === 'apps/profile/', 'home page: has the profile icon (apps/profile/)');
     await ctx.close();
   }
 
@@ -78,7 +90,9 @@ const server = http.createServer((req, res) => {
     ok((await wide(page)) <= 390, `${name}: no sideways scroll at 390px (${await wide(page)}px)`);
     if (!NOT_GAMES.has(name)) {
       const home = await page.$eval('.home-link', (a) => a.getAttribute('href')).catch(() => null);
-      ok(home === '../games/', `${name}: has the "‹ All games" link to ../games/`);
+      ok(home === '../games/', `${name}: has the ‹ back link to ../games/`);
+      const me = await page.$eval('.me-link', (a) => a.getAttribute('href')).catch(() => null);
+      ok(me === '../apps/profile/', `${name}: has the profile icon (../apps/profile/)`);
     }
     // Same-device play, where the game has it: it must start without errors.
     if (await page.isVisible('#local').catch(() => false)) {
@@ -89,21 +103,19 @@ const server = http.createServer((req, res) => {
     await ctx.close();
   }
 
-  // The apps: the list, and each app (on the stand-in backend: no Supabase here).
-  for (const name of fs.existsSync(path.join(SITE, 'apps', 'index.html')) ? ['apps', ...apps.map((a) => `apps/${a}`)] : []) {
+  // The apps (on the stand-in backend: no Supabase here).
+  for (const name of apps.map((a) => `apps/${a}`)) {
     const { ctx, page, problems } = await open(name, '?backend=fake');
     await page.waitForTimeout(400);
     const policy = await page.evaluate(() => !!document.querySelector('meta[http-equiv="Content-Security-Policy"]'));
     ok(policy && !problems.length, `${name}: loads with the security policy and no errors ${problems.join(' | ')}`);
     ok((await wide(page)) <= 390, `${name}: no sideways scroll at 390px (${await wide(page)}px)`);
-    if (name !== 'apps') {
-      const home = await page.$eval('.home-link', (a) => a.getAttribute('href')).catch(() => null);
-      ok(home === '../', `${name}: has the "‹ All apps" link to ../`);
-    }
+    const home = await page.$eval('.home-link', (a) => a.getAttribute('href')).catch(() => null);
+    ok(home === '../../', `${name}: has the ‹ back link home (../../)`);
     await ctx.close();
   }
 
-  console.log(`\n${projects.length} projects, the games page and ${apps.length} app(s) checked. FAILS: ${fails}`);
+  console.log(`\n${projects.length} projects, the home and games pages and ${apps.length} app(s) checked. FAILS: ${fails}`);
   await browser.close();
   server.close();
   process.exit(fails ? 1 : 0);

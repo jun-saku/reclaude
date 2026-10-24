@@ -6,9 +6,9 @@
 //   Other sites (Firebase, the game server): never touched.
 const CACHE = "reclaude-2"; // a new name drops every older copy on the next visit
 
-// Kept from the start: the games page (the app's start), the manifest and icons. The page that registered this
+// Kept from the start: the home page (the app's start), the games page, the manifest and icons. The page that registered this
 // worker loaded before it was there, so it's fetched again and kept too (and any other open tab of the site).
-const CORE = ["games/", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png"];
+const CORE = ["./", "games/", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png"];
 self.addEventListener("install", (e) => e.waitUntil((async () => {
   const cache = await caches.open(CACHE);
   await Promise.all(CORE.map((u) => cache.add(new URL(u, self.registration.scope)).catch(() => {})));

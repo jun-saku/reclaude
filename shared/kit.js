@@ -41,6 +41,7 @@
 import * as rooms from "../shared/rooms.js";
 import { topTen } from "../shared/leaderboard.js";
 import { feedJoin } from "../shared/feed.js";
+import { showMe } from "../shared/me.js";
 
 export { rooms };
 
@@ -55,7 +56,7 @@ export function start(game, ui = {}) {
   const main = document.querySelector("main") || document.body.appendChild(document.createElement("main"));
   const localPlayers = modes.includes("local") ? range(maxP - Math.max(2, minP) + 1).map((i) => i + Math.max(2, minP)) : [];
   main.insertAdjacentHTML("beforeend", `
-    <div class="kit-title"><h1>${ui.logo || ""}${esc(ui.title || game.id)}</h1><div class="code" id="room-label"></div>${ui.leaderboard ? '<button class="trophy" id="trophy" aria-label="Top 10 leaderboard" aria-haspopup="dialog">🏆</button>' : ""}</div>
+    <div class="kit-title"><h1>${ui.logo || ""}${esc(ui.title || game.id)}</h1><div class="code" id="room-label"></div>${ui.leaderboard ? '<button class="trophy" id="trophy" aria-label="Top 10 leaderboard" aria-haspopup="dialog">🏆</button>' : ""}<a class="me-link" href="../apps/profile/" aria-label="Your profile">👤</a></div>
     <section id="home">
       ${online || ui.leaderboard ? `<div class="card"><label class="name-row"><span>Your name</span>
         <input id="my-name" maxlength="12" autocomplete="nickname" spellcheck="false" placeholder="So friends know it's you"></label></div>` : ""}
@@ -100,6 +101,11 @@ export function start(game, ui = {}) {
       </div>
       <div class="row"><button class="secondary" id="leave">Leave</button></div>
     </section>`);
+  // The title row: the page's back link (‹ to the games page) moves in before the title; the profile icon shows
+  // your avatar (shared/me.js).
+  const back = main.querySelector(".home-link");
+  if (back) main.querySelector(".kit-title").prepend(back);
+  showMe(main);
   const $ = (id) => document.getElementById(id);
   const stage = $("stage");
 

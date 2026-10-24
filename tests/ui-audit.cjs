@@ -28,8 +28,8 @@ const server = http.createServer((req, res) => {
   res.writeHead(200, { 'content-type': TYPES[path.extname(f)] || 'application/octet-stream' });
   fs.createReadStream(f).pipe(res);
 });
-// Every game and page, and the apps (apps, apps/<name>).
-const ALL = fs.readdirSync(SITE).filter((d) => fs.existsSync(path.join(SITE, d, 'index.html')) && !['shared'].includes(d));
+// The home page (''), every game and page, and the apps (apps/<name>).
+const ALL = ['', ...fs.readdirSync(SITE).filter((d) => fs.existsSync(path.join(SITE, d, 'index.html')) && !['shared', 'apps'].includes(d))];
 if (fs.existsSync(path.join(SITE, 'apps'))) {
   for (const d of fs.readdirSync(path.join(SITE, 'apps'))) if (fs.existsSync(path.join(SITE, 'apps', d, 'index.html'))) ALL.push(`apps/${d}`);
 }
@@ -100,8 +100,11 @@ function audit({ card }) {
     if (card && t !== card) out.push(`consistent: <h1> "${t}" isn't the games page title "${card}"`);
   }
   const link = document.querySelector('.home-link');
-  const back = location.pathname.includes('/apps/') ? '‹ All apps' : '‹ All games';
-  if (shown(link) && link.textContent.trim() !== back) out.push(`consistent: the home link says "${link.textContent.trim()}", not "${back}"`);
+  // The back link is ‹ alone, named for where it goes: the games page from a game, else home.
+  const games = /\/games\/$/.test(location.pathname), app = location.pathname.includes('/apps/');
+  const back = games || app ? 'Home' : 'All games';
+  if (shown(link) && (link.textContent.trim() !== '‹' || link.getAttribute('aria-label') !== back)) out.push(`consistent: the back link is "${link.textContent.trim()}" (${link.getAttribute('aria-label')}), not ‹ (${back})`);
+  for (const me of document.querySelectorAll('.me-link')) if (shown(me) && !(me.getAttribute('aria-label') || '').startsWith('Your profile')) out.push('labelled: the profile icon has no "Your profile" label');
   const WORDS = {
     create: /^Create room$/, join: /^Join$/, share: /^Share link$/, copy: /^(Copy code|Copied!?)$/, leave: /^Leave$/,
     'lobby-leave': /^Leave$/, rematch: /^Play again( \(.+\))?$/, local: /^(Play (here|solo)|Continue game)$/, 'local-many': /^Play here$/,
@@ -170,7 +173,7 @@ function audit({ card }) {
       const ctx = await b.newContext({ viewport: { width, height: 760 }, colorScheme: scheme, hasTouch: true });
       await ctx.route('**/*', (r) => (new URL(r.request().url()).hostname === 'localhost' ? r.continue() : r.abort()));
       const errs = [];
-      const open = async () => { const p = await ctx.newPage(); p.on('pageerror', (e) => errs.push(e.message)); await p.goto(`http://localhost:${PORT}/${game}/?backend=fake`); await p.waitForTimeout(400); return p; };
+      const open = async () => { const p = await ctx.newPage(); p.on('pageerror', (e) => errs.push(e.message)); await p.goto(`http://localhost:${PORT}/${game ? `${game}/` : ''}?backend=fake`); await p.waitForTimeout(400); return p; };
       const tag = `${scheme} ${width}`;
       const p = await open();
       note(game, `home ${tag}`, await p.evaluate(audit, { card: CARDS[game] }));

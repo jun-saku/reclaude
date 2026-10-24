@@ -2,7 +2,7 @@
    adds its own styles for its board:
      <link rel="stylesheet" href="../shared/base.css">
      <link rel="stylesheet" href="../shared/kit.css"> */
-.kit-title { display: flex; align-items: center; gap: 10px; }
+.kit-title { display: flex; align-items: center; gap: 6px; }
 .kit-title h1 { flex: 1; min-width: 0; }
 .kit-title .code { flex: none; white-space: nowrap; }
 h1 svg { width: 1.1em; height: 1.1em; }

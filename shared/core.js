@@ -8,6 +8,7 @@
 // It connects to the live project; on this machine (localhost, 127.0.0.1) to a local Supabase (`supabase start`,
 // which the security policy allows too); with ?backend=fake to nothing: this browser's storage only, for the UI tests.
 import { createClient } from "../shared/supabase-js.js";
+import { rememberMe } from "../shared/me.js";
 
 const LIVE = { url: "https://xikukwpayubiyxcnlwme.supabase.co", key: "sb_publishable_Qqo7Kh391E381GR_zy9DVg_JImDyTVy" };
 // The local stack's demo key: the same on every machine, public like the live one.
@@ -99,11 +100,16 @@ async function fakeSignIn() {
 // ---------- API ----------
 export const signIn = () => (fake ? fakeSignIn() : supabaseSignIn());
 export const signedIn = async () => (fake ? (fakeRead().id ? { id: fakeRead().id } : null) : supabaseSignedIn());
-export const myProfile = async () => (fake ? fakeRead().profile || null : supabaseMyProfile());
+// Both keep this device's copy of the name and avatar (shared/me.js: the profile icon on every page) up to date.
+export async function myProfile() {
+  const profile = fake ? fakeRead().profile || null : await supabaseMyProfile();
+  rememberMe(profile);
+  return profile;
+}
 export async function saveProfile({ display_name, avatar }) {
   const name = cleanName(display_name);
   if (!name) throw new CoreError("That name can't be used. Try letters, numbers or emoji (up to 24).");
   const row = { display_name: name, avatar: cleanAvatar(avatar) };
-  if (fake) { const db = fakeRead(); db.profile = row; fakeWrite(db); return; }
-  await supabaseSaveProfile(row);
+  if (fake) { const db = fakeRead(); db.profile = row; fakeWrite(db); } else await supabaseSaveProfile(row);
+  rememberMe(row);
 }

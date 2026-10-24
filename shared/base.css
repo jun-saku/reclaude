@@ -1,6 +1,6 @@
 /* The shared look of every game (the design standard, .claude/skills/new-game/DESIGN.md): colours for light and dark
    mode, the page, title, buttons, fields, cards, the join form, segmented options, the player bar, status and hint
-   lines, the lobby, "‹ All games" and the 44 px rule. A game links it first,
+   lines, the lobby, the title row (back and profile icon) and the 44 px rule. A game links it first,
      <link rel="stylesheet" href="../shared/base.css">
    then adds only its own board and pieces in its <style> (which may also override a colour token). Kit games link
    ../shared/kit.css after it. Player colours are --p0..--p9 (seat % 10). */
@@ -62,13 +62,23 @@ p { margin: 0; }
 .muted { color: var(--muted); }
 #home, #game { display: flex; flex-direction: column; gap: 12px; }
 
-/* Back to the games list; hidden while in a room or a game (use Leave there). */
+/* The title row (.title-bar): back (‹, an icon-only link with an aria-label: to the games page from a game, home
+   from the games page) before the title, and the profile icon (.me-link: your avatar, or 👤) at the right. Both are
+   hidden once in a room or game (use Leave there). */
+.title-bar { display: flex; align-items: center; gap: 6px; }
+.title-bar h1 { flex: 1; min-width: 0; }
+.title-bar .code { flex: none; white-space: nowrap; }
 .home-link {
-  align-self: flex-start; display: inline-flex; align-items: center; gap: 2px; margin: -6px 0 -6px -6px; padding: 6px;
-  min-height: 44px; color: var(--muted); font-size: 0.9rem; font-weight: 600; text-decoration: none; border-radius: 8px;
+  flex: none; display: inline-grid; place-items: center; width: 44px; height: 44px; margin-left: -10px;
+  color: var(--text); font-size: 2.1rem; line-height: 1; text-decoration: none; border-radius: 12px;
 }
-.home-link:active { opacity: 0.6; }
-main:has(#home[hidden]) .home-link { display: none; }
+.me-link {
+  flex: none; display: inline-grid; place-items: center; width: 44px; height: 44px; border-radius: 50%;
+  background: var(--soft); font-size: 1.35rem; line-height: 1; text-decoration: none;
+}
+:is(.home-link, .me-link):active { opacity: 0.6; }
+:is(.home-link, .me-link):focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+main:has(#home[hidden]) :is(.home-link, .me-link) { display: none; }
 
 /* Controls: one primary (accent) button per card or row, the rest .secondary. */
 button {
@@ -139,7 +149,7 @@ input, select { font: inherit; touch-action: manipulation; }
 .title-row h1 { min-width: 0; }
 .title-row .code { flex: none; white-space: nowrap; }
 /* (On the home screen there's no room: an old code from before Leave stays hidden.) */
-main:has(#home:not([hidden])) :is(.title-row, .kit-title) .code { display: none; }
+main:has(#home:not([hidden])) :is(.title-row, .kit-title, .title-bar) .code { display: none; }
 .code b { font-size: 1.05rem; letter-spacing: 0.15em; color: var(--text); }
 .clock { font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 600; }
 .clock.low { color: var(--danger); }

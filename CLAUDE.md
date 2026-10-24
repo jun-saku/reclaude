@@ -7,21 +7,26 @@ The user usually works from their phone, so keep replies short and end with the 
 
 - `https://reclaude.junsaku.dev/<name>/`: one project, from `projects/<name>/`. This is the address to share
   (Cloudflare Pages custom domain; `https://reclaude.pages.dev/<name>/` is the same site).
-- `https://reclaude.junsaku.dev/games/`: the landing page (`site/games/index.html`), a card linking to each game.
-  Non-games (the calculator) aren't listed. Projects don't link to each other.
-- `https://reclaude.junsaku.dev/apps/`: the social apps (`apps/index.html`, the list) and `/apps/<name>/` (from
-  `apps/<name>/`), on Supabase. Not linked from the games, and games don't link to them.
-- Anything else, including the root: the blank 404 page.
+- `https://reclaude.junsaku.dev/`: the home page (`site/index.html`), where the installed app opens: a row per
+  section (Games for now, then the apps) and the profile icon.
+- `https://reclaude.junsaku.dev/games/`: the games page (`site/games/index.html`), a card linking to each game, and
+  back home. Non-games (the calculator) aren't listed. Projects don't link to each other.
+- `https://reclaude.junsaku.dev/apps/<name>/`: one social app (from `apps/<name>/`), on Supabase, e.g. the Profile
+  page `/apps/profile/`.
+- Every page's title row: back `‹` (game → games page, games page and apps → home), the title, and the profile icon
+  (`.me-link`, to `/apps/profile/`) at the right; see `.claude/skills/new-game/DESIGN.md`.
+- Anything else: the blank 404 page.
 
 ## Layout
 
 - `projects/<name>/`: one project. `index.html` is required; add any other files it needs
   (images, sounds, extra scripts) next to it.
 - `projects/_template/`: starting point for new projects.
-- `site/`: files copied to the site root (`404.html`, and `games/`: the landing page), and what makes the site an
+- `site/`: files copied to the site root (`index.html`: the home page, `404.html`, and `games/`: the games page), and what makes the site an
   installable app: `manifest.webmanifest`, `icons/` and `sw.js` (the service worker: pages from the network first,
   so always the newest site, and from its copy when offline; versioned shared files kept; other sites never
-  touched). The build adds the manifest, icons and the worker's registration to every page in a folder.
+  touched). The build adds the manifest, icons and the worker's registration to every page but 404.html, and
+  `shared/me.js`, which shows your avatar in the profile icon from this device's copy (no network).
 - `shared/`: code used by several projects, published at `/shared/` and imported as `../shared/<file>`.
   `shared/rooms.js` is the multiplayer room system: 2–10 seats, teams, auto-start or a host-started lobby, codes, share
   links, presence, player names (`myName`/`setMyName`/`nameOf`, remembered per device), an optional turn timer
@@ -51,11 +56,12 @@ The user usually works from their phone, so keep replies short and end with the 
   locally `cd worker && npm ci && npm run dev`, which the e2e tests start themselves.
 - `site/_headers`: Cloudflare response headers for every path (no framing by other sites, nosniff, referrer and
   permissions policies).
-- `apps/`: the social apps (see "Supabase"): `apps/index.html` lists them, `apps/<name>/index.html` is one app. They
-  use `shared/base.css` and the design standard like games, but link back with `‹ All apps` (`../`), not to the games,
-  and import `../../shared/<file>`, which the build stamps the same way.
+- `apps/`: the social apps (see "Supabase"): `apps/<name>/index.html` is one app, listed on the home page. They use
+  `shared/base.css` and the design standard like games, link back home (`‹`, `../../`), and import
+  `../../shared/<file>`, which the build stamps the same way.
 - `shared/core.js`: the apps' client: sign-in (anonymous, remembered per device) and the person's profile
-  (`core.profiles`). It loads `shared/supabase-js.js`, the Supabase client bundled into one file by
+  (`core.profiles`), keeping this device's copy of the name and avatar for the profile icon (`shared/me.js`, which
+  pages can load without Supabase). It loads `shared/supabase-js.js`, the Supabase client bundled into one file by
   `scripts/vendor-supabase.mjs` (never edit it; update by changing the version there and running it). On localhost it
   uses a local Supabase (`supabase start`), with `?backend=fake` this browser only (what the smoke test and UI audit use).
 - `scripts/new-project.mjs`: creates a project from the template.
@@ -64,7 +70,7 @@ The user usually works from their phone, so keep replies short and end with the 
 - `tests/`: dev-only tests, never published. `tests/worker-auth.test.mjs` checks the game server's sign-in check and `tests/feed.test.mjs` its feeds (both part
   of the `build` check). `tests/smoke.cjs` (run after the build: `node tests/smoke.cjs`) opens every
   page at 390px and fails on JavaScript errors, blocked scripts, sideways scroll, a game missing from the games page or
-  its "‹ All games" link, or a same-device game that won't start; it's part of the required `build` check, needs no
+  its ‹ back link or profile icon, a missing link from the home page to the games, or a same-device game that won't start; it's part of the required `build` check, needs no
   per-game code, and lists non-games (no card, no link) in `NOT_GAMES`. `node tests/ui-audit.cjs` (after the build; CI's `ui` job) checks every screen against the design standard
   (`.claude/skills/new-game/DESIGN.md`: titles, wording, home-screen order, controls)
   in light and dark mode at 320 and 390 px: tap targets at least 44 px, text at least 12 px with 4.5:1 contrast (3:1
