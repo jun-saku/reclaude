@@ -65,7 +65,8 @@ The user usually works from their phone, so keep replies short and end with the 
   in `tests/e2e/<name>.cjs` (more as `<name>-<what>.cjs`, e.g. `tanks-smooth.cjs`: a slow phone network) (`engine.cjs` for room features); `E2E=wall-race,engine npm run e2e` runs only some. On
   PRs, CI's `e2e` job runs only the tests for the games the PR changes (`tests/pick-e2e.mjs`), or all of them when
   `shared/`, the rules, the build or the test setup change; it isn't a required check.
-- `.github/workflows/pages.yml`: builds and smoke-tests every push and PR (the `build` check `main` requires) and runs the rules test; from `main` it
+- `supabase/`: the Supabase database for the social apps (see "Supabase" below): `config.toml`, `migrations/`, `tests/`.
+- `.github/workflows/pages.yml`: builds and smoke-tests every push and PR (the `build` check `main` requires) and runs the rules and Supabase tests; from `main` it
   deploys to Cloudflare Pages; on PRs it uploads a Cloudflare preview and comments its link.
   Cloudflare uploads use the `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` repo secrets (set by the user;
   never ask for their values) and are skipped while those are missing.
@@ -136,6 +137,25 @@ only its own `projects/<name>/` folder; engine changes to `shared/` or the rules
   and rules. Any rules change needs a passing `npm run rules` and new cases in `tests/rules.test.mjs`. Rules must stay
   compatible with the site currently live, since the rules publish a moment before the new site does. Then ask
   the user to try the real thing.
+
+## Supabase (social apps, being built)
+
+- Project `xikukwpayubiyxcnlwme` (`https://xikukwpayubiyxcnlwme.supabase.co`, Singapore), anonymous sign-ins on.
+  The publishable key (`sb_publishable_…`) is public by design, like the Firebase config; access is controlled by row
+  level security. Never ask for, or put anywhere, the secret / `service_role` key or the database password.
+- Games stay on Firebase. Supabase is for the social side (profiles first, then apps such as Plan), one Postgres
+  schema per module: `core` (shared by every app: `core.profiles` now) and later one schema per app, which refers to
+  people only by `core.profiles.id` and never touches another app's schema. Core never refers to an app.
+- Everything is created by migrations in `supabase/migrations/` (never by hand in the dashboard), each with row level
+  security on and explicit grants (Supabase grants nothing on a new schema), and tested in `supabase/tests/` (pgTAP:
+  every policy gets allowed and refused cases). Run locally with the Supabase CLI and Docker: `supabase db start`,
+  then `supabase test db`.
+- CI's `supabase` job runs those tests on every push and PR. On `main`, the `migrate` job applies new migrations to the
+  live database (`supabase db push`) before the site deploys, with the `SUPABASE_DB_URL` secret of the `production`
+  environment (main only). A migration goes live on merge and can't be undone by reverting: call it out in the PR,
+  and fix mistakes with a new migration.
+- A new schema must also be added to the dashboard's exposed schemas (Settings → Data API) and to `[api] schemas` in
+  `supabase/config.toml` before pages can reach it.
 
 ## Rules
 

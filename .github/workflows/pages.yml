@@ -1,7 +1,7 @@
 name: Build and deploy
 
 # Every PR and push is built and the database rules are tested, so problems are caught before merging.
-# On main, the database rules are published to Firebase first, then the game server (worker/) goes to Cloudflare
+# On main, the database rules are published to Firebase and the Supabase migrations applied first, then the game server (worker/) goes to Cloudflare
 # Workers, then the site goes to Cloudflare Pages.
 # PRs get a Cloudflare preview link, posted as a PR comment.
 # Cloudflare steps are skipped until the CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets exist.
@@ -76,6 +76,18 @@ jobs:
       - run: npm ci
       - run: npm run rules
 
+  # Supabase (supabase/): applies the migrations to a local Supabase and runs their row level security tests
+  # (supabase/tests/). Docker is on the runner.
+  supabase:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.120.0
+      - run: supabase db start
+      - run: supabase test db
+
   # End-to-end tests on PRs: only the games a PR changes (tests/pick-e2e.mjs), or all of them when shared code, the
   # rules or the test setup change. Real Firebase SDK + emulator, headless Chrome. Not a required check, so it never
   # holds up a merge; a red result is still worth a look.
@@ -139,6 +151,24 @@ jobs:
       - name: Publish database rules
         run: npx --yes firebase-tools@13.35.1 deploy --only database --project reclaude-67a01 --non-interactive
 
+  # Applies new Supabase migrations (supabase/migrations/) to the live database, on main only, after their tests pass
+  # and before the site deploys. The connection string is a secret of the `production` environment, which only main
+  # can use, so PR branches never see it.
+  migrate:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: [build, supabase]
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.120.0
+      - name: Apply database migrations
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: supabase db push --db-url "$SUPABASE_DB_URL" --yes
+
   # The game server (worker/, a Cloudflare Worker with one Durable Object per room) at play.reclaude.junsaku.dev, from
   # main only, after the rules and before the site, so a new page never meets an older server. PR previews use the
   # live server. Skipped until the Cloudflare secrets exist; the API token needs "Workers Scripts: Edit". The address
@@ -181,8 +211,8 @@ jobs:
   # (no Cloudflare-GitHub connection needed, and direct uploads don't use Cloudflare's build quota).
   # On main it waits for the rules to publish; PR previews use the live rules.
   cloudflare:
-    if: ${{ !cancelled() && needs.build.result == 'success' && (github.event_name == 'pull_request' || (github.ref == 'refs/heads/main' && needs.publish_rules.result == 'success')) }}
-    needs: [build, publish_rules, worker]
+    if: ${{ !cancelled() && needs.build.result == 'success' && (github.event_name == 'pull_request' || (github.ref == 'refs/heads/main' && needs.publish_rules.result == 'success' && needs.migrate.result == 'success')) }}
+    needs: [build, publish_rules, migrate, worker]
     runs-on: ubuntu-latest
     permissions:
       contents: read
