@@ -152,7 +152,7 @@ await expect('the host closing a waiting room with guests in it', true, async ()
   await set(A.r('rooms/LQBY'), room(A.uid)); await update(B.r('rooms/LQBY'), { 'players/s1': B.uid }); await remove(A.r('rooms/LQBY'));
 });
 
-console.log('-- 10 seats, names, turn timer');
+console.log('-- 10 seats, names, avatars, turn timer');
 const U = []; for (let i = 0; i < 10; i++) U.push(await user('P' + i));
 await expect('a 10-seat room', true, () => set(U[0].r('rooms/BXGA'), { ...room(U[0].uid), seats: 10, min: 2, names: { s0: 'Host' } }));
 for (let i = 1; i < 10; i++) await update(U[i].r('rooms/BXGA'), { [`players/s${i}`]: U[i].uid, [`names/s${i}`]: 'Player ' + i });
@@ -164,6 +164,14 @@ await expect("changing someone else's name", false, () => set(U[3].r('rooms/BXGA
 await expect('a name with HTML characters', false, () => set(U[3].r('rooms/BXGA/names/s3'), '<b>x</b>'));
 await expect('a name over 16 characters', false, () => set(U[3].r('rooms/BXGA/names/s3'), 'ABCDEFGHIJKLMNOPQ'));
 await expect('an empty name', false, () => set(U[3].r('rooms/BXGA/names/s3'), ''));
+await expect('creating a room with your avatar', true, () => set(U[0].r('rooms/BXGB'), { ...room(U[0].uid), seats: 3, min: 2, avatars: { s0: '🦊' } }));
+await expect('joining with a name and an avatar', true, () => update(U[1].r('rooms/BXGB'), { 'players/s1': U[1].uid, 'names/s1': 'Bo', 'avatars/s1': '🐼' }));
+await expect('joining with an avatar for another seat', false, () => update(U[2].r('rooms/BXGB'), { 'players/s2': U[2].uid, 'avatars/s0': '💩' }));
+await expect('changing your own avatar', true, () => set(U[3].r('rooms/BXGA/avatars/s3'), '👨‍👩‍👧'));
+await expect("changing someone else's avatar", false, () => set(U[3].r('rooms/BXGA/avatars/s4'), '💩'));
+await expect('a stranger setting an avatar', false, () => set(D.r('rooms/BXGA/avatars/s3'), '🐸'));
+await expect('an avatar with HTML characters', false, () => set(U[3].r('rooms/BXGA/avatars/s3'), '<img>'));
+await expect('an avatar over 16 characters', false, () => set(U[3].r('rooms/BXGA/avatars/s3'), '🦊🦊🦊🦊🦊🦊🦊🦊🦊'));
 await expect('a turn of 9 and a winner of 9', true, () => update(U[0].r('rooms/BXGA'), { status: 'playing', turn: 9 }));
 await expect('the tenth player making a move', true, () => update(U[9].r('rooms/BXGA'), { board: 'x', turn: 0 }));
 // Turn timer

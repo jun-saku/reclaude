@@ -30,7 +30,7 @@ The user usually works from their phone, so keep replies short and end with the 
   `shared/me.js`, which shows your avatar in the profile icon from this device's copy (no network).
 - `shared/`: code used by several projects, published at `/shared/` and imported as `../shared/<file>`.
   `shared/rooms.js` is the multiplayer room system: 2–10 seats, teams, auto-start or a host-started lobby, codes, share
-  links, presence, player names (`myName`/`setMyName`/`nameOf`, remembered per device), an optional turn timer
+  links, presence, player names (`myName`/`setMyName`/`nameOf`, remembered per device) and avatars (`face`), an optional turn timer
   (`turnSecs` on `createRoom`, `turnLeft`, `skipTurn`), private per-seat data (`setPrivate`/`watchPrivate`, e.g. hands
   of cards), idle disconnect, and Firebase / emulator / stand-in / same-device backends. New multiplayer games must use it rather than copying room code.
   `shared/base.css` is the shared look every game links first (colours for light and dark, buttons, cards, the
@@ -60,9 +60,10 @@ The user usually works from their phone, so keep replies short and end with the 
 - `apps/`: the social apps (see "Supabase"): `apps/<name>/index.html` is one app, listed on the home page. They use
   `shared/base.css` and the design standard like games, link back home (`‹`, `../../`), and import
   `../../shared/<file>`, which the build stamps the same way.
-- `shared/core.js`: the apps' client: sign-in (anonymous, remembered per device) and the person's profile
-  (`core.profiles`), keeping this device's copy of the name and avatar for the profile icon (`shared/me.js`, which
-  pages can load without Supabase). It loads `shared/supabase-js.js`, the Supabase client bundled into one file by
+- `shared/core.js`: the apps' client: the person's profile, local first: kept on this device (`shared/me.js`, which
+  every page loads for the profile icon, and `rooms.js` for the avatar it sends into rooms) so it works offline and
+  with Supabase paused, and backed up to Supabase (`core.profiles`, anonymous sign-in) whenever it can be. Saving it
+  also sets the games' name (`rooms.myName`). It loads `shared/supabase-js.js`, the Supabase client bundled into one file by
   `scripts/vendor-supabase.mjs` (never edit it; update by changing the version there and running it). On localhost it
   uses a local Supabase (`supabase start`), with `?backend=fake` this browser only (what the smoke test and UI audit use).
 - `scripts/new-project.mjs`: creates a project from the template.
@@ -143,7 +144,9 @@ only its own `projects/<name>/` folder; engine changes to `shared/` or the rules
   the other player, the other team, or `draw` with 3+ players); games call it when a player taps Leave. Play again is
   by agreement (`rooms.playAgain`): each player sets only their own `again/<seat>` flag, and the round starts once
   everyone still online has tapped; `rooms.wantsAgain` reads the flags for the button text. Names live in
-  `names/<seat>` (each player sets only their own, no `<>&`; escape them anyway when building HTML). With a turn timer,
+  `names/<seat>` and avatars (the profile's emoji, sent on create and join; `rooms.avatarOf`, and `rooms.face(room,
+  seat)` as escaped HTML before a name in chips and the lobby) in `avatars/<seat>` (each player sets only their own, no
+  `<>&`; escape them anyway when building HTML). With a turn timer,
   every write that starts a new turn stamps `turnAt` automatically, and once `turnSecs` have passed any seated player
   may move `turn` on (`rooms.skipTurn`); the skipped player just misses that turn. Rooms over a
   day old may be deleted by anyone; `rooms.js` clears them when it meets one, and a host leaving a waiting room
@@ -173,8 +176,11 @@ only its own `projects/<name>/` folder; engine changes to `shared/` or the rules
 - A new schema must also be added to the dashboard's exposed schemas (Settings → Data API) and to `[api] schemas` in
   `supabase/config.toml` before pages can reach it.
 - Pages reach Supabase only through `shared/core.js` (and later each app's own module next to it), and only signed-in
-  users can read anything. Opening a page must not sign anyone up: only an action that needs it (like saving a
-  profile, or opening the profile page) calls `core.signIn()`; elsewhere use `core.signedIn()`.
+  users can read anything. Opening a page must not sign anyone up: only an action that needs it (like backing up a
+  saved profile) calls `core.signIn()`; elsewhere use `core.signedIn()`.
+- The free plan pauses an idle project, so nothing the games need may depend on Supabase: names and avatars work from
+  the device's copy and Firebase rooms. Accounts (username + personal key) and Supabase-backed apps wait until the
+  project is on a paid plan or kept awake.
 - Testing an app for real: `supabase start` (the CLI and Docker), build, serve `_site` on localhost and drive it with
   Playwright: the pages use the local stack there.
 

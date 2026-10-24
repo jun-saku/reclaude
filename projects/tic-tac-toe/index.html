@@ -295,7 +295,7 @@
       els.roomLabel.innerHTML = local ? "Same phone" : `Room <b>${code}</b>`;
       const chip = (s, label, dot) =>
         `<span class="chip ${s}${r.status === "playing" && r.turn === s ? " turn" : ""}">` +
-        `<span class="mark">${s.toUpperCase()}</span>${label}${dot === undefined ? "" : `<span class="dot${dot ? " on" : ""}"></span>`}</span>`;
+        `<span class="mark">${s.toUpperCase()}</span>${local ? "" : rooms.face(r, MARK.indexOf(s))}${label}${dot === undefined ? "" : `<span class="dot${dot ? " on" : ""}"></span>`}</span>`;
       els.players.innerHTML = local
         ? chip("x", "", undefined) + chip("o", "", undefined)
         : chip(side, "You", true) + (r.o ? chip(other, friendName(r, other), !!online[other]) : "");

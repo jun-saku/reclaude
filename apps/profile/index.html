@@ -30,14 +30,7 @@
       <a class="home-link" href="../../" aria-label="Home">‹</a>
       <h1>Profile</h1>
     </div>
-    <p class="muted" id="loading">Signing in…</p>
-
-    <section class="card" id="offline" hidden>
-      <p id="offline-text">Can't reach the server. Check your connection and try again.</p>
-      <button id="retry">Try again</button>
-    </section>
-
-    <section class="card" id="form" hidden>
+    <section class="card" id="form">
       <div class="preview" aria-hidden="true"><span class="avatar" id="preview-avatar">🙂</span><span class="name" id="preview-name"></span></div>
       <label class="name-row"><span>Your name</span>
         <input id="name" maxlength="24" autocomplete="nickname" enterkeyhint="done" placeholder="So friends know it's you"></label>
@@ -48,7 +41,7 @@
       <p class="done" id="done" role="status"></p>
     </section>
 
-    <p class="hint">Saving also sets your name in the games. Your profile is kept on this device: clearing the browser's data starts a new one.</p>
+    <p class="hint">Saving also sets your name in the games. Your profile is kept on this phone, so it works offline too: clearing the browser's data starts a new one.</p>
   </main>
   <script type="module">
     import * as core from "../../shared/core.js";
@@ -79,39 +72,33 @@
       $("done").textContent = "";
     }
 
-    async function start() {
-      $("loading").hidden = false;
-      $("offline").hidden = $("form").hidden = true;
-      try {
-        await core.signIn();
-        const me = await core.myProfile();
-        saved = me;
-        $("name").value = me?.display_name || "";
-        avatar = me?.avatar || null;
-        $("form").hidden = false;
-        show();
-        $("save").textContent = me ? "Save" : "Create profile";
-      } catch (err) {
-        $("offline-text").textContent = err instanceof core.CoreError ? err.message : "Something went wrong. Try again.";
-        $("offline").hidden = false;
-      } finally {
-        $("loading").hidden = true;
-      }
+    // The profile shows straight away from this phone. A phone without one may still have one with Supabase (from
+    // an earlier visit); one not yet backed up is sent now. Neither holds anything up.
+    function fill(me) {
+      saved = me;
+      $("name").value = me?.display_name || "";
+      avatar = me?.avatar || null;
+      $("save").textContent = me ? "Save" : "Create profile";
+      show();
+    }
+    function start() {
+      fill(core.localProfile());
+      if (saved) core.backUpProfile();
+      else core.loadProfile().then((me) => { if (me && !saved && !$("name").value) fill(me); });
     }
 
     $("name").addEventListener("input", show);
     $("name").addEventListener("keydown", (e) => { if (e.key === "Enter" && !$("save").disabled) $("save").click(); });
-    $("retry").addEventListener("click", start);
     $("save").addEventListener("click", async () => {
       $("save").disabled = true;
       $("error").textContent = "";
       try {
-        await core.saveProfile({ display_name: $("name").value, avatar });
+        const { backedUp } = await core.saveProfile({ display_name: $("name").value, avatar });
         $("name").value = core.cleanName($("name").value);
         saved = { display_name: $("name").value, avatar };
         show();
         $("save").textContent = "Save";
-        $("done").textContent = "Saved ✓";
+        $("done").textContent = backedUp ? "Saved ✓" : "Saved on this phone ✓";
       } catch (err) {
         $("error").textContent = err instanceof core.CoreError ? err.message : "Something went wrong. Try again.";
         $("save").disabled = false;

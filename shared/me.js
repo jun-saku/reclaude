@@ -1,5 +1,5 @@
 // The profile icon (.me-link, shared/base.css) at the top right of the pages: your avatar once you've made a profile
-// on this device (shared/core.js keeps a copy of your name and avatar here), else 👤. Only reads this device: no
+// on this device (where shared/core.js keeps your profile: name and avatar), else 👤. Only reads this device: no
 // network, no sign-in. The build runs showMe() on every page; pages that add a .me-link later (the kit) call it again.
 export const ME_KEY = "core-me";
 
@@ -9,7 +9,8 @@ export function readMe() {
 
 export function rememberMe(profile) {
   try {
-    if (profile) localStorage.setItem(ME_KEY, JSON.stringify({ display_name: profile.display_name, avatar: profile.avatar || null }));
+    // (pending: shared/core.js hasn't backed it up to Supabase yet.)
+    if (profile) localStorage.setItem(ME_KEY, JSON.stringify({ display_name: profile.display_name, avatar: profile.avatar || null, ...(profile.pending ? { pending: true } : {}) }));
     else localStorage.removeItem(ME_KEY);
   } catch {}
   showMe();

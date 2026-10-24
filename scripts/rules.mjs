@@ -30,11 +30,12 @@ const write = `auth != null && $code.matches(/^[A-HJ-NP-Z2-9]{4}$/) && (newData.
 
 // A seat, once taken, can't be emptied or given to someone else.
 const seatsKept = S.map((i) => `(!data.child('players/s${i}').exists() || ${same(`players/s${i}`)})`).join(" && ");
-// Only the seat's own player changes its online flag, play-again flag and name. Play-again flags are all
+// Only the seat's own player changes its online flag, play-again flag, name and avatar. Play-again flags are all
 // cleared when a new round starts.
 const online = ownFlag("online");
 const again = `(newData.child('round').val() !== data.child('round').val() || (${ownFlag("again")}))`;
 const names = ownFlag("names");
+const avatars = ownFlag("avatars");
 const full = S.slice(1).map((i) => `(newData.child('seats').val() <= ${i} || newData.child('players/s${i}').exists())`).join(" && ");
 // Waiting: the host sets the game up; others may only take a seat (and start an auto room once it is full).
 const waiting = `(!${st("waiting")} || ${isHost} || (${leaves(game)} && (${same("status")} || (newData.child('status').val() === 'playing' && data.child('auto').val() === true && ${full}))))`;
@@ -61,7 +62,7 @@ const fixed = "(!data.exists() || newData.val() === data.val())";
 const room = {
   ".read": "auth != null && $code.matches(/^[A-HJ-NP-Z2-9]{4}$/)",
   ".write": write,
-  ".validate": `newData.hasChildren(['game', 'host', 'seats', 'players', 'status', 'turn', 'round', 'createdAt']) && (!data.exists() || (${seatsKept} && ${online} && ${again} && ${names} && ${waiting} && ${playing} && ${done}))`,
+  ".validate": `newData.hasChildren(['game', 'host', 'seats', 'players', 'status', 'turn', 'round', 'createdAt']) && (!data.exists() || (${seatsKept} && ${online} && ${again} && ${names} && ${avatars} && ${waiting} && ${playing} && ${done}))`,
   game: { ".validate": `newData.isString() && newData.val().matches(/^[a-z0-9-]{1,24}$/) && ${fixed}` },
   host: { ".validate": "newData.isString() && (data.exists() ? newData.val() === data.val() : newData.val() === auth.uid && newData.parent().child('players/s0').val() === auth.uid)" },
   seats: { ".validate": `newData.isNumber() && newData.val() >= 2 && newData.val() <= ${SEATS} && ${fixed}` },
@@ -85,6 +86,8 @@ const room = {
   online: perSeat("newData.isBoolean()"),
   again: perSeat("newData.isBoolean()"),
   names: perSeat(`newData.isString() && newData.val().matches(/${NAME_RE}/)`),
+  // The player's avatar from their profile (an emoji, shared/me.js), shown before their name.
+  avatars: perSeat(`newData.isString() && newData.val().matches(/${NAME_RE}/)`),
   $other: { ".validate": false },
 };
 
