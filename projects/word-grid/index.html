@@ -641,7 +641,8 @@
       $("again").textContent = r.mode === "daily" ? "Random board" : "New board";
       $("save-label").textContent = r.mode === "daily" ? `Add your score to the Top 10 for ${dateLabel(r.date)}:` : "Add your score to the all-time Top 10:";
       $("save-msg").textContent = "";
-      if (!$("save-name").value) { try { $("save-name").value = localStorage.getItem(NAME_KEY) || ""; } catch {} }
+      // The name last saved here, else the one used across the games (your profile's, once you've saved one).
+      if (!$("save-name").value) { try { $("save-name").value = localStorage.getItem(NAME_KEY) || rooms.cleanName(rooms.myName()); } catch {} }
       $("save-btn").textContent = `Save ${score}`;
       $("save-box").hidden = !(score > 0 && !r.saved) || r.mode === "room";
       $("solo-actions").hidden = r.mode === "room";
