@@ -321,7 +321,7 @@
 
       $("room-label").innerHTML = local ? "Same phone" : `Room <b>${code}</b>`;
       const chip = (s, label, dot) =>
-        `<span class="chip ${s}${r.status === "playing" && r.turn === s ? " turn" : ""}"><span class="disc"></span>${label}` +
+        `<span class="chip ${s}${r.status === "playing" && r.turn === s ? " turn" : ""}"><span class="disc"></span>${local ? "" : rooms.face(r, MARK.indexOf(s))}${label}` +
         (dot === undefined ? "" : `<span class="dot${dot ? " on" : ""}"></span>`) + `</span>`;
       $("players").innerHTML = local
         ? chip("x", "Red") + chip("o", "Yellow")

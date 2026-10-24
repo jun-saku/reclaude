@@ -2,12 +2,18 @@
 module.exports = async ({ page, ok, statusIs, BASE, out }) => {
   const FL = BASE + 'five-line/?backend=emulator';
   // ---- Names and the turn timer on real Firebase (a 3-seat Five Line room with a 30 s timer) ----
-  const T1 = await page(FL); await T1.fill('#my-name', 'Jun'); await T1.click('#mode button[data-mode="3"]'); await T1.click('#timer button[data-secs="30"]');
+  // (Each player has a profile avatar on their phone: shared/me.js's copy, which rooms.js sends with the name.)
+  const T1 = await page(FL); await T1.evaluate(() => localStorage.setItem('core-me', JSON.stringify({ display_name: 'Jun', avatar: '🦊' })));
+  await T1.fill('#my-name', 'Jun'); await T1.click('#mode button[data-mode="3"]'); await T1.click('#timer button[data-secs="30"]');
   await T1.click('#create'); await T1.waitForSelector('#waiting:not([hidden])', { timeout: 15000 });
   const tmcode = (await T1.textContent('#waiting-code')).trim();
-  const T2 = await page(FL); await T2.fill('#my-name', 'Bo'); await T2.fill('#join-code', tmcode); await T2.click('#join'); await T2.waitForSelector('#waiting:not([hidden])', { timeout: 15000 });
+  const T2 = await page(FL); await T2.evaluate(() => localStorage.setItem('core-me', JSON.stringify({ display_name: 'Bo', avatar: '🐼' })));
+  await T2.fill('#my-name', 'Bo'); await T2.fill('#join-code', tmcode); await T2.click('#join'); await T2.waitForSelector('#waiting:not([hidden])', { timeout: 15000 });
   await T1.waitForFunction(() => document.getElementById('seated').textContent.includes('Bo'), null, { timeout: 8000 });
   ok((await T2.textContent('#seated')).includes('Jun'), 'names reach the other players through the real rules');
+  const faces = async (P) => P.evaluate(() => [...document.querySelectorAll('#seated .face')].map((e) => e.textContent).join(''));
+  await T1.waitForFunction(() => document.querySelectorAll('#seated .face').length === 2, null, { timeout: 8000 }).catch(() => {});
+  ok((await faces(T1)) === '🦊🐼' && (await faces(T2)) === '🦊🐼', `avatars reach the other players through the real rules (${await faces(T1)} / ${await faces(T2)})`);
   await T1.waitForFunction(() => !document.getElementById('start-btn').disabled, null, { timeout: 8000 });
   await T1.click('#start-btn'); await T1.waitForTimeout(3000);
   console.log('DEBUG note:', await T1.textContent('#waiting-note'), JSON.stringify(await T1.evaluate(() => { const r = window.__fl.room; return { status: r.status, turnSecs: r.turnSecs, turnAt: r.turnAt, names: r.names, keys: Object.keys(r) }; })));

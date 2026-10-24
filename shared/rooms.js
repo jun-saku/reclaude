@@ -36,6 +36,7 @@
 // Firebase may call fn with null before it has the room cached: transactions on a room you aren't
 // watching (via enter) should return null for a null room, not abort, so Firebase retries with real data.
 
+import { readMe } from "../shared/me.js";
 export const FIREBASE_CONFIG = {
   apiKey: "AIzaSyCCRIEJKgWbghpEhua1HlBvSoAuJ7ffDhE",
   authDomain: "reclaude-67a01.firebaseapp.com",
@@ -99,6 +100,15 @@ export function wantsAgain(room, seat) {
 // The seat's player name, or "P1", "P2"… when they haven't set one.
 export function nameOf(room, seat) {
   return room?.names?.[seatKey(seat)] || `P${seat + 1}`;
+}
+// The seat's player's avatar (an emoji from their profile, shared/me.js), or "" when they have none.
+export function avatarOf(room, seat) {
+  return room?.avatars?.[seatKey(seat)] || "";
+}
+// The avatar as HTML for a player chip or the lobby list, right before the name: escaped, or "" when there's none.
+export function face(room, seat) {
+  const a = avatarOf(room, seat);
+  return a ? `<span class="face" aria-hidden="true">${a.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)}</span>` : "";
 }
 // Seconds left on the current turn, or null when the room has no timer or no game is on.
 // A turn timer as a bar that empties as the seconds go (red for the last `low` of them), or "time's up": HTML for the
@@ -503,7 +513,17 @@ export function lobbyName(before, seatOf) {
   before.before(row);
   if (!myName()) setTimeout(() => { if (row.offsetParent) input.focus(); }, 300);
 }
-const withName = (room, seat) => { const n = myName(); if (n) room.names = { ...(room.names || {}), [seatKey(seat)]: n }; return room; };
+// The avatar from this device's profile (shared/me.js), as the rules take it (avatars/<seat>: up to 16, no < > &).
+export function myAvatar() {
+  const a = String(readMe()?.avatar || "").replace(/[<>&]/g, "").trim();
+  return a.length <= ROOM_NAME_MAX ? a : "";
+}
+const withName = (room, seat) => {
+  const n = myName(), a = myAvatar();
+  if (n) room.names = { ...(room.names || {}), [seatKey(seat)]: n };
+  if (a) room.avatars = { ...(room.avatars || {}), [seatKey(seat)]: a };
+  return room;
+};
 
 // ---------- rooms ----------
 
@@ -558,8 +578,9 @@ export async function joinRoom(game, raw) {
   if ((current.game || "tic-tac-toe") !== game || !current.players) throw new RoomError(`${code} is a room for a different game.`);
   const mine = seatOf(current, b.uid);
   if (mine !== null) {
-    // Rejoining: bring the name in the room up to date.
+    // Rejoining: bring the name and avatar in the room up to date.
     if (myName() && current.names?.[seatKey(mine)] !== myName()) await b.update(code, { [`names/${seatKey(mine)}`]: myName() }).catch(() => {});
+    if (myAvatar() && current.avatars?.[seatKey(mine)] !== myAvatar()) await b.update(code, { [`avatars/${seatKey(mine)}`]: myAvatar() }).catch(() => {});
     return { backend: b, code, seat: mine };
   }
   if (playerCount(current) >= current.seats) throw new RoomError("That room is full.");

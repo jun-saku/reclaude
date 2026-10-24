@@ -655,9 +655,9 @@
 
     function who(t) {
       const o = G.owner[t];
-      if (o === myRS()) return "You";
+      if (o === myRS()) return rooms.face(room, o) + "You";
       if (o < 0) return mode === "solo" && t === partner(meSeat()) ? "Partner" : "Computer";
-      return esc(rooms.nameOf(room, o)) + (room && !rooms.isOnline(room, o) ? ' <span class="away">(away)</span>' : "");
+      return rooms.face(room, o) + esc(rooms.nameOf(room, o)) + (room && !rooms.isOnline(room, o) ? ' <span class="away">(away)</span>' : "");
     }
 
     function saveSolo() { try { localStorage.setItem(KEY, JSON.stringify(G)); } catch (e) {} }
@@ -918,7 +918,7 @@
       const list = rooms.seatList(r);
       const count = rooms.playerCount(r);
       $("seated").innerHTML = list.map((uid, s) => uid
-        ? `<div><span class="dot${rooms.isOnline(r, s) ? " on" : ""}"></span>${s === seat.seat ? "You" : esc(rooms.nameOf(r, s))}${s === seat.seat && rooms.nameOf(r, s) !== `P${s + 1}` ? ` (${esc(rooms.nameOf(r, s))})` : ""}${s === 0 ? " (host)" : ""}</div>` : "").join("");
+        ? `<div><span class="dot${rooms.isOnline(r, s) ? " on" : ""}"></span>${rooms.face(r, s)}${s === seat.seat ? "You" : esc(rooms.nameOf(r, s))}${s === seat.seat && rooms.nameOf(r, s) !== `P${s + 1}` ? ` (${esc(rooms.nameOf(r, s))})` : ""}${s === 0 ? " (host)" : ""}</div>` : "").join("");
       const host = isHost();
       $("pairing").hidden = !(host && count === 2);
       for (const b of document.querySelectorAll("#pairing button")) b.setAttribute("aria-pressed", String(b.dataset.pair === pairing));

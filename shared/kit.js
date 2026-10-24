@@ -287,7 +287,7 @@ export function start(game, ui = {}) {
     const seats = mode === "online" ? rooms.seatList(room).flatMap((u, s) => (u ? [s] : [])) : i.seats;
     const here = (s) => (mode !== "online" ? true : realtime ? i.seats.includes(s) : rooms.isOnline(room, s));
     // (In the waiting room the list of who's here shows them, so the bar stays empty.)
-    const players = mode === "solo" || waiting ? "" : seats.map((s) => `<span class="chip${i.turn === s && !i.over ? " turn" : ""}${here(s) ? "" : " out"}" style="--pc: var(--p${s % 10})"><span class="disc"></span>${name(s)}${ui.chip?.(s, i) ?? ""}${mode === "online" ? `<span class="dot${here(s) ? " on" : ""}"></span>` : ""}</span>`).join("");
+    const players = mode === "solo" || waiting ? "" : seats.map((s) => `<span class="chip${i.turn === s && !i.over ? " turn" : ""}${here(s) ? "" : " out"}" style="--pc: var(--p${s % 10})"><span class="disc"></span>${rooms.face(room, s)}${name(s)}${ui.chip?.(s, i) ?? ""}${mode === "online" ? `<span class="dot${here(s) ? " on" : ""}"></span>` : ""}</span>`).join("");
     if ($("players").innerHTML !== players) {
       $("players").innerHTML = players;
       // A long row scrolls sideways: bring whoever's on turn into view.
@@ -318,7 +318,7 @@ export function start(game, ui = {}) {
   function renderLobby() {
     const seats = rooms.seatList(room), count = rooms.playerCount(room), host = seat.seat === 0;
     $("waiting-code").textContent = seat.code;
-    $("seated").innerHTML = seats.map((uid, s) => uid ? `<div><span class="chip" style="--pc: var(--p${s % 10})"><span class="disc"></span>${name(s)}${s === seat.seat && rooms.nameOf(room, s) !== `P${s + 1}` ? ` (${esc(rooms.nameOf(room, s))})` : ""}${s === 0 ? " (host)" : ""}</span></div>` : "").join("");
+    $("seated").innerHTML = seats.map((uid, s) => uid ? `<div><span class="chip" style="--pc: var(--p${s % 10})"><span class="disc"></span>${rooms.face(room, s)}${name(s)}${s === seat.seat && rooms.nameOf(room, s) !== `P${s + 1}` ? ` (${esc(rooms.nameOf(room, s))})` : ""}${s === 0 ? " (host)" : ""}</span></div>` : "").join("");
     const need = Math.max(2, minP);
     $("start-btn").hidden = !host;
     $("start-btn").disabled = count < need;

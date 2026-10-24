@@ -103,6 +103,7 @@ secret goal) goes in private data: one string per seat, ≤ 512 chars, readable 
 | `playAgain(seat, deal)` | Marks you ready; once everyone online is ready, `deal(room, round)` sets up the next round. |
 | `skipTurn(seat, room)` / `turnLeft(room)` | Turn timer: seconds left, and passing an overdue turn on. |
 | `nameOf(room, s)`, `myName()`, `setMyName(name, seat?)` | Player names (escape them before putting them in HTML). |
+| `face(room, s)`, `avatarOf(room, s)` | The player's avatar (their profile's emoji, sent with the name): `face` is escaped HTML to put right before the name in chips and the lobby list (the kit does it). |
 | `seatList`, `playerCount`, `seatOf`, `nextSeat`, `teamOf`, `isOnline`, `wantsAgain` | Small helpers. |
 | `localRoom(game, players, makeRoom)` | Same-phone mode, no network. |
 | `share(code, title)`, `roomFromUrl()` | Share links; open `?room=CODE` to join directly. |

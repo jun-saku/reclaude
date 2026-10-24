@@ -66,7 +66,7 @@ and 390 px; it must report 0 problems before a game PR is ready.
 ## Game screen (interface)
 
 Top to bottom:
-1. ✓ Player bar (`#players`): a chip per player (colour, name, online dot, score if any); the player on turn has a coloured ring.
+1. ✓ Player bar (`#players`): a chip per player (colour, avatar (`rooms.face`) and name, online dot, score if any); the player on turn has a coloured ring.
    Online, the room code sits at the right.
 2. ✓ Status line (`#status`, bold, centred, above the board): the turn line, timer, or result. One line, it never jumps the board around.
 3. The board, as wide as the screen allows (max 480 px), square cells.

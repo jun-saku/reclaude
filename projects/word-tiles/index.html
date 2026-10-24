@@ -603,7 +603,7 @@
       const seats = rooms.seatList(r);
 
       $("room-label").innerHTML = local() ? "Same phone" : `Room <b>${seat.code}</b>`;
-      $("players").innerHTML = seats.map((uid, s) => uid ? `<span class="chip${playing && r.turn === s ? " turn" : ""}">${label(s)}` +
+      $("players").innerHTML = seats.map((uid, s) => uid ? `<span class="chip${playing && r.turn === s ? " turn" : ""}">${rooms.face(r, s)}${label(s)}` +
         (st ? ` <b>${st.sc[s]}</b>` : "") + (local() ? "" : `<span class="dot${rooms.isOnline(r, s) ? " on" : ""}"></span>`) + "</span>" : "").join("");
 
       $("waiting").hidden = !waiting;
@@ -611,7 +611,7 @@
       if (waiting) {
         $("waiting-code").textContent = seat.code;
         const count = rooms.playerCount(r), host = r.host === seat.backend.uid;
-        $("seated").innerHTML = seats.map((uid, s) => uid ? `<div><span class="chip">${label(s)}${s === seat.seat && rooms.nameOf(r, s) !== `P${s + 1}` ? ` (${esc(rooms.nameOf(r, s))})` : ""}${s === 0 ? " (host)" : ""}</span></div>` : "").join("");
+        $("seated").innerHTML = seats.map((uid, s) => uid ? `<div><span class="chip">${rooms.face(r, s)}${label(s)}${s === seat.seat && rooms.nameOf(r, s) !== `P${s + 1}` ? ` (${esc(rooms.nameOf(r, s))})` : ""}${s === 0 ? " (host)" : ""}</span></div>` : "").join("");
         $("start-btn").hidden = !host;
         $("start-btn").disabled = count < 2;
         $("waiting-note").textContent = `${count} of ${r.seats} here. ` + (host ? (count < 2 ? "Waiting for a friend to join…" : "Start when everyone's in.") : "Waiting for the host to start…");

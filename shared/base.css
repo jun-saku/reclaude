@@ -141,6 +141,8 @@ input, select { font: inherit; touch-action: manipulation; }
 .chip.turn { border-color: var(--pc, var(--accent)); }
 .chip.out { opacity: 0.5; }
 .chip .disc { width: 12px; height: 12px; border-radius: 3px; background: var(--pc); }
+/* rooms.face(): the player's avatar (an emoji from their profile) before their name, in chips and the lobby list. */
+.face { font-size: 1.05em; line-height: 1; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); opacity: 0.4; }
 .dot.on { background: var(--good); opacity: 1; }
 .code { font-size: 0.85rem; color: var(--muted); }

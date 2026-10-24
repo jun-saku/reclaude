@@ -778,7 +778,7 @@
     }
 
     function renderPlayers() {
-      const html = seated(room).map((s) => `<span class="chip">${label(s)}<span class="dot${rooms.isOnline(room, s) ? " on" : ""}"></span></span>`).join("");
+      const html = seated(room).map((s) => `<span class="chip">${rooms.face(room, s)}${label(s)}<span class="dot${rooms.isOnline(room, s) ? " on" : ""}"></span></span>`).join("");
       const code = `Room <b>${seat.code}</b>`;
       for (const id of ["lobby-players", "play-players"]) $(id).innerHTML = html;
       $("lobby-code").innerHTML = $("play-code").innerHTML = code;
@@ -788,7 +788,7 @@
       renderPlayers();
       $("waiting-code").textContent = seat.code;
       const hostSeat = rooms.seatOf(room, room.host);
-      $("seated").innerHTML = seated(room).map((s) => `<div><span class="chip">${label(s)}${s === hostSeat ? " (host)" : ""}</span></div>`).join("");
+      $("seated").innerHTML = seated(room).map((s) => `<div><span class="chip">${rooms.face(room, s)}${label(s)}${s === hostSeat ? " (host)" : ""}</span></div>`).join("");
       const count = rooms.playerCount(room);
       const host = room.host === seat.backend.uid;
       $("start-btn").hidden = !host;

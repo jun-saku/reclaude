@@ -361,7 +361,7 @@
       $("players").innerHTML = seats.map((uid, s) => {
         if (!uid) return "";
         const out = r.status !== "waiting" && !alive(r, s, moved);
-        return `<span class="chip${playing && r.turn === s ? " turn" : ""}${out ? " out" : ""}" style="--pc: var(--p${s})"><span class="disc"></span>${label(s)}` +
+        return `<span class="chip${playing && r.turn === s ? " turn" : ""}${out ? " out" : ""}" style="--pc: var(--p${s})"><span class="disc"></span>${rooms.face(r, s)}${label(s)}` +
           (r.status !== "waiting" ? `<span class="count">${orbsOf(r.board, s)}</span>` : "") +
           (local() ? "" : `<span class="dot${rooms.isOnline(r, s) ? " on" : ""}"></span>`) + `</span>`;
       }).join("");
@@ -372,7 +372,7 @@
       if (waiting) {
         $("waiting-code").textContent = seat.code;
         const count = rooms.playerCount(r);
-        $("seated").innerHTML = seats.map((uid, s) => uid ? `<div><span class="chip" style="--pc: var(--p${s})"><span class="disc"></span>${label(s)}${s === mine && rooms.nameOf(r, s) !== `P${s + 1}` ? ` (${esc(rooms.nameOf(r, s))})` : ""}${s === 0 ? " (host)" : ""}</span></div>` : "").join("");
+        $("seated").innerHTML = seats.map((uid, s) => uid ? `<div><span class="chip" style="--pc: var(--p${s})"><span class="disc"></span>${rooms.face(r, s)}${label(s)}${s === mine && rooms.nameOf(r, s) !== `P${s + 1}` ? ` (${esc(rooms.nameOf(r, s))})` : ""}${s === 0 ? " (host)" : ""}</span></div>` : "").join("");
         $("waiting-note").textContent = `${count} of ${r.seats} here. The game starts when everyone's in.`;
         $("status").textContent = $("hint").textContent = "";
         $("rematch").hidden = $("skip").hidden = true;
