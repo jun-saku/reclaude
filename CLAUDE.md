@@ -23,7 +23,8 @@ The user usually works from their phone, so keep replies short and end with the 
   (images, sounds, extra scripts) next to it.
 - `projects/_template/`: starting point for new projects.
 - `site/`: files copied to the site root (`index.html`: the home page, `404.html`, and `games/`: the games page), and what makes the site an
-  installable app: `manifest.webmanifest`, `icons/` and `sw.js` (the service worker: pages from the network first,
+  installable app named "reclaude", opening on the home page: `manifest.webmanifest`, `icons/` (drawn by
+  `node scripts/icons.cjs`) and `sw.js` (the service worker: pages from the network first,
   so always the newest site, and from its copy when offline; versioned shared files kept; other sites never
   touched). The build adds the manifest, icons and the worker's registration to every page but 404.html, and
   `shared/me.js`, which shows your avatar in the profile icon from this device's copy (no network).

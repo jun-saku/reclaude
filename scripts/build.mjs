@@ -151,6 +151,7 @@ function addCsp(dir) {
   <link rel="apple-touch-icon" href="${r}icons/apple-touch-icon.png">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="reclaude">
   <script type="module">import { showMe } from "${r}shared/me.js?v=${version["me.js"]}"; showMe();
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("${r}sw.js").catch(() => {});</script>`);
     }
