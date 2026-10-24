@@ -14,7 +14,8 @@ const ROOT = new URL("..", import.meta.url).pathname;
 const OUT = join(ROOT, "_site");
 const PROJECTS = join(ROOT, "projects");
 const NAME_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
-const RESERVED = new Set(["404", "assets", "games", "icons", "shared"]);
+const RESERVED = new Set(["404", "apps", "assets", "games", "icons", "shared"]);
+const APPS = join(ROOT, "apps");
 
 rmSync(OUT, { recursive: true, force: true });
 mkdirSync(OUT);
@@ -44,6 +45,21 @@ for (const e of readdirSync(PROJECTS, { withFileTypes: true })) {
   built.push(e.name);
 }
 
+// The social apps (on Supabase, see CLAUDE.md): apps/index.html, the list, at /apps/, and each apps/<name>/ at
+// /apps/<name>/, with the same rules as projects. "_" and "." folders are skipped.
+const apps = [];
+if (existsSync(APPS)) {
+  if (!existsSync(join(APPS, "index.html"))) errors.push("apps/: missing index.html (the list of apps)");
+  for (const e of readdirSync(APPS, { withFileTypes: true })) {
+    if (!e.isDirectory() || e.name.startsWith("_") || e.name.startsWith(".")) continue;
+    if (!NAME_RE.test(e.name)) errors.push(`apps/${e.name}: name must be lowercase-kebab-case (it becomes the URL)`);
+    else if (!existsSync(join(APPS, e.name, "index.html"))) errors.push(`apps/${e.name}: missing index.html`);
+    else apps.push(e.name);
+  }
+  cpSync(APPS, join(OUT, "apps"), { recursive: true, filter: (src) => !relative(APPS, src).split(sep).some((p) => /^[_.]/.test(p)) });
+  built.push("apps", ...apps.map((a) => `apps/${a}`));
+}
+
 if (errors.length) {
   console.error(errors.join("\n"));
   process.exit(1);
@@ -66,17 +82,17 @@ for (let pass = 0; pass < 8; pass++) { // until links between shared files settl
   for (const [f, text] of Object.entries(sharedText)) version[f] = createHash("sha256").update(stampText(text)).digest("hex").slice(0, 10);
 }
 for (const [f, text] of Object.entries(sharedText)) if (/\.(js|mjs)$/.test(f)) writeFileSync(join(OUT, "shared", f), stampText(text));
-function stamp(dir) {
+function stamp(dir, shallow = false) { // shallow: this folder's files only (apps/: each app is stamped on its own)
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, e.name);
-    if (e.isDirectory()) { stamp(full); continue; }
+    if (e.isDirectory()) { if (!shallow) stamp(full); continue; }
     if (!/\.(html|js|mjs)$/.test(e.name)) continue;
     const text = readFileSync(full, "utf8");
     const out = stampText(text);
     if (out !== text) writeFileSync(full, out);
   }
 }
-for (const name of built) stamp(join(OUT, name));
+for (const name of built) stamp(join(OUT, name), name === "apps");
 // A game's own modules (./game.js, ./words.js, ./sim.js…) get ?v=<content hash> too, so a page never runs with an
 // older copy of one held by the browser or the offline copy (the page then fails to start: a name it imports is
 // missing). Like shared files, a module's hash covers the stamped links in it (game.js changes when words.js does).
@@ -95,9 +111,9 @@ for (const name of built) {
 
 // Content-Security-Policy, added to every page as a <meta> tag: scripts may only come from this site, the page's own
 // inline scripts (by hash, so injected ones can't run), Firebase's SDK folder and reCAPTCHA's (App Check), and pages
-// may only connect to Firebase, Google's APIs and reclaude's game server (worker/, play.reclaude.junsaku.dev). Sources
-// are exact folders, not whole hosts: a whole CDN would let an injected tag load anyone's code from it. 127.0.0.1 is the
-// Firebase emulator and the local game server the tests use.
+// may only connect to Firebase, Google's APIs, reclaude's game server (worker/, play.reclaude.junsaku.dev) and the
+// apps' Supabase project. Sources are exact folders, not whole hosts: a whole CDN would let an injected tag load
+// anyone's code from it. 127.0.0.1 is the Firebase emulator, the local game server and the local Supabase the tests use.
 // site/_headers adds the rest (no framing by other sites, nosniff, referrer and permissions policies).
 // A new external source must be added here as its exact folder (e.g. https://cdn.jsdelivr.net/npm/some-lib@1.2.3/),
 // or the browser blocks it.
@@ -110,7 +126,8 @@ const CSP = {
   "img-src": ["'self'", "data:", "https://www.gstatic.com/recaptcha/"],
   "connect-src": ["'self'", "https://*.firebasedatabase.app", "wss://*.firebasedatabase.app", "https://*.googleapis.com",
     "https://www.google.com", "http://127.0.0.1:9000", "ws://127.0.0.1:9000", "http://127.0.0.1:9099",
-    "wss://play.reclaude.junsaku.dev", "ws://127.0.0.1:8787"],
+    "wss://play.reclaude.junsaku.dev", "ws://127.0.0.1:8787",
+    "https://xikukwpayubiyxcnlwme.supabase.co", "wss://xikukwpayubiyxcnlwme.supabase.co", "http://127.0.0.1:54321", "ws://127.0.0.1:54321"],
   "frame-src": ["https://www.google.com", "https://recaptcha.google.com"],
   "object-src": ["'none'"],
   "base-uri": ["'none'"],

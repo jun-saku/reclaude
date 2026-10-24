@@ -1,4 +1,4 @@
-// UI audit: opens every screen of every game (home, one-phone game, online lobby, online game; ?backend=fake) at
+// UI audit: opens every screen of every game (home, one-phone game, online lobby, online game; ?backend=fake) and app at
 // 320 and 390 px wide in light and dark mode, and checks them against the design principles:
 //   touch    buttons, inputs and other tap targets at least 44×44 px (inline text links excepted)
 //   legible  text at least 12 px, with contrast at least 4.5:1 (3:1 for large text: 24 px, or 18.7 px bold)
@@ -28,7 +28,11 @@ const server = http.createServer((req, res) => {
   res.writeHead(200, { 'content-type': TYPES[path.extname(f)] || 'application/octet-stream' });
   fs.createReadStream(f).pipe(res);
 });
+// Every game and page, and the apps (apps, apps/<name>).
 const ALL = fs.readdirSync(SITE).filter((d) => fs.existsSync(path.join(SITE, d, 'index.html')) && !['shared'].includes(d));
+if (fs.existsSync(path.join(SITE, 'apps'))) {
+  for (const d of fs.readdirSync(path.join(SITE, 'apps'))) if (fs.existsSync(path.join(SITE, 'apps', d, 'index.html'))) ALL.push(`apps/${d}`);
+}
 const ONLY = process.argv.slice(2);
 const QUICK = !!process.env.QUICK; // light 390 only, for a quick look
 
@@ -96,7 +100,8 @@ function audit({ card }) {
     if (card && t !== card) out.push(`consistent: <h1> "${t}" isn't the games page title "${card}"`);
   }
   const link = document.querySelector('.home-link');
-  if (shown(link) && link.textContent.trim() !== '‹ All games') out.push(`consistent: the home link says "${link.textContent.trim()}", not "‹ All games"`);
+  const back = location.pathname.includes('/apps/') ? '‹ All apps' : '‹ All games';
+  if (shown(link) && link.textContent.trim() !== back) out.push(`consistent: the home link says "${link.textContent.trim()}", not "${back}"`);
   const WORDS = {
     create: /^Create room$/, join: /^Join$/, share: /^Share link$/, copy: /^(Copy code|Copied!?)$/, leave: /^Leave$/,
     'lobby-leave': /^Leave$/, rematch: /^Play again( \(.+\))?$/, local: /^(Play (here|solo)|Continue game)$/, 'local-many': /^Play here$/,
