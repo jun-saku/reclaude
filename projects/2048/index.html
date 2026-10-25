@@ -285,7 +285,7 @@
       if (over || (won && !keepPlaying)) return false;
 
       const [dr, dc] = DIRS[dir];
-      const snapshot = { grid: gridValues(), score };
+      const snapshot = { grid: gridValues(), score, best, won, keepPlaying };
       for (const t of tiles) { delete t.isNew; delete t.pop; }
       const g = gridOf(tiles);
       let moved = false;
@@ -349,6 +349,10 @@
       finishMove();
       setGridValues(history.grid);
       score = history.score;
+      // Undoing the move that made 2048 (or a new best) takes the win screen and the best back too.
+      won = history.won;
+      keepPlaying = history.keepPlaying;
+      best = Math.max(history.best, score);
       history = null;
       over = false;
       save();
@@ -542,7 +546,8 @@
       setGridValues(saved.grid);
       score = saved.score || 0;
       best = Math.max(saved.best || 0, score);
-      won = !!saved.won;
+      // A tile never shrinks, so a win needs a 2048 on the board (older saves could say otherwise after an undo).
+      won = !!saved.won && saved.grid.flat().some((v) => v >= 2048);
       keepPlaying = !!saved.keepPlaying;
       over = !canMove();
       if (!liveTiles().length) { spawn(); spawn(); }
