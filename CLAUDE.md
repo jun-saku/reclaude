@@ -69,7 +69,7 @@ The user usually works from their phone, so keep replies short and end with the 
 - `scripts/new-project.mjs`: creates a project from the template.
 - `scripts/rules.mjs`: generates `firebase/database.rules.json` (room rules repeat per seat). Edit the rules there, never
   the JSON, then run `node scripts/rules.mjs`; `npm run rules` fails if the two don't match.
-- `tests/`: dev-only tests, never published. `tests/worker-auth.test.mjs` checks the game server's sign-in check and `tests/feed.test.mjs` its feeds (both part
+- `tests/`: dev-only tests, never published. `tests/worker-auth.test.mjs` checks the game server's sign-in check, `tests/feed.test.mjs` its feeds and `tests/kit.test.mjs` its Play again (all part
   of the `build` check). `tests/smoke.cjs` (run after the build: `node tests/smoke.cjs`) opens every
   page at 390px and fails on JavaScript errors, blocked scripts, sideways scroll, a game missing from the games page or
   its ‹ back link or profile icon, a missing link from the home page to the games, or a same-device game that won't start; it's part of the required `build` check, needs no
