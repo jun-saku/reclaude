@@ -49,8 +49,9 @@ module.exports = async ({ page, ok, BASE }) => {
         // The drawer walks away while picking: their turn ends, the game goes on without them.
         await D.click('#leave');
         ps = ps.filter((p) => p !== D);
-        if (!(await wait(ps[0], () => ['reveal', 'pick'].includes(window.__kit.info.view.phase) && window.__kit.info.view.phase !== 'draw'))) problems.push('leaving mid-turn didn\'t end the turn');
-        await ps[0].evaluate(() => window.__kit.dev('skip'));
+        // The pen moves straight on to the next drawer (no reveal: there's no word to show).
+        if (!(await wait(ps[0], (t) => { const x = window.__kit.info.view; return x.phase === 'reveal' || (x.phase === 'pick' && x.turn > t); }, v.turn))) problems.push('leaving mid-turn didn\'t end the turn');
+        await ps[0].evaluate(() => { if (window.__kit.info.view.phase === 'reveal') window.__kit.dev('skip'); });
         continue;
       }
       await D.click('[data-pick="1"]');

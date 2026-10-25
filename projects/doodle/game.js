@@ -15,7 +15,20 @@ const MAX_CHAT = 30;
 export const REACTIONS = ["😂", "👏", "🤯", "😍", "🙈"];
 const REACT_GAP = 0.6, REACT_SHOW = 3;  // seconds between one player's reactions; how long they're sent for
 
-const norm = (t) => String(t).toLowerCase().replace(/[^a-z ]/g, "").replace(/\s+/g, " ").trim();
+// Guesses are compared in lower case, letters only, ignoring spaces and hyphens: "hotdog", "hot-dog" and "Hot Dog" all
+// match "hot dog". `words` keeps the word breaks (a hyphen is one) to find the answer inside a longer guess.
+const words = (t) => String(t).toLowerCase().replace(/-/g, " ").replace(/[^a-z ]/g, "").split(/\s+/).filter(Boolean);
+const squash = (t) => words(t).join("");
+// Right: the guess is the word, or has it as whole words in it ("a smoke", "it's a hotdog").
+function isRight(text, word) {
+  const w = squash(word), ws = words(text);
+  if (!w) return false;
+  for (let i = 0; i < ws.length; i++) {
+    let run = "";
+    for (let j = i; j < ws.length && run.length < w.length; j++) { run += ws[j]; if (run === w) return true; }
+  }
+  return false;
+}
 // One letter off (missing, extra or wrong): "close!".
 function oneOff(a, b) {
   if (Math.abs(a.length - b.length) > 1 || a === b) return false;
@@ -84,7 +97,13 @@ function startDrawing(g, word) {
   g.drawn[g.drawer]++;
 }
 function endTurn(g) {
-  if (g.phase === "pick") g.drawn[g.drawer]++; // a drawer who left (or never picked) loses that turn
+  if (g.phase === "pick") {
+    // The drawer left before picking: they lose that turn and, with no word to show, the pen moves straight on.
+    // (`text` is for pages from before `gone`, which show it as "<name>: left".)
+    g.drawn[g.drawer]++;
+    say(g, { s: g.drawer, gone: true, text: "left" });
+    return nextTurn(g);
+  }
   const n = Object.keys(g.guessed).length;
   if (n && g.drawer !== null) { g.scores[g.drawer] += DRAWER_POINTS * n; g.gained[g.drawer] = DRAWER_POINTS * n; }
   g.phase = "reveal"; g.left = REVEAL_S;
@@ -152,14 +171,17 @@ export function input(g, seat, m) {
   if (m.t === "guess") {
     const text = typeof m.text === "string" ? m.text.slice(0, 40).replace(/[<>&]/g, "").trim() : "";
     if (!text || seat === g.drawer || seat in g.guessed || !g.here[seat]) return false;
-    if (g.phase === "draw" && norm(text) === norm(g.word)) {
+    if (g.phase === "draw" && isRight(text, g.word)) {
       const pts = guessPoints(g.left);
       g.guessed[seat] = pts; g.gained[seat] = pts; g.scores[seat] += pts;
       say(g, { s: seat, ok: true });
       if (everyoneGuessed(g)) endTurn(g);
       return true;
     }
-    const close = g.phase === "draw" && norm(text).length >= 3 && oneOff(norm(text), norm(g.word));
+    // Close (one letter off, or the word inside a longer one like "smokestack"): only its guesser sees it, since
+    // everyone else would read the answer in it.
+    const t = squash(text), w = squash(g.word);
+    const close = g.phase === "draw" && t.length >= 3 && (oneOff(t, w) || t.includes(w));
     say(g, { s: seat, text, close: close || undefined });
     return true;
   }

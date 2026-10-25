@@ -262,6 +262,7 @@
         els.chat.innerHTML = v.chat.map((c) => {
           const who = `<b>${info.name(c.s)}</b>`;
           if (c.word) return `<li class="sys">The word was <b>${esc(c.word)}</b>.</li>`;
+          if (c.gone) return `<li class="sys">${info.name(c.s)} left.</li>`;
           if (c.ok) return `<li class="ok">✓ ${info.name(c.s)} got it!</li>`;
           return `<li${c.close ? ' class="close"' : ""}>${who}: ${esc(c.text)}${c.close ? " (close!)" : ""}</li>`;
         }).reverse().join("");
