@@ -88,9 +88,12 @@
 
     .rack {
       background: #8a6a43; border-radius: 12px; padding: 10px 8px; min-height: 76px;
-      display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; align-content: flex-start;
+      display: flex; flex-direction: column; gap: 8px; justify-content: center;
       box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.18);
     }
+    .rack .plans, .rack .loose { display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; align-content: flex-start; }
+    .rack .plans { padding-bottom: 8px; border-bottom: 2px solid rgba(255, 255, 255, 0.3); }
+    .rack .loose { flex: 1; }
     @media (prefers-color-scheme: dark) {
       .rack { background: #5a4630; }
     }
@@ -170,7 +173,7 @@
           <li>After that, rearrange the table any way you like, as long as every set is valid when you tap <b>Done</b>.</li>
           <li>Drag a tile onto a set, or onto the green table for a new set. Or tap tiles to pick them up, then tap <b>＋</b> on a set or <b>New set</b>.</li>
           <li>Drag tiles around your rack to put them in your own order.</li>
-          <li>Plan ahead on your rack: drag tiles onto <b>＋ New set</b> in the rack to group them, any time. Groups get the same outlines; drag one by its <b>⋮</b> handle (or tap the handle, then ＋) to put the whole set down.</li>
+          <li>Plan ahead on your rack: drag tiles onto <b>＋ New set</b> in the rack to group them, any time. Groups get the same outlines; drag one by its <b>☰</b> handle (or tap the handle, then ＋) to put the whole set down.</li>
           <li>Sets you changed get a green outline when they're valid and a dashed red one when they aren't. Tiles from your rack this turn are tinted.</li>
           <li>Everyone sees the table change live while the player on turn arranges it.</li>
           <li>Can't or don't want to play? <b>Draw</b> a tile and your turn ends. First to empty their rack wins.</li>
@@ -689,22 +692,22 @@
       // Rack
       const rackTiles = mt ? work.hand : hand || [];
       const canDrag = !!hand && handRound === r.round && playing;
-      // Planned sets first (tiles that left my rack for good drop out of them), then the loose tiles.
+      // Planned sets in their own row (tiles that left my rack for good drop out of them), then the loose tiles.
       if (hand && handRound === r.round) plan = plan.map((set) => set.filter((t) => hand.includes(t))).filter((set) => set.length);
       const rackTile = (t) => tileHtml(t, (picked.has(t) ? " sel" : "") + (canDrag ? " drag" : ""), !mt && !canDrag, "rack");
       const planned = new Set();
-      let rack = plan.map((set, g) => {
+      let plans = plan.map((set, g) => {
         const shown = set.filter((t) => rackTiles.includes(t));
         if (!shown.length) return "";
         shown.forEach((t) => planned.add(t));
         const a = analyze(shown);
-        return `<div class="pset${a.ok ? " ok" : ""}" data-g="${g}"><button class="grip${canDrag ? " drag" : ""}" data-g="${g}" aria-label="Move this set">⋮</button>` +
+        return `<div class="pset${a.ok ? " ok" : ""}" data-g="${g}"><button class="grip${canDrag ? " drag" : ""}" data-g="${g}" aria-label="Move this set">☰</button>` +
           (a.ok ? a.order : shown).map(rackTile).join("") + "</div>";
       }).join("");
-      rack += rackOrder(rackTiles.filter((t) => !planned.has(t))).map(rackTile).join("");
+      let rack = rackOrder(rackTiles.filter((t) => !planned.has(t))).map(rackTile).join("");
       if (mt && picked.size && [...picked].every((t) => work.fromHand.has(t)) && [...picked].some((t) => !work.hand.includes(t))) rack += `<button class="back" data-set="rack">↩ Back to rack</button>`;
       if (!rackTiles.length && !rack) rack = `<span class="none">${handRound === r.round || r.status !== "playing" ? "No tiles" : "Dealing…"}</span>`;
-      $("rack").innerHTML = rack;
+      $("rack").innerHTML = (plans ? `<div class="plans">${plans}</div>` : "") + `<div class="loose">${rack}</div>`;
 
       $("pool").textContent = st ? `${st.pool.length - st.next} tiles in the pool` : "";
       for (const b of document.querySelectorAll("#sort button")) b.setAttribute("aria-pressed", String(!custom && b.dataset.sort === sortBy));
@@ -901,7 +904,7 @@
         if (ps) return { kind: "rack", g: Number(ps.dataset.g), before: beforeOf(ps, ".tile"), el: ps };
         const np = el.closest(".newplan");
         if (np) return { kind: "rack", g: "new", el: np };
-        return { kind: "rack", g: null, before: beforeOf(rack, ":scope > .tile"), el: rack };
+        return { kind: "rack", g: null, before: beforeOf(rack.querySelector(".loose"), ".tile"), el: rack };
       }
       if (!work) return null;
       const set = el.closest(".set[data-i]");
@@ -936,8 +939,8 @@
         $("table").insertAdjacentHTML("beforeend", `<button class="newset" data-set="new">＋ New set</button>`);
       }
       // …and a planned set on the rack.
-      $("rack").querySelector(".none")?.remove();
-      $("rack").insertAdjacentHTML("beforeend", `<button class="newplan" type="button">＋ New set</button>`);
+      if (!$("rack").querySelector(".plans")) $("rack").insertAdjacentHTML("afterbegin", `<div class="plans"></div>`);
+      $("rack").querySelector(".plans").insertAdjacentHTML("beforeend", `<button class="newplan" type="button">＋ New set</button>`);
       const scroll = () => {
         if (!drag?.started) return;
         const edge = 70, h = innerHeight;
