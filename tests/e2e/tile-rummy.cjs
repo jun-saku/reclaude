@@ -13,6 +13,17 @@ module.exports = async ({ page, ok, statusIs, BASE, out }) => {
   ok(new Set(rh.flat()).size === 28, `tile rummy: room ${rcode}, both players deal themselves 14 different tiles`);
   const rpeek = await R2.evaluate(async (c) => { const b = await window.__tr.rooms.__test.backend(); return new Promise((r) => b.watchPrivate(c, 0, (v, e) => r(e ? 'denied' : 'read ' + v))); }, rcode);
   ok(rpeek === 'denied', "a player can't read the other's rack");
+  // Live view: the player on turn puts a tile down; the other watches it appear before Done, then Undo clears it.
+  {
+    const t0 = await R1.evaluate(() => window.__tr.room.turn);
+    const [M, O] = t0 === 0 ? [R1, R2] : [R2, R1];
+    await M.waitForFunction(() => window.__tr.work, null, { timeout: 8000 });
+    await M.evaluate(() => window.__tr.put([window.__tr.work.hand[0]], 'new'));
+    const seen = await O.waitForFunction(() => document.querySelectorAll('#table .set').length === 1 && /arranging/.test(document.getElementById('hint').textContent), null, { timeout: 8000 }).then(() => true, () => false);
+    await M.click('#reset');
+    const gone = await O.waitForFunction(() => !document.querySelector('#table .set'), null, { timeout: 8000 }).then(() => true, () => false);
+    ok(seen && gone, 'the other player watches the table change live, and Undo takes it back');
+  }
   // Bot: add a tile to a set on the table, else put down the best new set of three (30+ points for a first
   // meld), else draw.
   const trBot = async () => {
