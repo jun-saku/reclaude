@@ -14,19 +14,22 @@ export function kitGame(game) {
     for (const p of here) game.join?.(s, p);
     return s;
   };
+  // Once the game is over and everyone still here wants to play again: a new game with them.
+  const maybeRestart = (st) => {
+    const here = seatsOf(st.here);
+    if (game.result(st.s) && here.length && here.every((p) => st.again[p])) { st.s = fresh(st.players, here); st.again = {}; st.round++; }
+  };
   return {
     create: (room) => ({ s: fresh(playersIn(room), []), players: playersIn(room), round: 0, again: {}, here: {} }),
     load: (saved) => ({ ...saved, here: {}, s: game.load ? game.load(saved.s) : saved.s }),
     save: (st) => ({ ...st, here: {}, s: game.save ? game.save(st.s) : st.s }),
     join(st, seat) { st.here[seat] = true; game.join?.(st.s, seat); },
-    leave(st, seat) { delete st.here[seat]; delete st.again[seat]; game.leave?.(st.s, seat); },
+    leave(st, seat) { delete st.here[seat]; delete st.again[seat]; game.leave?.(st.s, seat); maybeRestart(st); },
     input(st, seat, msg, { dev } = {}) {
       if (msg.t === "in") { if (!game.result(st.s)) game.input(st.s, seat, msg.m && typeof msg.m === "object" ? msg.m : {}); }
       else if (msg.t === "again" && game.result(st.s)) {
         st.again[seat] = true;
-        // Everyone still here agrees: a new game with them.
-        const here = seatsOf(st.here);
-        if (here.every((p) => st.again[p])) { st.s = fresh(st.players, here); st.again = {}; st.round++; }
+        maybeRestart(st);
       } else if (msg.t === "dev" && dev) game.dev?.(st.s, msg.m, seat);
     },
     tick(st, dt) { if (!game.result(st.s)) game.tick?.(st.s, dt); },
