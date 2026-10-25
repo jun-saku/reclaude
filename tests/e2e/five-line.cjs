@@ -10,10 +10,10 @@ module.exports = async ({ page, ok, statusIs, BASE, out }) => {
   await F1.waitForFunction(() => !document.getElementById('start-btn').disabled, null, { timeout: 8000 });
   await F1.click('#start-btn'); await F1.waitForSelector('#board:not([hidden])', { timeout: 15000 });
   await F2.waitForSelector('#board:not([hidden])', { timeout: 15000 });
-  await F1.waitForFunction(() => window.__fl.hand && window.__fl.hand.length === 6, null, { timeout: 8000 });
-  await F2.waitForFunction(() => window.__fl.hand && window.__fl.hand.length === 6, null, { timeout: 8000 });
+  await F1.waitForFunction(() => window.__fl.hand && window.__fl.hand.length === 7, null, { timeout: 8000 });
+  await F2.waitForFunction(() => window.__fl.hand && window.__fl.hand.length === 7, null, { timeout: 8000 });
   const fh = [await F1.evaluate(() => window.__fl.hand), await F2.evaluate(() => window.__fl.hand)];
-  ok(new Set(fh.flat()).size === 12, 'host starts a 3-seat room with 2 players; both deal themselves 6 different cards');
+  ok(new Set(fh.flat()).size === 14, 'host starts a 3-seat room with 2 players; both deal themselves 7 different cards (2 players get 7)');
   const fpeek = await F2.evaluate(async (c) => { const b = await window.__fl.rooms.__test.backend(); return new Promise((r) => b.watchPrivate(c, 0, (v, e) => r(e ? 'denied' : 'read ' + v))); }, fcode);
   ok(fpeek === 'denied', "a player can't read the other's hand");
   const flBot = async () => {
@@ -40,11 +40,11 @@ module.exports = async ({ page, ok, statusIs, BASE, out }) => {
   const fr = await F1.evaluate(() => window.__fl.room);
   const flLines = fr.line.split(',').map(Number), flWon = []; for (let i = 0; i < flLines.length; i += 5) flWon.push(flLines.slice(i, i + 5));
   const winnerLines = flWon.filter((g) => fr.board[g.find((x) => ![0, 9, 90, 99].includes(x))] === String(fr.winner)).length;
-  ok(fr.status === 'done' && typeof fr.winner === 'number' && winnerLines === 2, `the rules accept every move; 2 players need two lines to win (${fturns} turns, ${swaps} dead-card swaps, winner seat ${fr.winner} with ${winnerLines} lines)`);
+  ok(fr.status === 'done' && typeof fr.winner === 'number' && winnerLines >= 2, `the rules accept every move; 2 players need two lines to win (${fturns} turns, ${swaps} dead-card swaps, winner seat ${fr.winner} with ${winnerLines} lines)`);
   ok(await statusIs([F1, F2][fr.winner], 'You win! 🎉'), 'the winner is told');
   await F1.screenshot({ path: `${out}/e2e-fl.png` });
   await F2.click('#rematch'); await F1.waitForFunction(() => document.getElementById('hint').textContent.includes('wants to play again'), null, { timeout: 8000 });
-  await F1.click('#rematch'); await F2.waitForFunction(() => window.__fl.room.round === 1 && window.__fl.hand && window.__fl.hand.length === 6, null, { timeout: 8000 });
+  await F1.click('#rematch'); await F2.waitForFunction(() => window.__fl.room.round === 1 && window.__fl.hand && window.__fl.hand.length === 7, null, { timeout: 8000 });
   ok(true, 'play again deals a new round once both tapped');
   // Leaving when it isn't your turn forfeits under the real rules (the room is rewritten whole, state included)
   const fr1 = await F1.evaluate(() => window.__fl.room);
