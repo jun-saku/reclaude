@@ -53,9 +53,15 @@
     .tile.joker { font-size: calc(var(--w) * 0.66); }
     .tile:disabled { cursor: default; opacity: 1; }
     .tile.sel { transform: translateY(-5px); box-shadow: 0 0 0 3px var(--accent), 0 4px 6px rgba(0, 0, 0, 0.25); }
+    .tile.mine { background: color-mix(in srgb, var(--face) 80%, #ffd54a); }
     .tile.mine::after { content: ""; position: absolute; bottom: 3px; left: 50%; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: var(--accent); }
-    .tile.fresh { box-shadow: 0 0 0 2px #ffd54a, 0 2px 3px rgba(0, 0, 0, 0.18); }
+    .tile.fresh { background: color-mix(in srgb, var(--face) 80%, #ffd54a); box-shadow: 0 0 0 2px #ffd54a, 0 2px 3px rgba(0, 0, 0, 0.18); }
     .tile.locked { cursor: default; }
+    .tile.drag { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; cursor: grab; }
+    .tile.dragging { opacity: 0.3; }
+    .ghost { position: fixed; left: 0; top: 0; z-index: 50; pointer-events: none; display: flex; gap: 2px; }
+    .ghost .tile { --w: 34px; transform: rotate(-3deg); box-shadow: 0 8px 16px rgba(0, 0, 0, 0.35); }
+    body.dragging-tiles { -webkit-user-select: none; user-select: none; }
     @media (prefers-reduced-motion: no-preference) { .tile { transition: transform 120ms ease-out; } }
 
     .table {
@@ -64,10 +70,15 @@
     }
     .table .empty { color: rgba(255, 255, 255, 0.92); font-size: 0.9rem; margin: auto; text-align: center; }
     .set {
-      display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 4px; border-radius: 8px;
-      background: rgba(0, 0, 0, 0.14); border: 2px solid transparent; align-items: center; max-width: 100%;
+      display: inline-flex; flex-direction: column; gap: 2px; padding: 4px; border-radius: 8px;
+      background: rgba(0, 0, 0, 0.14); border: 2px solid transparent; max-width: 100%;
     }
-    .set.bad { border-color: #ff8a80; border-style: dashed; }
+    .set .tiles { display: flex; flex-wrap: wrap; gap: 2px; align-items: center; }
+    .set.ok { border-color: #a5ecb9; background: rgba(0, 0, 0, 0.2); }
+    .set.bad { border-color: #ff8a80; border-style: dashed; background: rgba(120, 0, 0, 0.22); }
+    .set .cap { font-size: 12px; font-weight: 700; color: #fff; padding: 1px 2px 0; white-space: nowrap; }
+    .set.bad .cap { color: #ffe0dc; }
+    .set.over, .newset.over, .rack.over { outline: 3px solid #ffd54a; outline-offset: 1px; }
     .set .add {
       width: 28px; height: 38px; padding: 0; border-radius: 5px; font-size: 1.2rem; line-height: 1;
       background: rgba(255, 255, 255, 0.22); color: #fff; border: 2px dashed rgba(255, 255, 255, 0.8);
@@ -145,7 +156,10 @@
           <li>Jokers stand in for any tile.</li>
           <li>Your first play must be new sets from your own rack worth at least <b>30</b> points.</li>
           <li>After that, rearrange the table any way you like, as long as every set is valid when you tap <b>Done</b>.</li>
-          <li>Tap tiles to pick them up, then tap <b>＋</b> on a set or <b>New set</b> to put them down.</li>
+          <li>Drag a tile onto a set, or onto the green table for a new set. Or tap tiles to pick them up, then tap <b>＋</b> on a set or <b>New set</b>.</li>
+          <li>Drag tiles around your rack to put them in your own order.</li>
+          <li>Sets you changed get a green outline when they're valid and a dashed red one when they aren't. Tiles from your rack this turn are tinted.</li>
+          <li>Everyone sees the table change live while the player on turn arranges it.</li>
           <li>Can't or don't want to play? <b>Draw</b> a tile and your turn ends. First to empty their rack wins.</li>
           <li>When the pool runs out and everyone passes, the fewest tiles wins.</li>
         </ul>
@@ -218,7 +232,7 @@
     const enc = (list) => list.map((t) => t.toString(36).padStart(2, "0")).join("");
     const dec = (s) => { const out = []; for (let i = 0; i + 1 < (s || "").length; i += 2) out.push(parseInt(s.slice(i, i + 2), 36)); return out; };
     const encTable = (sets) => sets.map(enc).join(".");
-    const decTable = (s) => (s ? s.split(".").filter(Boolean).map(dec) : []);
+    const decTable = (s) => (s ? s.split(".").map(dec).filter((set) => set.length) : []);
     function shuffled(list) {
       const a = [...list];
       const r = new Uint32Array(a.length);
@@ -253,12 +267,26 @@
       return bad;
     }
     const setKey = (set) => [...set].sort((a, b) => a - b).join(",");
+    // A short caption for a set while it's being arranged: what it is and its points, or what it's missing.
+    function caption(set) {
+      const a = analyze(set);
+      if (a.ok) return `✓ ${a.kind === "run" ? "Run" : "Group"} · ${a.value}`;
+      const real = set.filter((t) => !isJoker(t));
+      if (set.length < 3) return `✗ Add ${3 - set.length} more`;
+      if (!real.length) return "✗ Add a number";
+      const sameNum = real.every((t) => numOf(t) === numOf(real[0])), sameCol = real.every((t) => colourOf(t) === colourOf(real[0]));
+      if (sameNum && !sameCol) return set.length > 4 ? "✗ A group has at most 4" : "✗ A colour twice";
+      if (sameCol) return new Set(real.map(numOf)).size < real.length ? "✗ A number twice" : "✗ Gap in the run";
+      return "✗ Mixed colours and numbers";
+    }
 
     // ---------- room shape ----------
     // state: { pool: every tile, shuffled (2 chars each); next: tiles dealt or drawn so far; table: sets joined by
     //          "."; counts: "14,14" tiles per seat (0 for an empty seat); melded: "1,0" first meld done per seat;
     //          played: tiles the last move put down (highlighted for the others); drawn: "id,…" the tile each seat
-    //          last drew (so a hand whose save failed can be repaired); passes: draws from an empty pool in a row }
+    //          last drew (so a hand whose save failed can be repaired); passes: draws from an empty pool in a row;
+    //          live: "<turnAt>|<table>", the arrangement the player on turn is working on, so others watch it change;
+    //          dropped by every move (packState leaves it out) }
     // Private per seat: "<round>:<tiles>".
     const parseState = (room) => {
       const s = room.state || {};
@@ -266,6 +294,7 @@
         pool: dec(s.pool), next: s.next || 0, table: decTable(s.table), counts: String(s.counts || "").split(",").map(Number),
         melded: String(s.melded || "").split(",").map(Number), played: dec(s.played),
         drawn: String(s.drawn || "").split(",").map((x) => (x === "" ? null : Number(x))), passes: s.passes || 0,
+        live: s.live || "",
       };
     };
     const packState = (room, st) => ({
@@ -305,6 +334,8 @@
     let work = null;
     let picked = new Set();
     let warn = "";
+    let custom = null;    // my own rack order (tile ids), after dragging tiles around the rack
+    let drag = null;      // a drag in progress: { tiles, id, x0, y0, x, y, started, ghost, over }
 
     const $ = (id) => document.getElementById(id);
     const me = () => seat.seat;
@@ -342,6 +373,7 @@
       if (typeof value !== "string") { hand = null; handRound = -1; }
       else {
         const [r, tiles] = value.split(":");
+        if (Number(r) !== handRound) custom = null;
         handRound = Number(r);
         hand = dec(tiles);
       }
@@ -392,20 +424,67 @@
     // A table tile may be picked up after the first meld, or if it came from my rack this turn.
     const canPick = (t) => !!work && (work.fromHand.has(t) || melded());
 
-    function moveTo(target) { // target: set index, "new" or "rack"
-      if (!work || !picked.size) return;
-      const tiles = [...picked];
+    // Moves tiles (the picked ones by default) to a set (its index), a new set ("new") or back to the rack ("rack"),
+    // in front of the tile `before` if given. Valid sets then put themselves in order.
+    function moveTo(target, tiles = [...picked], before = null) {
+      if (!work || !tiles.length) return;
+      if (!tiles.every((t) => work.hand.includes(t) || work.sets.some((s) => s.includes(t)))) return;
       if (target === "rack" && !tiles.every((t) => work.fromHand.has(t))) return;
-      work.hand = work.hand.filter((t) => !picked.has(t));
-      let sets = work.sets.map((s) => s.filter((t) => !picked.has(t)));
+      const moving = new Set(tiles);
+      work.hand = work.hand.filter((t) => !moving.has(t));
+      let sets = work.sets.map((s) => s.filter((t) => !moving.has(t)));
       if (target === "rack") work.hand.push(...tiles);
       else if (target === "new") sets.push(tiles);
-      else sets[target].push(...tiles);
+      else { const s = sets[target], i = before == null ? -1 : s.indexOf(before); if (i < 0) s.push(...tiles); else s.splice(i, 0, ...tiles); }
       sets = sets.filter((s) => s.length);
       work.sets = sets.map((s) => { const a = analyze(s); return a.ok ? a.order : s; });
-      picked = new Set();
+      for (const t of tiles) picked.delete(t);
       warn = "";
+      pushLive();
       render();
+    }
+    // Puts tiles into my own rack order, in front of `before` (or at the end).
+    function placeInRack(tiles, before) {
+      const shown = rackOrder(work ? work.hand : hand || []).filter((t) => !tiles.includes(t));
+      const i = before == null ? -1 : shown.indexOf(before);
+      if (i < 0) shown.push(...tiles); else shown.splice(i, 0, ...tiles);
+      custom = shown;
+    }
+
+    // ---------- live view ----------
+    // While arranging, the player on turn writes their arrangement to state.live (a moment after each change), so
+    // everyone else watches the table change. It's tagged with turnAt, so an old one is never shown for a new turn.
+    let liveTimer = null, liveSending = null, liveAgain = false;
+    function pushLive() {
+      clearTimeout(liveTimer);
+      liveTimer = setTimeout(sendLive, 250);
+    }
+    function sendLive() {
+      if (!work || !room) return;
+      if (liveSending) { liveAgain = true; return; }
+      const mySeat = me(), round = room.round, base = tableOf(room);
+      const value = `${room.turnAt || 0}|${encTable(work.sets)}`;
+      liveSending = seat.backend.transact(seat.code, (cur) => {
+        if (!cur || cur.status !== "playing" || cur.turn !== mySeat || cur.round !== round || tableOf(cur) !== base || !cur.state) return undefined;
+        if (cur.state.live === value) return undefined;
+        cur.state = { ...cur.state, live: value };
+        return cur;
+      }).catch(console.error).finally(() => {
+        liveSending = null;
+        if (liveAgain) { liveAgain = false; sendLive(); }
+      });
+    }
+    // Before a move: no more live writes, and wait for one already on its way.
+    async function stopLive() {
+      clearTimeout(liveTimer);
+      liveAgain = false;
+      if (liveSending) await liveSending;
+    }
+    // The arrangement the player on turn is working on, if it's for this turn: sets, or null.
+    function liveSets(r, st) {
+      if (!st?.live || r.status !== "playing") return null;
+      const [at, table] = st.live.split("|");
+      return Number(at) === (r.turnAt || 0) ? decTable(table) : null;
     }
 
     // What's wrong with the arrangement, or "" if Done may be tapped.
@@ -434,6 +513,7 @@
       const sets = work.sets.map((s) => [...s]), left = [...work.hand], placed = hand.filter((t) => !left.includes(t));
       busy = true;
       try {
+        await stopLive();
         const r = await seat.backend.transact(seat.code, (cur) => {
           if (!cur || cur.status !== "playing" || cur.turn !== mySeat || cur.round !== round || tableOf(cur) !== base) return undefined;
           const st = parseState(cur);
@@ -462,6 +542,7 @@
       const mySeat = me(), round = room.round;
       busy = true;
       try {
+        await stopLive();
         const r = await seat.backend.transact(seat.code, (cur) => {
           if (!cur || cur.status !== "playing" || cur.turn !== mySeat || cur.round !== round) return undefined;
           const st = parseState(cur);
@@ -520,9 +601,16 @@
       const key = sortBy === "number" ? (t) => (isJoker(t) ? 999 : numOf(t) * 4 + colourOf(t)) : (t) => (isJoker(t) ? 999 : colourOf(t) * 13 + numOf(t));
       return [...tiles].sort((a, b) => key(a) - key(b) || a - b);
     }
+    // The rack as shown: my own order if I've dragged tiles around (new tiles at the end), else sorted.
+    function rackOrder(tiles) {
+      const sorted = sortedRack(tiles);
+      if (!custom) return sorted;
+      const pos = new Map(custom.map((t, i) => [t, i]));
+      return [...sorted.filter((t) => pos.has(t)).sort((a, b) => pos.get(a) - pos.get(b)), ...sorted.filter((t) => !pos.has(t))];
+    }
 
     function render() {
-      if (!room || !seat) return;
+      if (!room || !seat || drag?.started) return; // mid-drag the page stays as it is; dropping draws it again
       syncWork();
       const r = room;
       const mine = me();
@@ -532,7 +620,7 @@
 
       $("room-label").innerHTML = `Room <b>${seat.code}</b>${r.turnSecs ? ` · ⏱ ${r.turnSecs < 60 ? `${r.turnSecs} s` : `${r.turnSecs / 60} min`}` : ""}`;
       $("players").innerHTML = seats.map((uid, s) => !uid ? "" :
-        `<span class="chip${playing && r.turn === s ? " turn" : ""}">${rooms.face(r, s)}${label(s)}${st && r.status !== "waiting" ? ` <span class="n">${s === mine && work ? work.hand.length : st.counts[s]}</span>` : ""}` +
+        `<span class="chip${playing && r.turn === s ? " turn" : ""}">${rooms.face(r, s)}${label(s)}${st && r.status !== "waiting" ? ` <span class="n">${s === mine && work ? work.hand.length : st.counts[s] - (s === r.turn ? liveDown(r, st) : 0)}</span>` : ""}` +
         `<span class="dot${rooms.isOnline(r, s) ? " on" : ""}"></span></span>`).join("");
 
       const waiting = r.status === "waiting";
@@ -555,30 +643,39 @@
       }
 
       const mt = !!work;
-      // Table
-      const sets = mt ? work.sets : st ? st.table : [];
-      const fresh = new Set(st && !mt ? st.played : []);
+      // Table: my arrangement on my turn, the live one while someone else arranges, else the table as it is.
+      const live = !mt && playing && r.turn !== mine ? liveSets(r, st) : null;
+      const sets = mt ? work.sets : live || (st ? st.table : []);
+      // Sets that differ from the table at the start of the turn get an outline and a caption.
+      const startKeys = mt ? work.startSets : live ? st.table.map(setKey) : [];
+      const onTable = new Set(st ? st.table.flat() : []);
+      const fresh = new Set(st && !mt ? (live ? sets.flat().filter((t) => !onTable.has(t)) : st.played) : []);
+      const moving = picked.size;
       let html = sets.map((set, i) => {
         const a = analyze(set);
         const order = a.ok ? a.order : set;
-        return `<div class="set${mt && !a.ok ? " bad" : ""}">` + order.map((t) => {
+        const touched = (mt || live) && !startKeys.includes(setKey(set));
+        return `<div class="set${touched ? (a.ok ? " ok" : " bad") : ""}" data-i="${i}"><div class="tiles">` + order.map((t) => {
           const pickable = mt && canPick(t);
-          return tileHtml(t, (picked.has(t) ? " sel" : "") + (mt && work.fromHand.has(t) ? " mine" : "") + (fresh.has(t) ? " fresh" : "") + (pickable ? "" : " locked"), !pickable, "table");
-        }).join("") + (mt && picked.size ? `<button class="add" data-set="${i}" aria-label="Add to this set">＋</button>` : "") + "</div>";
+          return tileHtml(t, (picked.has(t) ? " sel" : "") + (mt && work.fromHand.has(t) ? " mine" : "") + (fresh.has(t) ? " fresh" : "") +
+            (pickable ? " drag" : " locked"), !pickable, "table");
+        }).join("") + (mt && picked.size ? `<button class="add" data-set="${i}" aria-label="Add to this set">＋</button>` : "") + "</div>" +
+          (touched ? `<span class="cap">${caption(set)}</span>` : "") + "</div>";
       }).join("");
-      if (mt && picked.size) html += `<button class="newset" data-set="new">＋ New set</button>`;
-      if (!sets.length && !(mt && picked.size)) html = `<p class="empty">${mt ? "Tap tiles in your rack, then New set" : "No sets on the table yet"}</p>`;
+      if (mt && moving) html += `<button class="newset" data-set="new">＋ New set</button>`;
+      if (!sets.length && !(mt && moving)) html = `<p class="empty">${mt ? "Drag tiles here from your rack to make a set" : "No sets on the table yet"}</p>`;
       $("table").innerHTML = html;
 
       // Rack
       const rackTiles = mt ? work.hand : hand || [];
-      let rack = sortedRack(rackTiles).map((t) => tileHtml(t, picked.has(t) ? " sel" : "", !mt, "rack")).join("");
+      const canDrag = !!hand && handRound === r.round && playing;
+      let rack = rackOrder(rackTiles).map((t) => tileHtml(t, (picked.has(t) ? " sel" : "") + (canDrag ? " drag" : ""), !mt && !canDrag, "rack")).join("");
       if (mt && picked.size && [...picked].every((t) => work.fromHand.has(t)) && [...picked].some((t) => !work.hand.includes(t))) rack += `<button class="back" data-set="rack">↩ Back to rack</button>`;
       if (!rackTiles.length && !rack) rack = `<span class="none">${handRound === r.round || r.status !== "playing" ? "No tiles" : "Dealing…"}</span>`;
       $("rack").innerHTML = rack;
 
       $("pool").textContent = st ? `${st.pool.length - st.next} tiles in the pool` : "";
-      for (const b of document.querySelectorAll("#sort button")) b.setAttribute("aria-pressed", String(b.dataset.sort === sortBy));
+      for (const b of document.querySelectorAll("#sort button")) b.setAttribute("aria-pressed", String(!custom && b.dataset.sort === sortBy));
 
       // Actions
       $("actions").hidden = !mt;
@@ -596,15 +693,20 @@
         if (mt) {
           status = "Your turn";
           const why = changed() ? problem() : "";
+          const down = hand.length - work.hand.length;
+          const pts = melded() ? 0 : work.sets.filter((s) => !work.startSets.includes(setKey(s))).reduce((n, s) => n + analyze(s).value, 0);
+          const tally = down ? `${down} tile${down === 1 ? "" : "s"} down${melded() ? "" : `, ${pts} of ${FIRST_MELD} points`}. ` : "";
           if (warn) { hint = warn; warnHint = true; }
-          else if (picked.size) hint = `Tap ＋ on a set, or New set, to put ${picked.size === 1 ? "it" : "them"} down.`;
-          else if (why) { hint = why; warnHint = true; }
-          else if (changed()) hint = "Looks good: tap Done.";
-          else hint = melded() ? "Tap tiles to pick them up, or Draw." : `First meld: ${FIRST_MELD}+ points of new sets from your rack, or Draw.`;
+          else if (picked.size) hint = `Drag ${picked.size === 1 ? "it" : "them"} to a set, or tap ＋ on a set or New set.`;
+          else if (why) { hint = tally + why; warnHint = true; }
+          else if (changed()) hint = `${tally}Looks good: tap Done.`;
+          else hint = melded() ? "Drag tiles onto the table, or Draw." : `First meld: drag ${FIRST_MELD}+ points of new sets from your rack, or Draw.`;
         } else {
           status = `${label(r.turn)}'s turn${online(r.turn) ? "…" : " (away)"}`;
           const by = lastMover(r);
-          if (st && st.played.length && by !== mine) hint = `${label(by)} put down ${st.played.length} tile${st.played.length === 1 ? "" : "s"} (yellow).`;
+          const n = live ? liveDown(r, st) : 0;
+          if (live) hint = `${label(r.turn)} is arranging the table${n ? `: ${n} tile${n === 1 ? "" : "s"} from their rack (yellow)` : ""}.`;
+          else if (st && st.played.length && by !== mine) hint = `${label(by)} put down ${st.played.length} tile${st.played.length === 1 ? "" : "s"} (yellow).`;
         }
         const left = rooms.turnLeft(r);
         status += rooms.timeBar(left, r.turnSecs, 10);
@@ -629,6 +731,8 @@
       $("skip").innerHTML = `Skip ${label(r.turn)}`;
       $("leave").disabled = false;
     }
+    // How many tiles the player on turn has put down from their rack so far, in their live arrangement.
+    const liveDown = (r, st) => { const sets = liveSets(r, st); if (!sets) return 0; const on = new Set(st.table.flat()); return sets.flat().filter((t) => !on.has(t)).length; };
     const lastMover = (r) => { const l = rooms.seatList(r); for (let k = 1; k <= l.length; k++) { const s = (r.turn - k + l.length) % l.length; if (l[s]) return s; } return r.turn; };
 
     // ---------- actions ----------
@@ -672,6 +776,7 @@
     for (const b of document.querySelectorAll("#sort button")) {
       b.addEventListener("click", () => {
         sortBy = b.dataset.sort;
+        custom = null;
         try { localStorage.setItem("tile-rummy-sort", sortBy); } catch {}
         render();
       });
@@ -694,8 +799,10 @@
     $("rematch").addEventListener("click", rematch);
     $("draw").addEventListener("click", draw);
     $("done").addEventListener("click", done);
-    $("reset").addEventListener("click", () => { if (work) { work.key = null; syncWork(); render(); } });
+    $("reset").addEventListener("click", () => { if (work) { work.key = null; syncWork(); pushLive(); render(); } });
+    let noClick = false; // a drag just ended: its pointerup's click isn't a tap
     const onTap = (e) => {
+      if (noClick) return;
       const target = e.target.closest("[data-set]");
       if (target) return moveTo(target.dataset.set === "new" || target.dataset.set === "rack" ? target.dataset.set : Number(target.dataset.set));
       const b = e.target.closest(".tile");
@@ -708,6 +815,110 @@
     };
     $("table").addEventListener("click", onTap);
     $("rack").addEventListener("click", onTap);
+
+    // ---------- drag and drop ----------
+    // Press a tile and move: it (or all the picked tiles, if it's one of them) follows the finger, lifted a little so
+    // it isn't hidden under it. Drop on a set to add to it, on the table for a new set, or on the rack to take tiles
+    // from your rack back or to reorder it (that works on others' turns too). Near the top or bottom of the screen
+    // the page scrolls.
+    const onDown = (e) => {
+      if (drag || (e.button && e.pointerType === "mouse")) return;
+      const b = e.target.closest(".tile.drag");
+      if (!b || !e.currentTarget.contains(b)) return;
+      const t = Number(b.dataset.t);
+      const tiles = work && picked.has(t) ? [...picked] : [t];
+      if (!work && b.dataset.where !== "rack") return;
+      drag = { tiles, id: e.pointerId, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, started: false, ghost: null, over: null };
+    };
+    $("table").addEventListener("pointerdown", onDown);
+    $("rack").addEventListener("pointerdown", onDown);
+
+    // Where tiles would land at a point: { kind: "set" | "new" | "rack", i?, before?, el } or null.
+    function dropAt(x, y) {
+      const el = document.elementFromPoint(x, y);
+      if (!el || !drag) return null;
+      // The tile under the finger; dropping on its right half puts the tiles after it.
+      const beforeOf = (box, sel) => {
+        const tile = el.closest(".tile");
+        if (!tile || !box.contains(tile)) return null;
+        const list = [...box.querySelectorAll(sel)], i = list.indexOf(tile), rc = tile.getBoundingClientRect();
+        const at = x > rc.left + rc.width / 2 ? list[i + 1] : tile;
+        return at ? Number(at.dataset.t) : null;
+      };
+      const rack = el.closest("#rack");
+      if (rack) {
+        if (work && !drag.tiles.every((t) => work.fromHand.has(t))) return null;
+        return { kind: "rack", before: beforeOf(rack, ".tile"), el: rack };
+      }
+      if (!work) return null;
+      const set = el.closest(".set[data-i]");
+      if (set) return { kind: "set", i: Number(set.dataset.i), before: beforeOf(set, ".tile"), el: set };
+      const ns = el.closest(".newset");
+      if (ns) return { kind: "new", el: ns };
+      if (el.closest("#table")) return { kind: "new", el: $("table").querySelector(".newset") };
+      return null;
+    }
+    function dragTo(x, y) {
+      drag.x = x; drag.y = y;
+      drag.ghost.style.transform = `translate(${x - 18}px, ${y - 64}px)`;
+      const target = dropAt(x, y);
+      if (drag.over?.el !== target?.el) {
+        drag.over?.el?.classList.remove("over");
+        target?.el?.classList.add("over");
+      }
+      drag.over = target;
+    }
+    function startDrag() {
+      drag.started = true;
+      document.body.classList.add("dragging-tiles");
+      const g = document.createElement("div");
+      g.className = "ghost";
+      g.innerHTML = drag.tiles.map((t) => tileHtml(t)).join("");
+      document.body.append(g);
+      drag.ghost = g;
+      // Fade the lifted tiles where they were and offer a new set, without redrawing under the finger.
+      for (const el of document.querySelectorAll("#table .tile, #rack .tile")) if (drag.tiles.includes(Number(el.dataset.t))) el.classList.add("dragging");
+      if (work && !$("table").querySelector(".newset")) {
+        $("table").querySelector(".empty")?.remove();
+        $("table").insertAdjacentHTML("beforeend", `<button class="newset" data-set="new">＋ New set</button>`);
+      }
+      const scroll = () => {
+        if (!drag?.started) return;
+        const edge = 70, h = innerHeight;
+        const dy = drag.y < edge ? -Math.ceil((edge - drag.y) / 5) : drag.y > h - edge ? Math.ceil((drag.y - h + edge) / 5) : 0;
+        if (dy) { scrollBy(0, dy); dragTo(drag.x, drag.y); }
+        requestAnimationFrame(scroll);
+      };
+      requestAnimationFrame(scroll);
+    }
+    function endDrag(drop) {
+      const d = drag;
+      drag = null;
+      document.body.classList.remove("dragging-tiles");
+      d.ghost?.remove();
+      d.over?.el?.classList.remove("over");
+      if (!d.started) return;
+      noClick = true;
+      setTimeout(() => (noClick = false), 0);
+      const target = drop ? d.over : null;
+      if (target?.kind === "rack") {
+        placeInRack(d.tiles, target.before);
+        if (work && d.tiles.some((t) => !work.hand.includes(t))) return moveTo("rack", d.tiles);
+      } else if (target?.kind === "set") return moveTo(target.i, d.tiles, target.before);
+      else if (target?.kind === "new") return moveTo("new", d.tiles);
+      render();
+    }
+    addEventListener("pointermove", (e) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      if (!drag.started) {
+        if (Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) < 8) return;
+        startDrag();
+      }
+      e.preventDefault();
+      dragTo(e.clientX, e.clientY);
+    }, { passive: false });
+    addEventListener("pointerup", (e) => { if (drag && e.pointerId === drag.id) endDrag(true); });
+    addEventListener("pointercancel", (e) => { if (drag && e.pointerId === drag.id) endDrag(false); });
     $("leave").addEventListener("click", async () => {
       if (!seat || !room) return showHome();
       const s = seat;
@@ -735,7 +946,7 @@
 
     // For tests: pick tiles and put them down the way taps do.
     const put = (tiles, target) => { syncWork(); if (!work) return false; picked = new Set(tiles); moveTo(target); return true; };
-    window.__tr = { rooms, analyze, numOf, colourOf, isJoker, get room() { return room; }, get hand() { return hand; }, get seat() { return seat; }, get work() { return work; }, put, done, draw, problem };
+    window.__tr = { rooms, analyze, numOf, colourOf, isJoker, get room() { return room; }, get hand() { return hand; }, get seat() { return seat; }, get work() { return work; }, put, done, draw, problem, caption };
   </script>
 </body>
 </html>
