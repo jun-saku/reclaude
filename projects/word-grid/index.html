@@ -679,8 +679,9 @@
     // Everyone plays the same board at the same time, each on their own clock. The room engine only lets the
     // player whose turn it is write, so the results are handed in one by one when time's up: on your turn you
     // add your words to state.res and pass the turn on; once the turn comes round to someone who has handed
-    // in, that write also ends the game with the highest score as the winner (a tie is a draw). A player who
-    // doesn't hand in (left, or offline) is skipped by the turn timer once the others are done.
+    // in, that write also ends the game with the highest score as the winner (a tie is a draw). Players who are
+    // offline (left) are passed over; one who goes quiet while holding the turn is skipped by the turn timer once
+    // the others are done.
     // board: the 25 dice faces, comma-separated. state: { round, res: { s0: "words found" … } }.
     const ROOM_SEATS = 6;
     const TURN_SECS = 20;  // how long the others wait for a player to hand in before skipping them
@@ -704,9 +705,24 @@
       const all = solved.get(key);
       return total([...new Set(list)].filter((w) => all.has(w)));
     }
+    // Who hands in after seat `s`: the next seated player, passing over anyone offline who hasn't handed in (a
+    // player who left mid-round keeps their seat but can't hand in, so waiting on them would only hold everyone
+    // up). null once the turn would come round to someone who has handed in: the game is over.
+    function nextToHandIn(cur, s) {
+      const list = rooms.seatList(cur);
+      for (let k = 1; k < list.length; k++) {
+        const t = (s + k) % list.length;
+        if (!list[t]) continue;
+        if (resOf(cur, t)) return null;
+        if (rooms.isOnline(cur, t)) return t;
+      }
+      return null;
+    }
     function newRound(cur, round) {
+      const order = seated(cur);
       return Object.assign(cur, {
-        board: makeBoard((Math.random() * 2 ** 32) >>> 0).join(","), round, turn: seated(cur)[0],
+        board: makeBoard((Math.random() * 2 ** 32) >>> 0).join(","), round,
+        turn: order.find((s) => rooms.isOnline(cur, s)) ?? order[0],
         winner: null, left: null, state: { round, res: {} }, status: "playing",
       });
     }
@@ -812,8 +828,8 @@
           const had = rooms.seatKey(me) in res;
           if (!had) res[rooms.seatKey(me)] = mine.found.join(" ") || ".";
           cur.state = { ...cur.state, res };
-          const next = rooms.nextSeat(cur, me);
-          if (!had && next !== me && !resOf(cur, next)) { cur.turn = next; return cur; }
+          const next = nextToHandIn(cur, me);
+          if (!had && next !== null) { cur.turn = next; return cur; }
           const letters = cur.board.split(",");
           const scores = seated(cur).filter((s) => resOf(cur, s)).map((s) => [s, scoreOf(letters, wordsIn(resOf(cur, s)))]);
           const best = Math.max(...scores.map(([, p]) => p));
