@@ -403,8 +403,18 @@
       return { ...base, changed: false };
     }
     function rackKnown() { return local() || (privLoaded && !!room); }
+    let seenMove = "";   // "<round>:<n>" when the board was last in sync, to clear tiles left from a finished move
     function syncRack() {
       if (!room || room.status === "waiting" || !room.state?.mv) return;
+      // A new move or round: tiles placed for the last one are on the board now (or gone), even when the rack
+      // drew back the same letters and so looks unchanged.
+      const moveKey = `${room.round}:${parse(room).n}`;
+      if (moveKey !== seenMove) {
+        seenMove = moveKey;
+        placed = [];
+        sel = null;
+        swapping = null;
+      }
       let r;
       if (local()) {
         for (const s of seatedOf(room)) localRacks[s] = rackFor(s, localRacks[s]);
@@ -441,7 +451,7 @@
       leave = unwatchRack = null;
       seat = room = priv = null;
       privLoaded = false;
-      rack = ""; order = []; placed = []; sel = null; swapping = null; revealed = "";
+      rack = ""; order = []; placed = []; sel = null; swapping = null; revealed = ""; seenMove = "";
       $("game").hidden = true;
       $("home").hidden = false;
       $("home-error").textContent = error;
@@ -677,7 +687,7 @@
           const res = judge(r.board, placedChars());
           if (res.ok) { hint = `${res.words.map((w) => w.word).join(", ")}: ${res.score} points${res.bingo ? " (all 7 tiles: +50!)" : ""}`; kind = "good"; }
           else { hint = res.why; kind = "bad"; }
-        } else hint = r.board === EMPTY ? "Make the first word across the ★." : sel === null ? "Tap a tile, then a square." : "Tap a square to place it.";
+        } else hint = r.board === EMPTY ? "Make the first word through the ★." : sel === null ? "Tap a tile, then a square." : "Tap a square to place it.";
       }
       $("hint").textContent = hint;
       $("hint").className = "hint" + (kind ? " " + kind : "");
