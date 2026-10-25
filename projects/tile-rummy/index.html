@@ -747,7 +747,16 @@
         const left = rooms.turnLeft(r);
         status += rooms.timeBar(left, r.turnSecs, 10);
       } else if (typeof r.left === "number") status = r.left === mine ? "You left this game" : `${label(r.left)} left. ${r.winner === "draw" ? "Game over" : r.winner === mine ? "You win! 🎉" : `${label(r.winner)} wins`}`;
-      else if (r.winner === "draw") status = "Pool's empty: it's a tie";
+      else if (r.winner === "draw" && st) {
+        // The pool ran out and two or more share the fewest tiles: name them, so the others know they lost.
+        const seated = seats.flatMap((u, s) => (u ? [s] : []));
+        const low = Math.min(...seated.map((s) => st.counts[s]));
+        const tied = seated.filter((s) => st.counts[s] === low);
+        const names = tied.filter((s) => s !== mine).map((s) => rooms.nameOf(r, s));
+        status = tied.length === seated.length ? "It's a draw!"
+          : tied.includes(mine) ? `You tie with ${names.join(" and ")}! 🎉`
+          : `${names.join(" and ")} tie for the win`;
+      } else if (r.winner === "draw") status = "It's a draw!";
       else if (r.winner === mine) status = "You win! 🎉";
       else status = `${label(r.winner)} wins`;
       if (r.status === "done" && st && st.passes && typeof r.left !== "number") hint = "The pool ran out: fewest tiles wins.";
