@@ -291,9 +291,10 @@ export function step(g, dt) {
   }
   // The wave is cleared once nobody's left to come: a bonus life, and on to the next map.
   if (g.base && g.toSpawn <= 0 && g.enemies.length === 0) nextWave(g);
-  // Game over: the eagle fell, or every player here is down with no lives left.
-  const here = Object.values(g.tanks).filter((t) => t.present);
-  if (!g.base || (here.length && here.every((t) => !t.alive && t.respawnIn === null))) {
+  // Game over: the eagle fell, or every player is down with no lives left. A player who left counts too: their tank
+  // waits for them (they can rejoin), so the game carries on for the others.
+  const all = Object.values(g.tanks);
+  if (!g.base || (all.length && all.every((t) => !t.alive && t.respawnIn === null))) {
     g.over = { base: !g.base, waves: g.wave - 1 };
   }
 }
@@ -327,7 +328,7 @@ export function view(g) {
     w: g.wave, l: g.lives, k: g.kills, n: g.toSpawn + g.enemies.length, base: g.base ? 1 : 0, b: encBricks(g.bricks),
     tanks,
     e: g.enemies.map((e) => [e.id, e.kind, r1(e.x), r1(e.y), e.d, e.hp, e.moving ? 1 : 0, g.t - e.flash < 0.1 ? 1 : 0]),
-    s: g.shells.map((s) => [s.id, r1(s.x), r1(s.y), s.d, s.speed]),
+    s: g.shells.map((s) => [s.id, r1(s.x), r1(s.y), s.d, s.speed, s.from === "p" ? s.owner : -1]), // last: who fired (-1 an enemy)
     bo: g.booms.map((b) => [b.id, r1(b.x), r1(b.y), b.big ? 1 : 0]),
     banner: g.t < g.bannerUntil ? `Wave ${g.wave}` : null,
     over: g.over,
