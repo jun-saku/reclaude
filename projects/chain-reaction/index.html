@@ -172,15 +172,16 @@
     const canPlace = (board, i, p) => board[2 * i] === "-" || Number(board[2 * i]) === p;
 
     // Adds seat p's orb at cell i and runs every burst it sets off, one wave at a time.
-    // Returns the board after each step: [after the orb lands, after wave 1, …]. Bursting stops as soon as
-    // p owns every orb (it could otherwise go on forever).
-    function play(board, i, p) {
+    // Returns the board after each step: [after the orb lands, after wave 1, …]. When `final` (every other seat has
+    // had a turn, so owning every orb wins), bursting stops as soon as p owns every orb (it could otherwise go on
+    // forever); before that it carries on until the board settles, up to 500 waves.
+    function play(board, i, p, final = true) {
       const cells = decode(board);
       cells[i] = { o: p, n: cells[i].n + 1 };
       const steps = [encode(cells)];
       for (let wave = 0; wave < 500; wave++) {
         const full = cells.flatMap((x, k) => (x.n >= crit(k) ? [k] : []));
-        if (!full.length || cells.every((x) => !x.n || x.o === p)) break;
+        if (!full.length || (final && cells.every((x) => !x.n || x.o === p))) break;
         for (const k of full) {
           cells[k].n -= crit(k);
           if (!cells[k].n) cells[k].o = -1;
@@ -195,10 +196,25 @@
     // A seat is still in until it has played and then lost all its orbs.
     const alive = (room, s, moved = parseMoved(room)) => !!rooms.seatList(room)[s] && (!moved[s] || ownersOf(room.board).has(s));
     const parseMoved = (room) => (room.state?.moved || "").split(",").map((v) => v === "1");
-    // The next seat after s that's still in.
+    // Has every seat but p had a turn? Then p owning every orb ends the game (see play).
+    const final = (room, p, moved = parseMoved(room)) => rooms.seatList(room).every((u, s) => !u || s === p || moved[s]);
+    // The next seat after s that's still in, passing over players who are away (in an online room) so the game never
+    // waits on someone who isn't there; if every other player still in is away, the next of them.
     function nextAlive(room, s, moved) {
-      for (let k = 1; k <= room.seats; k++) { const n = (s + k) % room.seats; if (alive(room, n, moved)) return n; }
+      const here = (n) => room.host === "local" || rooms.isOnline(room, n);
+      for (const ok of [here, () => true]) {
+        for (let k = 1; k <= room.seats; k++) { const n = (s + k) % room.seats; if (alive(room, n, moved) && ok(n)) return n; }
+      }
       return s;
+    }
+    // Every seat whose turn was passed over (by the timer, or because they were out or away) since the last move
+    // counts as having had its turn: one who never played and has no orbs is out.
+    function markPassed(room, mover, moved) {
+      const by = room.state?.by;
+      let n = typeof by === "number" && by >= 0 ? (by + 1) % room.seats : room.round % room.seats;
+      for (let k = 0; k < room.seats && n !== mover; k++, n = (n + 1) % room.seats) if (rooms.seatList(room)[n]) moved[n] = true;
+      moved[mover] = true;
+      return moved;
     }
 
     // ---------- room shape ----------
@@ -207,7 +223,15 @@
     function freshRoom(seats, round = 0) {
       return { board: EMPTY, round, turn: round % seats, last: null, winner: null, left: null, state: { moved: Array(seats).fill(0).join(","), by: -1 } };
     }
-    const dealRoom = (room, round) => Object.assign(room, freshRoom(room.seats, round), { status: "playing" });
+    // A new round starts with the first player who's here (someone away may still hold a seat).
+    function dealRoom(room, round) {
+      Object.assign(room, freshRoom(room.seats, round), { status: "playing" });
+      for (let k = 0; k < room.seats; k++) {
+        const n = (round + k) % room.seats;
+        if (rooms.seatList(room)[n] && (room.host === "local" || rooms.isOnline(room, n))) { room.turn = n; break; }
+      }
+      return room;
+    }
 
     // ---------- state ----------
     let seat = null;      // { backend, code, seat } (seat is "local" on one phone)
@@ -264,7 +288,7 @@
       // The move starts from the board the last animation ends on (another move can arrive mid-animation).
       const base = anim ? anim.steps[anim.steps.length - 1] : shown?.board;
       if (shown && shown.round === room.round && base !== room.board && typeof room.last === "number" && by >= 0) {
-        const steps = play(base, room.last, by);
+        const steps = play(base, room.last, by, final(room, by));
         if (steps[steps.length - 1] === room.board) {
           stopAnim();
           anim = { steps, k: 0, timer: 0 };
@@ -296,9 +320,8 @@
           if (!cur || cur.status !== "playing" || cur.turn !== mover || cur.round !== round) return undefined;
           if (!local() && rooms.seatOf(cur, uid) !== mover) return undefined;
           if (!canPlace(cur.board, i, mover)) return undefined;
-          const steps = play(cur.board, i, mover);
-          const moved = parseMoved(cur);
-          moved[mover] = true;
+          const moved = markPassed(cur, mover, parseMoved(cur));
+          const steps = play(cur.board, i, mover, final(cur, mover, moved));
           cur.board = steps[steps.length - 1];
           cur.last = i;
           cur.state = { moved: moved.map(Number).join(","), by: mover };
@@ -316,7 +339,7 @@
 
     // The turn timer can hand the turn to a player who's already out: they pass it straight on.
     async function passIfOut() {
-      if (passing || local() || !room || room.status !== "playing" || room.turn !== me() || alive(room, me())) return;
+      if (passing || !seat || local() || !room || room.status !== "playing" || room.turn !== me() || alive(room, me())) return;
       const mover = me(), round = room.round;
       passing = true;
       try {
@@ -474,13 +497,35 @@
     });
     $("local").addEventListener("click", () => start(rooms.localRoom(GAME, mode, () => freshRoom(mode))));
     $("rematch").addEventListener("click", rematch);
+    // Leaving a game in play: a player who's already out just goes (their seat stays, they're out anyway); with one
+    // other player still in, that player wins; otherwise it ends in a draw for everyone (rooms.quit).
+    const rivalsOf = (r, s) => rooms.seatList(r).flatMap((u, i) => (u && i !== s && alive(r, i) ? [i] : []));
+    async function forfeit(s) {
+      const uid = s.backend.uid;
+      try {
+        const r = await s.backend.transact(s.code, (cur) => {
+          if (!cur || cur.status !== "playing" || rooms.seatOf(cur, uid) !== s.seat || !alive(cur, s.seat) || cur.teams) return undefined;
+          const rivals = rivalsOf(cur, s.seat);
+          if (rivals.length !== 1) return undefined;
+          return Object.assign(cur, { status: "done", winner: rivals[0], left: s.seat });
+        });
+        if (r.committed) return;
+      } catch (err) { console.error(err); }
+      await rooms.quit(s);
+    }
     $("leave").addEventListener("click", async () => {
       if (!seat || !room) return showHome();
-      const s = seat;
-      const others = local() ? 0 : rooms.seatList(room).filter((u, i) => u && i !== me() && rooms.isOnline(room, i)).length;
-      if (room.status === "playing" && others && !confirm(rooms.playerCount(room) === 2 ? "Leave the game? Your friend wins this round." : "Leave the game? It ends in a draw for everyone.")) return;
+      const s = seat, mine = me(), online = !local() && room.status === "playing";
+      if (online && !alive(room, mine)) {
+        $("leave").disabled = true;
+        await passIfOut(); // don't leave the turn timer's turn stuck on this seat
+        return showHome();
+      }
+      const rivals = online ? rivalsOf(room, mine) : [];
+      const others = online ? rooms.seatList(room).filter((u, i) => u && i !== mine && rooms.isOnline(room, i)).length : 0;
+      if (others && !confirm(rivals.length === 1 ? "Leave the game? Your friend wins this round." : "Leave the game? It ends in a draw for everyone.")) return;
       $("leave").disabled = true;
-      await rooms.quit(s);
+      if (rivals.length === 1) await forfeit(s); else await rooms.quit(s);
       showHome();
     });
     $("share").addEventListener("click", async () => {
@@ -506,7 +551,7 @@
     }
 
     // Hooks for automated tests.
-    window.__cr = { rooms, play, move, canPlace, alive, get room() { return room; }, get seat() { return seat; }, get animating() { return !!anim; } };
+    window.__cr = { rooms, play, move, canPlace, alive, nextAlive, get room() { return room; }, get seat() { return seat; }, get animating() { return !!anim; } };
   </script>
 </body>
 </html>
