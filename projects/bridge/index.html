@@ -847,7 +847,10 @@
         for (let i = 0; i < cells.length; i += 4) rows += `<tr>${cells.slice(i, i + 4).join("")}</tr>`;
         center.innerHTML = `<table class="auction"><tr>${heads}</tr>${rows}</table>`;
       } else {
-        const lastUp = !G.trick.length && G.last && (G.phase === "done" || showLastUntil > Date.now());
+        // Online, a finished deal shows its result line in the centre instead of the last trick (they'd overlap),
+        // once the last trick has had its moment on the table.
+        const resultUp = G.phase === "done" && mode === "online" && room && !(showLastUntil > Date.now());
+        const lastUp = !G.trick.length && G.last && !resultUp && (G.phase === "done" || showLastUntil > Date.now());
         const trick = G.trick.length ? G.trick : lastUp ? G.last : [];
         const win = trick.length === 4 ? trickWinner(trick, trumpOf(G)).seat : -1;
         let html = `<div class="trick">` + trick.map((x) => cardHtml(x.card, `p${slotOf(x.seat)}${x.seat === win ? " win" : ""}`)).join("") + `</div>`;
@@ -856,7 +859,7 @@
           const msg = myTurn() ? (t === me ? "Your lead" : `Lead from ${NAMES[t]}`) : `${NAMES[t]} to lead`;
           html += `<div class="note">${msg}</div>`;
         }
-        if (G.phase === "done" && mode === "online" && room) html += `<div class="note">${resultLine()}</div>`;
+        if (resultUp) html += `<div class="note">${resultLine()}</div>`;
         center.innerHTML = html;
       }
 
