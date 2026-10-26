@@ -22,6 +22,11 @@
     .avatars button[aria-pressed="true"] { background: var(--panel); box-shadow: 0 0 0 3px var(--accent); }
     .done { font-size: 0.95rem; text-align: center; }
     .done:empty { display: none; }
+    .view { display: flex; flex-direction: column; gap: 12px; }
+    #account .row > button { flex: 1 0 auto; }
+    .key { font: 700 clamp(1rem, 5.6vw, 1.35rem)/1.3 ui-monospace, Menlo, Consolas, monospace; letter-spacing: 0.04em; text-align: center; white-space: nowrap;
+      padding: 10px 6px; border-radius: 12px; background: var(--soft); user-select: all; }
+    .name-row input.upper { text-transform: uppercase; }
   </style>
 </head>
 <body>
@@ -41,7 +46,50 @@
       <p class="done" id="done" role="status"></p>
     </section>
 
-    <p class="hint">Saving also sets your name in the games. Your profile is kept on this phone, so it works offline too: clearing the browser's data starts a new one.</p>
+    <section class="card" id="account" aria-labelledby="account-title">
+      <h2 id="account-title">Account</h2>
+      <div class="view" id="v-none">
+        <p>Make an account to use your profile on your other devices too. You need an invite code.</p>
+        <div class="row"><button id="to-make">Make an account</button><button class="secondary" id="to-signin">Sign in</button></div>
+      </div>
+      <form class="view" id="v-make" hidden>
+        <label class="name-row"><span>Username</span>
+          <input id="make-user" maxlength="20" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="e.g. sam_12"></label>
+        <label class="name-row"><span>Invite code</span>
+          <input id="make-invite" class="upper" maxlength="24" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX-XXXX"></label>
+        <p class="hint">A username is 3 to 20 lowercase letters, numbers or _. Only you and the superuser see it.</p>
+        <div class="row"><button id="make">Make account</button><button type="button" class="secondary cancel">Cancel</button></div>
+      </form>
+      <form class="view" id="v-key" hidden>
+        <p>Your key for <strong id="key-user"></strong>:</p>
+        <p class="key" id="key"></p>
+        <p>It's shown only this once. Save it in your password manager or somewhere safe: you need it to sign in on another device, and nobody can look it up for you.</p>
+        <div class="row"><button type="button" id="copy-key">Copy key</button><button type="button" class="secondary" id="save-key">Save as file</button></div>
+        <label class="name-row"><span>Last 4 characters</span>
+          <input id="key-check" class="upper" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXX"></label>
+        <button id="key-done" disabled>I've saved my key</button>
+      </form>
+      <form class="view" id="v-signin" hidden>
+        <label class="name-row"><span>Username</span>
+          <input id="signin-user" maxlength="20" autocomplete="username" autocapitalize="none" spellcheck="false"></label>
+        <label class="name-row"><span>Key</span>
+          <input id="signin-key" type="password" maxlength="24" autocomplete="current-password" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX-XXXX"></label>
+        <div class="row"><button id="signin">Sign in</button><button type="button" class="secondary cancel">Cancel</button></div>
+      </form>
+      <div class="view" id="v-choose" hidden>
+        <p>This phone and your account have different profiles. Which one do you want to keep?</p>
+        <button id="keep-here"></button>
+        <button class="secondary" id="keep-account"></button>
+      </div>
+      <div class="view" id="v-in" hidden>
+        <p>Signed in as <strong id="in-user"></strong>. Your profile is backed up to your account.</p>
+        <div class="row"><button class="secondary" id="change-key">New key</button><button class="secondary" id="sign-out">Sign out</button></div>
+      </div>
+      <p class="error" id="account-error" role="alert"></p>
+    </section>
+
+    <p class="hint">Saving also sets your name in the games. Your profile is kept on this phone, so it works offline too: clearing the browser's data starts a new one, unless you have an account.</p>
+    <p class="hint">An account keeps only a username, your name and avatar, and a scrambled copy of your key: no email or other personal details.</p>
   </main>
   <script type="module">
     import * as core from "../../shared/core.js";
@@ -105,7 +153,125 @@
       }
     });
 
+    // ---------- account ----------
+    const views = ["none", "make", "key", "signin", "choose", "in"];
+    let account = null;
+    let shownKey = null; // { username, key } while the key screen is up
+    let choice = null; // { here, theirs } while choosing a profile after signing in
+    function view(name) {
+      for (const v of views) $(`v-${v}`).hidden = v !== name;
+      $("account-error").textContent = "";
+    }
+    const face = (p) => `${p.avatar || "🙂"} ${p.display_name}`;
+    const busy = (button, on) => { button.disabled = on; };
+    const fail = (err) => {
+      $("account-error").textContent = err instanceof core.CoreError ? err.message : "Something went wrong. Try again.";
+    };
+    function signedInView() {
+      $("in-user").textContent = account.username;
+      view("in");
+    }
+    async function loadAccount() {
+      account = await core.account();
+      if (account) signedInView(); else view("none");
+    }
+    function showKey({ username, key }) {
+      shownKey = { username, key };
+      $("key-user").textContent = username;
+      $("key").textContent = key;
+      $("key-check").value = "";
+      $("key-done").disabled = true;
+      view("key");
+    }
+
+    $("to-make").addEventListener("click", () => { view("make"); $("make-user").focus(); });
+    $("to-signin").addEventListener("click", () => { view("signin"); $("signin-user").focus(); });
+    for (const b of document.querySelectorAll("#account .cancel")) b.addEventListener("click", () => view("none"));
+
+    $("v-make").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      busy($("make"), true);
+      try {
+        const made = await core.makeAccount({ username: $("make-user").value, invite: $("make-invite").value });
+        account = { username: made.username };
+        showKey(made);
+      } catch (err) { fail(err); }
+      busy($("make"), false);
+    });
+
+    $("copy-key").addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(shownKey.key);
+        $("copy-key").textContent = "Copied ✓";
+        setTimeout(() => { $("copy-key").textContent = "Copy key"; }, 2000);
+      } catch { $("account-error").textContent = "Can't copy here. Write the key down instead."; }
+    });
+    $("save-key").addEventListener("click", () => {
+      const text = `reclaude account\nUsername: ${shownKey.username}\nKey: ${shownKey.key}\n`;
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
+      a.download = `reclaude-${shownKey.username}.txt`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    });
+    $("key-check").addEventListener("input", () => {
+      $("key-done").disabled = core.cleanKey($("key-check").value) !== core.cleanKey(shownKey.key).slice(-4);
+    });
+    $("v-key").addEventListener("submit", (e) => {
+      e.preventDefault();
+      if ($("key-done").disabled) return;
+      shownKey = null;
+      $("key").textContent = "";
+      loadAccount();
+    });
+
+    $("v-signin").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      busy($("signin"), true);
+      try {
+        const theirs = await core.signInAccount({ username: $("signin-user").value, key: $("signin-key").value });
+        $("signin-key").value = "";
+        const here = core.localProfile();
+        const same = (a, b) => a.display_name === b.display_name && (a.avatar || null) === (b.avatar || null);
+        if (theirs && here && !same(theirs, here)) {
+          choice = { here, theirs };
+          $("keep-here").textContent = `Keep ${face(here)} (this phone)`;
+          $("keep-account").textContent = `Use ${face(theirs)} (account)`;
+          view("choose");
+        } else {
+          if (theirs) core.useProfile(theirs); else if (here) await core.saveProfile(here);
+          start();
+          await loadAccount();
+        }
+      } catch (err) { fail(err); }
+      busy($("signin"), false);
+    });
+    $("keep-here").addEventListener("click", async () => {
+      await core.saveProfile(choice.here).catch(() => {});
+      start();
+      await loadAccount();
+    });
+    $("keep-account").addEventListener("click", async () => {
+      core.useProfile(choice.theirs);
+      start();
+      await loadAccount();
+    });
+
+    $("change-key").addEventListener("click", async () => {
+      if (!confirm("Make a new key? Your old key stops working and your other devices are signed out.")) return;
+      busy($("change-key"), true);
+      try { showKey({ username: account.username, ...(await core.changeKey()) }); } catch (err) { fail(err); }
+      busy($("change-key"), false);
+    });
+    $("sign-out").addEventListener("click", async () => {
+      if (!confirm("Sign out on this phone? Your profile stays here. To sign in again you need your key.")) return;
+      await core.signOut();
+      account = null;
+      view("none");
+    });
+
     start();
+    loadAccount();
   </script>
 </body>
 </html>
