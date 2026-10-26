@@ -163,7 +163,7 @@ only its own `projects/<name>/` folder; engine changes to `shared/` or the rules
   The publishable key (`sb_publishable_…`) is public by design, like the Firebase config; access is controlled by row
   level security. Never ask for, or put anywhere, the secret / `service_role` key or the database password.
 - Games stay on Firebase. Supabase is for the social side (`apps/`: profiles first, then apps such as Plan), one Postgres
-  schema per module: `core` (shared by every app: `core.profiles` now) and later one schema per app, which refers to
+  schema per module: `core` (shared by every app: profiles, accounts and roles) and later one schema per app, which refers to
   people only by `core.profiles.id` and never touches another app's schema. Core never refers to an app.
 - Everything is created by migrations in `supabase/migrations/` (never by hand in the dashboard), each with row level
   security on and explicit grants (Supabase grants nothing on a new schema), and tested in `supabase/tests/` (pgTAP:
@@ -178,9 +178,19 @@ only its own `projects/<name>/` folder; engine changes to `shared/` or the rules
 - Pages reach Supabase only through `shared/core.js` (and later each app's own module next to it), and only signed-in
   users can read anything. Opening a page must not sign anyone up: only an action that needs it (like backing up a
   saved profile) calls `core.signIn()`; elsewhere use `core.signedIn()`.
-- The free plan pauses an idle project, so nothing the games need may depend on Supabase: names and avatars work from
-  the device's copy and Firebase rooms. Accounts (username + personal key) and Supabase-backed apps wait until the
-  project is on a paid plan or kept awake.
+- Functions in `core` are callable by nobody unless a migration grants them: each migration that adds functions ends
+  with `revoke execute on all functions in schema core from public` and grants only what pages call.
+- Accounts (`…_core_accounts.sql`): everyone is anonymous by default; with an invite code from a superuser, an anonymous
+  sign-in can become an account (a username and a personal key made on the device and shown once; same user id, so
+  its data comes along) to use the profile on other devices. No email or other personal data: the sign-in is
+  Supabase's email + password with a made-up `<username>@users.reclaude.invalid` address. Accounts are never deleted,
+  only deactivated (data kept), and can hold roles (`core.roles`: superuser, admin, user, per app; policies use
+  `core.has_role(role, app)`). Superusers make invites, deactivate, reset keys and edit accounts; every change is in
+  `core.audit`. The first superuser's invite comes from running `select core.first_invite();` in the dashboard's SQL
+  editor (once, while there's none).
+- The free plan pauses an idle project (until someone resumes it in the dashboard; no data is lost), so nothing the
+  games need may depend on Supabase: names and avatars work from the device's copy and Firebase rooms. Accounts and
+  Supabase-backed apps are fine on it, but are down while it's paused.
 - Testing an app for real: `supabase start` (the CLI and Docker), build, serve `_site` on localhost and drive it with
   Playwright: the pages use the local stack there.
 
