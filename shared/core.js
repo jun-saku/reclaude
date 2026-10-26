@@ -345,6 +345,8 @@ export async function signOut() {
 //   await admin.cancelInvite(id)
 //   await admin.accounts()                      superusers: [{ id, username, active, created_at, roles, display_name, avatar }]
 //   await admin.setActive(id, active), admin.resetKey(id) (the new key), admin.editAccount(id, { username, display_name, avatar })
+//   await admin.setRole(id, { role, scope }), admin.removeRole(id, scope)   superusers: role "admin" or "superuser";
+//                                               scope an app's name, or "*" (or empty) for every app
 //   await admin.log({ before })                 superusers: audit entries, newest first, LOG_PAGE at a time (before: an
 //                                               entry's id, for the page after it)
 // (person: { display_name, avatar, username? } or null.)
@@ -409,6 +411,8 @@ const supabaseAdmin = {
     }));
   },
   setActive: (id, active) => call("set_active", { target: id, make_active: active }),
+  setRole: (id, role, scope) => call("set_role", { target: id, role, scope }),
+  removeRole: (id, scope) => call("remove_role", { target: id, scope }),
   resetKey: (id) => call("reset_key", { target: id }),
   editAccount: (id, { username, display_name, avatar }) =>
     call("edit_account", { target: id, new_username: username || null, new_display_name: display_name || null, new_avatar: avatar || null }),
@@ -486,6 +490,22 @@ const fakeAdmin = {
       this.logged(db, active ? "reactivated" : "deactivated", id);
     });
   },
+  setRole(id, role, scope) {
+    return this.change(id, (db, [, a], me) => {
+      if (a.id === me.id) throw new CoreError("You can't change your own roles.");
+      if (role === "superuser" && scope !== "*") throw new CoreError("A superuser is for every app.");
+      a.roles = [...(a.roles || []).filter((r) => r.scope !== scope), { role, scope }];
+      this.logged(db, "gave role", id, { role, scope });
+    });
+  },
+  removeRole(id, scope) {
+    return this.change(id, (db, [, a], me) => {
+      if (a.id === me.id) throw new CoreError("You can't change your own roles.");
+      const gone = (a.roles || []).find((r) => r.scope === scope);
+      a.roles = (a.roles || []).filter((r) => r.scope !== scope);
+      if (gone) this.logged(db, "removed role", id, { role: gone.role, scope });
+    });
+  },
   resetKey(id) {
     return this.change(id, (db, [, a], me) => {
       if (a.id === me.id) throw new CoreError("Change your own key from your profile.");
@@ -525,6 +545,13 @@ export const admin = {
   accounts: async () => backend().accounts(),
   setActive: async (id, active) => { await backend().setActive(id, active); },
   resetKey: async (id) => formatKey(await backend().resetKey(id)),
+  async setRole(id, { role, scope = "*" } = {}) {
+    const app = String(scope ?? "").trim().toLowerCase() || "*";
+    if (!["admin", "superuser"].includes(role)) throw new CoreError("Pick a role.");
+    if (app !== "*" && !/^[a-z][a-z0-9_]{0,30}$/.test(app)) throw new CoreError("An app is its short name, e.g. pickleball.");
+    await backend().setRole(id, role, role === "superuser" ? "*" : app);
+  },
+  removeRole: async (id, scope = "*") => { await backend().removeRole(id, scope || "*"); },
   async editAccount(id, { username, display_name, avatar } = {}) {
     const name = display_name == null ? null : cleanName(display_name);
     if (display_name != null && !name) throw new CoreError("That name can't be used. Try letters, numbers or emoji (up to 24).");

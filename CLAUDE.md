@@ -190,7 +190,7 @@ only its own `projects/<name>/` folder; engine changes to `shared/` or the rules
   `core.has_role(role, app)`). Accounts are invite-only, one code per person: admins (of any app) make plain invites
   and superusers also ones that give a role; a pending invite's code stays readable to its maker (and superusers),
   with an optional note, until it's used or cancelled (`…_core_invite_codes.sql`). Superusers also deactivate, reset
-  keys and edit accounts; every change is in `core.audit`. The first superuser's invite comes from running `select core.first_invite();` in the dashboard's SQL
+  keys, edit accounts and give or take roles (`…_core_set_roles.sql`; never their own, so a superuser always stays); every change is in `core.audit`. The first superuser's invite comes from running `select core.first_invite();` in the dashboard's SQL
   editor (once, while there's none).
 - The free plan pauses an idle project (until someone resumes it in the dashboard; no data is lost), so nothing the
   games need may depend on Supabase: names and avatars work from the device's copy and Firebase rooms. Accounts and

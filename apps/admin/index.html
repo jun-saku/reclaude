@@ -22,6 +22,12 @@
     .acct .info .who { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
     .gear { flex: none; width: 44px; padding: 0; font-size: 1.2rem; background: var(--soft); color: var(--text); }
     .gear[aria-expanded="true"] { box-shadow: 0 0 0 2px var(--accent); }
+    .menu { display: flex; flex-direction: column; gap: 10px; }
+    .menu h3 { margin: 4px 0 0; font-size: 0.95rem; }
+    .menu .give { display: flex; flex-wrap: wrap; gap: 8px; }
+    .menu .give select, .menu .give input { flex: 1 1 120px; min-width: 0; padding: 10px 12px; border-radius: 12px;
+      border: 1px solid var(--line); background: var(--bg); color: var(--text); font: inherit; }
+    .menu .give button { flex: 1 0 100%; }
     .entries { display: flex; flex-direction: column; }
     .entry { display: flex; gap: 10px; align-items: baseline; padding: 8px 0; border-top: 1px solid var(--line); font-size: 0.9rem; }
     .entry:first-child { border-top: 0; }
@@ -131,7 +137,7 @@
       return h >= 48 ? `${Math.round(h / 24)} days left` : h >= 1 ? `${h} hours left` : "less than an hour left";
     };
     const name = (p) => (p ? `${p.avatar ? `${p.avatar} ` : ""}${p.display_name}${p.username && p.username !== p.display_name ? ` (@${p.username})` : ""}` : "someone");
-    const roleText = (r) => `${r.role}${r.scope && r.scope !== "*" ? ` of ${r.scope}` : ""}`;
+    const roleText = (r) => (r.role === "superuser" ? "superuser" : `${r.role} of ${!r.scope || r.scope === "*" ? "every app" : r.scope}`);
     const message = (err) => (err instanceof core.CoreError ? err.message : "Something went wrong. Try again.");
     const inviteText = (code) => `Your reclaude invite code: ${code}\nMake your account on the Profile page: ${new URL("../profile/", location.href).href}`;
     async function copy(text, button, label) {
@@ -272,7 +278,33 @@
           act(() => core.admin.editAccount(a.id, { display_name }));
         });
         buttons.push(rename, rename2);
-        const actions = el("div", { class: "row", id: `actions-${a.id}`, hidden: true }, ...buttons);
+        // Roles (not your own): take each away, or give one.
+        const roles = [];
+        if (!self) {
+          for (const r of a.roles) {
+            const remove = el("button", { type: "button", class: "secondary" }, `Remove ${roleText(r)}`);
+            remove.addEventListener("click", () => {
+              if (!confirm(`Take away @${a.username}'s role: ${roleText(r)}?`)) return;
+              act(() => core.admin.removeRole(a.id, r.scope));
+            });
+            roles.push(remove);
+          }
+          const pick = el("select", { "aria-label": `Role for @${a.username}` },
+            el("option", { value: "admin" }, "Admin"), el("option", { value: "superuser" }, "Superuser"));
+          const app = el("input", { "aria-label": "App", placeholder: "All apps", maxlength: "31",
+            autocapitalize: "none", autocomplete: "off", spellcheck: "false" });
+          pick.addEventListener("change", () => { app.hidden = pick.value === "superuser"; });
+          const give = el("button", { type: "button" }, "Give role");
+          give.addEventListener("click", () => {
+            const r = { role: pick.value, scope: pick.value === "superuser" ? "*" : app.value.trim().toLowerCase() || "*" };
+            if (!confirm(`Make @${a.username} ${r.role === "superuser" ? "a superuser (everything, everywhere)" : `an ${roleText(r)}`}?`)) return;
+            act(() => core.admin.setRole(a.id, r));
+          });
+          roles.push(el("div", { class: "give" }, pick, app, give));
+        }
+        const actions = el("div", { class: "menu", id: `actions-${a.id}`, hidden: true },
+          el("div", { class: "row" }, ...buttons),
+          roles.length > 0 && el("h3", {}, "Roles"), ...roles);
         const gear = el("button", { type: "button", class: "gear", "aria-label": `Actions for @${a.username}`,
           "aria-expanded": "false", "aria-controls": `actions-${a.id}` }, "⚙️");
         gear.addEventListener("click", () => {
@@ -298,7 +330,7 @@
     const entry = (e) => {
       const what = e.action === "made account"
         ? `${short(e.actor)} made their account${e.detail?.role ? ` (${roleText(e.detail)})` : ""}`
-        : `${short(e.actor)} ${e.action}${e.target ? ` ${short(e.target)}` : ""}${e.detail?.note ? ` (${e.detail.note})` : ""}`;
+        : `${short(e.actor)} ${e.action}${e.target ? ` ${short(e.target)}` : ""}${e.detail?.role ? ` (${roleText(e.detail)})` : ""}${e.detail?.note ? ` (${e.detail.note})` : ""}`;
       return el("div", { class: "entry" }, el("span", { class: "what" }, what), el("time", { datetime: e.at }, when(e.at)));
     };
     async function loadLog(more = false) {
