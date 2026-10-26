@@ -23,10 +23,12 @@
     .done { font-size: 0.95rem; text-align: center; }
     .done:empty { display: none; }
     .view { display: flex; flex-direction: column; gap: 12px; }
-    #account .row > button { flex: 1 0 auto; }
+    :is(#account, #form) .row > button { flex: 1 0 auto; }
     .key { font: 700 clamp(1rem, 5.6vw, 1.35rem)/1.3 ui-monospace, Menlo, Consolas, monospace; letter-spacing: 0.04em; text-align: center; white-space: nowrap;
       padding: 10px 6px; border-radius: 12px; background: var(--soft); user-select: all; }
     .name-row input.upper { text-transform: uppercase; }
+    .settings summary { cursor: pointer; font-weight: 600; padding: 11px 0; }
+    .settings[open] { display: flex; flex-direction: column; gap: 12px; }
     a.button { display: flex; align-items: center; justify-content: center; min-height: 44px; border-radius: 12px;
       background: var(--soft); color: var(--text); font-weight: 650; text-decoration: none; }
   </style>
@@ -38,13 +40,16 @@
       <h1>Profile</h1>
     </div>
     <section class="card" id="form">
-      <div class="preview" aria-hidden="true"><span class="avatar" id="preview-avatar">🙂</span><span class="name" id="preview-name"></span></div>
-      <label class="name-row"><span>Your name</span>
-        <input id="name" maxlength="24" autocomplete="nickname" enterkeyhint="done" placeholder="So friends know it's you"></label>
-      <h2 id="avatar-label">Avatar</h2>
-      <div class="avatars" id="avatars" role="group" aria-labelledby="avatar-label"></div>
-      <button id="save">Save</button>
-      <p class="error" id="error" role="alert"></p>
+      <div class="preview"><span class="avatar" id="preview-avatar">🙂</span><span class="name" id="preview-name"></span></div>
+      <button class="secondary" id="edit" hidden>Edit profile</button>
+      <div class="view" id="editor">
+        <label class="name-row"><span>Your name</span>
+          <input id="name" maxlength="24" autocomplete="nickname" enterkeyhint="done" placeholder="So friends know it's you"></label>
+        <h2 id="avatar-label">Avatar</h2>
+        <div class="avatars" id="avatars" role="group" aria-labelledby="avatar-label"></div>
+        <div class="row"><button id="save">Save</button><button type="button" class="secondary" id="cancel-edit" hidden>Cancel</button></div>
+        <p class="error" id="error" role="alert"></p>
+      </div>
       <p class="done" id="done" role="status"></p>
     </section>
 
@@ -84,9 +89,14 @@
         <button class="secondary" id="keep-account"></button>
       </div>
       <div class="view" id="v-in" hidden>
-        <p>Signed in as <strong id="in-user"></strong>. Your profile is backed up to your account.</p>
-        <div class="row"><button class="secondary" id="change-key">New key</button><button class="secondary" id="sign-out">Sign out</button></div>
+        <p>Signed in as <strong id="in-user"></strong>.</p>
         <a class="button" id="to-admin" href="../admin/" hidden>Admin panel</a>
+        <button class="secondary" id="sign-out">Sign out</button>
+        <details class="settings">
+          <summary>Settings</summary>
+          <p class="hint">A new key replaces your old one and signs out your other devices.</p>
+          <button class="secondary" id="change-key">New key</button>
+        </details>
       </div>
       <p class="error" id="account-error" role="alert"></p>
     </section>
@@ -125,13 +135,22 @@
 
     // The profile shows straight away from this phone. A phone without one may still have one with Supabase (from
     // an earlier visit); one not yet backed up is sent now. Neither holds anything up.
+    // With a profile, the card shows it with Edit profile; the name and avatars open only while editing.
+    function editing(on) {
+      $("editor").hidden = !on;
+      $("edit").hidden = on || !saved;
+      $("cancel-edit").hidden = !saved;
+    }
     function fill(me) {
       saved = me;
       $("name").value = me?.display_name || "";
       avatar = me?.avatar || null;
       $("save").textContent = me ? "Save" : "Create profile";
       show();
+      editing(!me);
     }
+    $("edit").addEventListener("click", () => { editing(true); $("done").textContent = ""; $("name").focus(); });
+    $("cancel-edit").addEventListener("click", () => fill(saved));
     function start() {
       fill(core.localProfile());
       if (saved) core.backUpProfile();
@@ -146,9 +165,7 @@
       try {
         const { backedUp } = await core.saveProfile({ display_name: $("name").value, avatar });
         $("name").value = core.cleanName($("name").value);
-        saved = { display_name: $("name").value, avatar };
-        show();
-        $("save").textContent = "Save";
+        fill({ display_name: $("name").value, avatar });
         $("done").textContent = backedUp ? "Saved ✓" : "Saved on this phone ✓";
       } catch (err) {
         $("error").textContent = err instanceof core.CoreError ? err.message : "Something went wrong. Try again.";
@@ -172,6 +189,7 @@
     };
     function signedInView() {
       $("in-user").textContent = account.username;
+      document.querySelector(".settings").open = false;
       $("to-admin").hidden = !core.isAdmin(account);
       view("in");
     }

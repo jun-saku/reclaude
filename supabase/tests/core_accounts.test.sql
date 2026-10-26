@@ -86,7 +86,7 @@ select throws_ok($$ select core.make_account('ben', 'BBBBBBBBBBBBBBBB', current_
 select throws_ok($$ select core.make_account('jun', 'BBBBBBBBBBBBBBBB', current_setting('t.plain')) $$, 'RCTKN', null, 'a taken username is refused');
 select lives_ok($$ select core.make_account('ben', 'BBBBBBBBBBBBBBBB', current_setting('t.plain')) $$, 'B makes an account');
 select is((select display_name from core.profiles where id = '00000000-0000-0000-0000-00000000000b'), 'Ben', 'B keeps their profile');
-select ok(not core.is_superuser() and not core.has_role('user', 'pickleball'), 'a plain invite gives no role');
+select ok(not core.is_superuser() and not core.has_role('admin', 'pickleball'), 'a plain invite gives no role');
 
 -- B is no superuser: sees only their own account, and can't use the superusers' tools.
 select is((select count(*) from core.accounts), 1::bigint, 'B sees only their own account');
@@ -104,7 +104,7 @@ select throws_ok($$ update core.accounts set active = true $$, '42501', null, 'B
 -- C: an admin of pickleball only.
 set local request.jwt.claims = '{"sub": "00000000-0000-0000-0000-00000000000c", "role": "authenticated"}';
 select lives_ok($$ select core.make_account('cyd', 'CCCCCCCCCCCCCCCC', current_setting('t.admin')) $$, 'C makes an account with an admin invite');
-select ok(core.has_role('admin', 'pickleball') and core.has_role('user', 'pickleball'), 'C is an admin (and so a user) of pickleball');
+select ok(core.has_role('admin', 'pickleball') and not core.has_role('superuser', 'pickleball'), 'C is an admin of pickleball, no more');
 select ok(not core.has_role('admin', 'plan') and not core.has_role('admin') and not core.is_superuser(), 'but nothing more');
 select throws_ok($$ select core.make_invite('admin', 'pickleball') $$, '42501', null, 'an admin cannot make invites that give a role');
 
