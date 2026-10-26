@@ -20,8 +20,12 @@
     .avatars button { padding: 0; font-size: 1.5rem; background: var(--soft); color: var(--text); }
     .avatars button.none { font-size: 0.95rem; }
     .avatars button[aria-pressed="true"] { background: var(--panel); box-shadow: 0 0 0 3px var(--accent); }
-    .done { font-size: 0.95rem; text-align: center; }
-    .done:empty { display: none; }
+    /* A green ring round your avatar: your profile is saved and backed up (none: only on this phone so far). */
+    .preview .avatar.synced { box-shadow: 0 0 0 3px var(--good); }
+    .sr-only { position: absolute; clip-path: inset(50%); white-space: nowrap; pointer-events: none; } /* for screen readers only */
+    #account-fold summary { cursor: pointer; padding: 11px 0; margin: -11px 0; }
+    #account-fold summary h2 { display: inline; }
+    #account-fold[open] { display: flex; flex-direction: column; gap: 12px; }
     .view { display: flex; flex-direction: column; gap: 12px; }
     :is(#account, #form) .row > button { flex: 1 0 auto; }
     .key { font: 700 clamp(1rem, 5.6vw, 1.35rem)/1.3 ui-monospace, Menlo, Consolas, monospace; letter-spacing: 0.04em; text-align: center; white-space: nowrap;
@@ -64,11 +68,12 @@
         <div class="row"><button id="save">Save</button><button type="button" class="secondary" id="cancel-edit" hidden>Cancel</button></div>
         <p class="error" id="error" role="alert"></p>
       </div>
-      <p class="done" id="done" role="status"></p>
+      <p class="sr-only" id="done" role="status"></p>
     </section>
 
     <section class="card" id="account" aria-labelledby="account-title">
-      <h2 id="account-title">Account</h2>
+      <details id="account-fold">
+      <summary><h2 id="account-title">Account</h2></summary>
       <div class="view" id="v-none">
         <p>Make an account to use your profile on your other devices too. You need an invite code.</p>
         <div class="row"><button id="to-make">Make an account</button><button class="secondary" id="to-signin">Sign in</button></div>
@@ -123,6 +128,7 @@
         </details>
       </div>
       <p class="error" id="account-error" role="alert"></p>
+      </details>
     </section>
 
     <p class="hint">Saving also sets your name in the games. Your profile is kept on this phone, so it works offline too: clearing the browser's data starts a new one, unless you have an account.</p>
@@ -132,7 +138,11 @@
     import * as core from "../../shared/core.js";
     const $ = (id) => document.getElementById(id);
     const AVATARS = [["🦊", "Fox"], ["🐼", "Panda"], ["🐸", "Frog"], ["🐯", "Tiger"], ["🐙", "Octopus"], ["🦄", "Unicorn"],
-      ["🐧", "Penguin"], ["🐢", "Turtle"], ["🦉", "Owl"], ["🐝", "Bee"], ["🌵", "Cactus"], ["🍄", "Mushroom"]];
+      ["🐧", "Penguin"], ["🐢", "Turtle"], ["🦉", "Owl"], ["🐝", "Bee"], ["🌵", "Cactus"], ["🍄", "Mushroom"],
+      ["🐶", "Dog"], ["🐱", "Cat"], ["🐰", "Rabbit"], ["🐻", "Bear"], ["🐨", "Koala"], ["🦁", "Lion"],
+      ["🐵", "Monkey"], ["🐷", "Pig"], ["🐮", "Cow"], ["🐔", "Chicken"], ["🦋", "Butterfly"], ["🐞", "Ladybird"],
+      ["🐬", "Dolphin"], ["🐳", "Whale"], ["🦖", "Dinosaur"], ["🐉", "Dragon"], ["🌻", "Sunflower"], ["🍀", "Clover"],
+      ["🌈", "Rainbow"], ["⭐", "Star"], ["🍕", "Pizza"], ["🍩", "Doughnut"], ["⚽", "Football"], ["🎸", "Guitar"]];
     let avatar = null;
     let saved = null; // the profile as last loaded or saved: Save stays off until something differs
 
@@ -154,8 +164,12 @@
       for (const b of $("avatars").children) b.setAttribute("aria-pressed", String(b.dataset.avatar === (avatar || "")));
       $("save").disabled = !name || (saved && name === saved.display_name && (avatar || null) === (saved.avatar || null));
       $("error").textContent = $("name").value.trim() && !name ? "That name can't be used. Try letters, numbers or emoji (up to 24)." : "";
+      // The ring: saved and backed up, and not being changed right now.
+      const unchanged = saved && name === saved.display_name && (avatar || null) === (saved.avatar || null);
+      $("preview-avatar").classList.toggle("synced", synced && !!unchanged);
       $("done").textContent = "";
     }
+    let synced = false; // Supabase has this profile
 
     // The profile shows straight away from this phone. A phone without one may still have one with Supabase (from
     // an earlier visit); one not yet backed up is sent now. Neither holds anything up.
@@ -173,12 +187,13 @@
       show();
       editing(!me);
     }
-    $("edit").addEventListener("click", () => { editing(true); $("done").textContent = ""; $("name").focus(); });
+    $("edit").addEventListener("click", () => { editing(true); $("name").focus(); });
     $("cancel-edit").addEventListener("click", () => fill(saved));
     function start() {
+      synced = !!core.localProfile() && !core.localProfile().pending;
       fill(core.localProfile());
-      if (saved) core.backUpProfile();
-      else core.loadProfile().then((me) => { if (me && !saved && !$("name").value) fill(me); });
+      if (saved) core.backUpProfile().then((ok) => { synced = ok; show(); });
+      else core.loadProfile().then((me) => { if (me && !saved && !$("name").value) { synced = true; fill(me); } });
     }
 
     $("name").addEventListener("input", show);
@@ -189,8 +204,9 @@
       try {
         const { backedUp } = await core.saveProfile({ display_name: $("name").value, avatar });
         $("name").value = core.cleanName($("name").value);
+        synced = backedUp;
         fill({ display_name: $("name").value, avatar });
-        $("done").textContent = backedUp ? "Saved ✓" : "Saved on this phone ✓";
+        $("done").textContent = backedUp ? "Saved" : "Saved on this phone";
       } catch (err) {
         $("error").textContent = err instanceof core.CoreError ? err.message : "Something went wrong. Try again.";
         $("save").disabled = false;
@@ -251,7 +267,7 @@
     }
     async function loadAccount() {
       account = await core.account();
-      if (account) signedInView(); else view("none");
+      if (account) { $("account-fold").open = true; signedInView(); } else view("none");
     }
     function showKey({ username, key }) {
       shownKey = { username, key };
