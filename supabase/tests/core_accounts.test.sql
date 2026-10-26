@@ -106,7 +106,7 @@ set local request.jwt.claims = '{"sub": "00000000-0000-0000-0000-00000000000c", 
 select lives_ok($$ select core.make_account('cyd', 'CCCCCCCCCCCCCCCC', current_setting('t.admin')) $$, 'C makes an account with an admin invite');
 select ok(core.has_role('admin', 'pickleball') and core.has_role('user', 'pickleball'), 'C is an admin (and so a user) of pickleball');
 select ok(not core.has_role('admin', 'plan') and not core.has_role('admin') and not core.is_superuser(), 'but nothing more');
-select throws_ok($$ select core.make_invite() $$, '42501', null, 'an admin cannot make invites');
+select throws_ok($$ select core.make_invite('admin', 'pickleball') $$, '42501', null, 'an admin cannot make invites that give a role');
 
 -- A, the superuser, sees everything.
 set local request.jwt.claims = '{"sub": "00000000-0000-0000-0000-00000000000a", "role": "authenticated"}';
