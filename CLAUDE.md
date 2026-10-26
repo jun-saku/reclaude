@@ -12,7 +12,9 @@ The user usually works from their phone, so keep replies short and end with the 
 - `https://reclaude.junsaku.dev/games/`: the games page (`site/games/index.html`), a card linking to each game, and
   back home. Non-games (the calculator) aren't listed. Projects don't link to each other.
 - `https://reclaude.junsaku.dev/apps/<name>/`: one social app (from `apps/<name>/`), on Supabase, e.g. the Profile
-  page `/apps/profile/`.
+  page `/apps/profile/`, and the admin panel `/apps/admin/` (invites for admins; accounts and the log for superusers;
+  linked from the Profile page for admins only, not from the home page). The database checks every admin action; the
+  page can also be put behind Cloudflare Access.
 - Every page's title row: back `‹` (game → games page, games page and apps → home), the title, and the profile icon
   (`.me-link`, to `/apps/profile/`) at the right; see `.claude/skills/new-game/DESIGN.md`.
 - Anything else: the blank 404 page.

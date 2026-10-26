@@ -183,7 +183,7 @@ const fakeAccount = (db = fakeRead()) => Object.entries(db.accounts || {}).find(
 const fakeAccounts = {
   account() {
     const found = fakeAccount();
-    return found && { username: found[0], active: true, roles: [] };
+    return found && { username: found[0], active: found[1].active !== false, roles: found[1].roles || [] };
   },
   async makeAccount(username, invite) {
     const { id } = await fakeSignIn();
@@ -192,8 +192,12 @@ const fakeAccounts = {
     if (fakeAccount(db)) throw new CoreError("This device already has an account.");
     if (cleanKey(invite).length !== 16) throw explain({ code: "RCINV" });
     if (db.accounts[username]) throw explain({ code: "RCTKN" });
+    // The first account here is the superuser; a fake invite made in the admin panel gives its role.
+    const inv = (db.invites || []).find((i) => i.code === cleanKey(invite) && !i.used_at && !i.cancelled);
+    if (inv) Object.assign(inv, { used_by: id, used_at: new Date().toISOString(), code: null });
+    const roles = !Object.keys(db.accounts).length ? [{ role: "superuser", scope: "*" }] : inv?.role ? [{ role: inv.role, scope: inv.scope }] : [];
     const key = newKey();
-    db.accounts[username] = { id, key, profile: db.profile || null };
+    db.accounts[username] = { id, key, profile: db.profile || null, roles, active: true, created_at: new Date().toISOString() };
     fakeWrite(db);
     return key;
   },
@@ -201,6 +205,7 @@ const fakeAccounts = {
     const db = fakeRead();
     const a = db.accounts?.[username];
     if (!a || a.key !== cleanKey(key)) throw explain({ code: "invalid_credentials" });
+    if (a.active === false) throw explain({ code: "user_banned" });
     db.id = a.id;
     db.profile = a.profile;
     fakeWrite(db);
@@ -330,3 +335,195 @@ export async function changeKey() {
 export async function signOut() {
   if (fake) fakeAccounts.signOut(); else await supabaseSignOut();
 }
+
+// ---------- admin panel (apps/admin/) ----------
+// What admins and superusers can do. The database checks every call (supabase/migrations/…_core_accounts.sql and
+// …_core_invite_codes.sql); these only fetch and send. Each throws a CoreError with a message to show.
+//   isAdmin(account) / isSuperuser(account)    from core.account()'s roles
+//   await admin.invites()                       [{ id, code, note, role, scope, made_at, expires_at, used_at, used_by: person }]
+//   await admin.makeInvite({ note, days, role, scope })   the new code (formatted)
+//   await admin.cancelInvite(id)
+//   await admin.accounts()                      superusers: [{ id, username, active, created_at, roles, display_name, avatar }]
+//   await admin.setActive(id, active), admin.resetKey(id) (the new key), admin.editAccount(id, { username, display_name, avatar })
+//   await admin.log()                           superusers: the latest 100 audit entries, newest first
+// (person: { display_name, avatar, username? } or null.)
+const ADMIN_ROLES = ["admin", "superuser"];
+export const isAdmin = (acc) => !!acc?.active && !!acc.roles?.some((r) => ADMIN_ROLES.includes(r.role));
+export const isSuperuser = (acc) => !!acc?.active && !!acc.roles?.some((r) => r.role === "superuser");
+
+// The database's own messages for refusals are written to be shown; anything else gets explain()'s.
+function adminError(error) {
+  if (["42501", "22023", "P0002"].includes(error?.code) && error.message && !/permission denied|row-level/i.test(error.message)) {
+    return new CoreError(error.message);
+  }
+  if (error?.code === "42501") return new CoreError("Only an admin can do that.");
+  return explain(error);
+}
+const core = () => sb().schema("core");
+async function call(fn, args) {
+  let result;
+  try { result = await core().rpc(fn, args); } catch (err) { throw adminError(err); }
+  if (result.error) throw adminError(result.error);
+  return result.data;
+}
+async function rows(query) {
+  let result;
+  try { result = await query; } catch (err) { throw adminError(err); }
+  if (result.error) throw adminError(result.error);
+  return result.data || [];
+}
+// Names and avatars (and usernames, for superusers) of these people, by id.
+async function people(ids) {
+  ids = [...new Set(ids.filter(Boolean))];
+  if (!ids.length) return {};
+  const [profs, accs] = await Promise.all([
+    rows(profiles().select("id, display_name, avatar").in("id", ids)),
+    rows(core().from("accounts").select("id, username").in("id", ids)),
+  ]);
+  const out = {};
+  for (const p of profs) out[p.id] = { display_name: p.display_name, avatar: p.avatar };
+  for (const a of accs) out[a.id] = { display_name: a.username, ...out[a.id], username: a.username };
+  return out;
+}
+
+const supabaseAdmin = {
+  async invites() {
+    const list = await rows(core().from("invites")
+      .select("id, code, note, role, scope, made_by, made_at, expires_at, used_by, used_at").order("made_at", { ascending: false }).limit(200));
+    const who = await people(list.flatMap((i) => [i.used_by, i.made_by]));
+    return list.map((i) => ({ ...i, used_by: who[i.used_by] || null, made_by: who[i.made_by] || null }));
+  },
+  makeInvite: ({ note, days, role, scope }) => call("make_invite", { role: role || null, scope: scope || "*", days, note: note || null }),
+  cancelInvite: (id) => call("cancel_invite", { invite_id: id }),
+  async accounts() {
+    const [accs, roles] = await Promise.all([
+      rows(core().from("accounts").select("id, username, active, created_at").order("created_at")),
+      rows(core().from("roles").select("user_id, role, scope")),
+    ]);
+    const profs = await rows(profiles().select("id, display_name, avatar").in("id", accs.map((a) => a.id)));
+    return accs.map((a) => ({
+      ...a, roles: roles.filter((r) => r.user_id === a.id).map(({ role, scope }) => ({ role, scope })),
+      display_name: profs.find((p) => p.id === a.id)?.display_name || null, avatar: profs.find((p) => p.id === a.id)?.avatar || null,
+    }));
+  },
+  setActive: (id, active) => call("set_active", { target: id, make_active: active }),
+  resetKey: (id) => call("reset_key", { target: id }),
+  editAccount: (id, { username, display_name, avatar }) =>
+    call("edit_account", { target: id, new_username: username || null, new_display_name: display_name || null, new_avatar: avatar || null }),
+  async log() {
+    const list = await rows(core().from("audit").select("id, at, actor, action, target, detail").order("id", { ascending: false }).limit(100));
+    const who = await people(list.flatMap((e) => [e.actor, e.target]));
+    return list.map((e) => ({ ...e, actor: who[e.actor] || null, target: who[e.target] || null }));
+  },
+};
+
+// ?backend=fake: invites, accounts and a log in this browser, as the database would answer (roughly).
+const fakeAdmin = {
+  me() {
+    const found = fakeAccount();
+    if (!found || !isAdmin({ active: found[1].active !== false, roles: found[1].roles })) throw new CoreError("Only an admin can do that.");
+    return found;
+  },
+  logged(db, action, target, detail = {}) {
+    (db.log ||= []).unshift({ id: (db.log[0]?.id || 0) + 1, at: new Date().toISOString(), actor: fakeAccount(db)?.[1].id, action, target, detail });
+  },
+  person(db, id) {
+    const found = Object.entries(db.accounts || {}).find(([, a]) => a.id === id);
+    return found ? { display_name: found[1].profile?.display_name || found[0], avatar: found[1].profile?.avatar || null, username: found[0] } : null;
+  },
+  invites() {
+    this.me();
+    const db = fakeRead();
+    return (db.invites || []).map((i) => ({ ...i, used_by: this.person(db, i.used_by), made_by: this.person(db, i.made_by) }));
+  },
+  makeInvite({ note, days, role, scope }) {
+    const [, me] = this.me();
+    if (role && !isSuperuser({ active: true, roles: me.roles })) throw new CoreError("Only a superuser can make invites that give a role.");
+    const db = fakeRead();
+    const code = newKey();
+    const now = Date.now();
+    (db.invites ||= []).unshift({ id: (db.invites[0]?.id || 0) + 1, code, note: note || null, role: role || null, scope: scope || "*",
+      made_by: me.id, made_at: new Date(now).toISOString(), expires_at: new Date(now + days * 864e5).toISOString(), used_at: null });
+    this.logged(db, "made invite", null, { note, role, days });
+    fakeWrite(db);
+    return code;
+  },
+  cancelInvite(id) {
+    this.me();
+    const db = fakeRead();
+    const inv = (db.invites || []).find((i) => i.id === id);
+    if (inv && !inv.used_at) Object.assign(inv, { expires_at: new Date().toISOString(), code: null });
+    this.logged(db, "cancelled invite", null, { invite: id });
+    fakeWrite(db);
+  },
+  super() {
+    const found = this.me();
+    if (!isSuperuser({ active: true, roles: found[1].roles })) throw new CoreError("Only a superuser can do that.");
+    return found;
+  },
+  accounts() {
+    this.super();
+    return Object.entries(fakeRead().accounts || {}).map(([username, a]) => ({ id: a.id, username, active: a.active !== false,
+      created_at: a.created_at, roles: a.roles || [], display_name: a.profile?.display_name || null, avatar: a.profile?.avatar || null }));
+  },
+  change(id, fn) {
+    const [, me] = this.super();
+    const db = fakeRead();
+    const found = Object.entries(db.accounts || {}).find(([, a]) => a.id === id);
+    if (!found) throw new CoreError("There's no such account.");
+    const out = fn(db, found, me);
+    fakeWrite(db);
+    return out;
+  },
+  setActive(id, active) {
+    return this.change(id, (db, [, a], me) => {
+      if (a.id === me.id) throw new CoreError("You can't deactivate your own account.");
+      a.active = active;
+      this.logged(db, active ? "reactivated" : "deactivated", id);
+    });
+  },
+  resetKey(id) {
+    return this.change(id, (db, [, a], me) => {
+      if (a.id === me.id) throw new CoreError("Change your own key from your profile.");
+      a.key = newKey();
+      this.logged(db, "reset key", id);
+      return a.key;
+    });
+  },
+  editAccount(id, { username, display_name, avatar }) {
+    return this.change(id, (db, [old, a]) => {
+      if (username && username !== old) {
+        if (db.accounts[username]) throw explain({ code: "RCTKN" });
+        delete db.accounts[old];
+        db.accounts[username] = a;
+      }
+      if (a.profile && (display_name || avatar)) Object.assign(a.profile, display_name ? { display_name } : {}, avatar ? { avatar } : {});
+      this.logged(db, "edited account", id);
+    });
+  },
+  log() {
+    this.super();
+    const db = fakeRead();
+    return (db.log || []).map((e) => ({ ...e, actor: this.person(db, e.actor), target: this.person(db, e.target) }));
+  },
+};
+
+const backend = () => (fake ? fakeAdmin : supabaseAdmin);
+export const admin = {
+  invites: async () => backend().invites(),
+  async makeInvite({ note, days = 7, role = null, scope = "*" } = {}) {
+    const text = String(note ?? "").replace(/\s+/g, " ").trim();
+    if (text && (text.length > 60 || /[<>&\p{Cc}]/u.test(text))) throw new CoreError("A note is up to 60 characters, without < > &.");
+    return formatKey(await backend().makeInvite({ note: text || null, days, role, scope }));
+  },
+  cancelInvite: async (id) => { await backend().cancelInvite(id); },
+  accounts: async () => backend().accounts(),
+  setActive: async (id, active) => { await backend().setActive(id, active); },
+  resetKey: async (id) => formatKey(await backend().resetKey(id)),
+  async editAccount(id, { username, display_name, avatar } = {}) {
+    const name = display_name == null ? null : cleanName(display_name);
+    if (display_name != null && !name) throw new CoreError("That name can't be used. Try letters, numbers or emoji (up to 24).");
+    await backend().editAccount(id, { username: username == null ? null : checkUsername(username), display_name: name, avatar });
+  },
+  log: async () => backend().log(),
+};
