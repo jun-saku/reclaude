@@ -22,6 +22,20 @@
     .acct .info .who { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
     .gear { flex: none; width: 44px; padding: 0; font-size: 1.2rem; background: var(--soft); color: var(--text); }
     .gear[aria-expanded="true"] { box-shadow: 0 0 0 2px var(--accent); }
+    .menu { display: flex; flex-direction: column; gap: 10px; }
+    .menu h3 { margin: 4px 0 0; font-size: 0.95rem; }
+    .menu section { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; border-top: 1px solid var(--line); }
+    .roles { display: flex; flex-direction: column; }
+    .role { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 4px 0; }
+    .role .label { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow-wrap: anywhere; }
+    .role .project { color: var(--muted); font-size: 0.8rem; }
+    .role .name { font-weight: 650; }
+    .role + .role { border-top: 1px solid var(--line); }
+    .role button { flex: none; width: 44px; padding: 0; background: var(--soft); color: var(--text); }
+    .add { display: flex; flex-wrap: wrap; gap: 8px; }
+    .add select { flex: 1 1 120px; min-width: 0; padding: 10px 12px; border-radius: 12px;
+      border: 1px solid var(--line); background: var(--bg); color: var(--text); font: inherit; }
+    .add button { flex: 1 0 40%; }
     .entries { display: flex; flex-direction: column; }
     .entry { display: flex; gap: 10px; align-items: baseline; padding: 8px 0; border-top: 1px solid var(--line); font-size: 0.9rem; }
     .entry:first-child { border-top: 0; }
@@ -76,9 +90,8 @@
           <select id="role">
             <option value="">None</option>
             <option value="admin">Admin</option>
+            <option value="superuser">Superuser</option>
           </select></label>
-        <label class="name-row" id="scope-row" hidden><span>App</span>
-          <input id="scope" maxlength="31" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="e.g. pickleball"></label>
         <button id="make">Make invite</button>
         <div class="view" id="made" hidden>
           <p class="newcode" id="made-code"></p>
@@ -131,7 +144,11 @@
       return h >= 48 ? `${Math.round(h / 24)} days left` : h >= 1 ? `${h} hours left` : "less than an hour left";
     };
     const name = (p) => (p ? `${p.avatar ? `${p.avatar} ` : ""}${p.display_name}${p.username && p.username !== p.display_name ? ` (@${p.username})` : ""}` : "someone");
-    const roleText = (r) => `${r.role}${r.scope && r.scope !== "*" ? ` of ${r.scope}` : ""}`;
+    let apps = []; // the projects and their roles
+    const appTitle = (app) => apps.find((a) => a.name === app)?.title || app;
+    const roleTitle = (app, role) => apps.find((a) => a.name === app)?.roles.find((r) => r.role === role)?.title || role;
+    // "admin" / "superuser" for core roles, "Pickleball organiser" for a project's.
+    const roleText = (r) => (!r.app || r.app === "core" ? r.role : `${appTitle(r.app)} ${roleTitle(r.app, r.role).toLowerCase()}`);
     const message = (err) => (err instanceof core.CoreError ? err.message : "Something went wrong. Try again.");
     const inviteText = (code) => `Your reclaude invite code: ${code}\nMake your account on the Profile page: ${new URL("../profile/", location.href).href}`;
     async function copy(text, button, label) {
@@ -160,8 +177,10 @@
       }
       $("gate").hidden = true;
       const sup = core.isSuperuser(me);
-      $("tabs").hidden = !sup; // admins only have invites
+      $("tabs").hidden = false;
+      document.querySelector('[data-tab="log"]').hidden = !sup; // admins: invites and project roles
       $("role-row").hidden = !sup;
+      try { apps = await core.admin.apps(); } catch {}
       show("invites");
     }
 
@@ -181,17 +200,13 @@
         for (const o of $("days").children) o.setAttribute("aria-pressed", String(o === b));
       });
     }
-    $("role").addEventListener("change", () => { $("scope-row").hidden = !$("role").value; });
 
     $("new-invite").addEventListener("submit", async (e) => {
       e.preventDefault();
       $("make").disabled = true;
       $("invite-error").textContent = "";
       try {
-        const role = $("role").value || null;
-        const scope = role ? $("scope").value.trim().toLowerCase() : "*";
-        if (role && !/^[a-z][a-z0-9_]{0,30}$/.test(scope)) throw new core.CoreError("Which app is the role for? e.g. pickleball");
-        const code = await core.admin.makeInvite({ note: $("note").value, days, role, scope });
+        const code = await core.admin.makeInvite({ note: $("note").value, days, role: $("role").value || null });
         $("made-code").textContent = code;
         $("made").hidden = false;
         $("note").value = "";
@@ -233,7 +248,7 @@
         el("span", { class: "who" }, i.note || "No note"), el("span", { class: "meta" }, `ended ${when(i.expires_at)}`))) : [el("p", { class: "empty" }, "None.")]));
     }
 
-    // ---------- accounts (superusers) ----------
+    // ---------- accounts (admins: roles; superusers: everything) ----------
     async function loadAccounts() {
       let list;
       try { list = await core.admin.accounts(); } catch (err) { $("account-error").textContent = message(err); return; }
@@ -241,8 +256,10 @@
       $("accounts").replaceChildren(...list.map((a) => {
         const self = a.id === me.id || a.username === me.username;
         const act = async (fn) => { try { await fn(); loadAccounts(); } catch (err) { $("account-error").textContent = message(err); } };
+        const sup = core.isSuperuser(me);
+        // Account: what superusers can change.
         const buttons = [];
-        if (!self) {
+        if (sup && !self) {
           const toggle = el("button", { type: "button", class: "secondary" }, a.active ? "Deactivate" : "Reactivate");
           toggle.addEventListener("click", () => {
             if (a.active && !confirm(`Deactivate @${a.username}? They're signed out everywhere and can't sign in. Their data stays.`)) return;
@@ -259,20 +276,67 @@
           });
           buttons.push(toggle, reset);
         }
-        const rename = el("button", { type: "button", class: "secondary" }, "Rename");
-        rename.addEventListener("click", () => {
-          const username = prompt(`New username for @${a.username}:`, a.username);
-          if (username == null || username.trim().toLowerCase() === a.username) return;
-          act(() => core.admin.editAccount(a.id, { username }));
+        if (sup) {
+          const rename = el("button", { type: "button", class: "secondary" }, "Rename");
+          rename.addEventListener("click", () => {
+            const username = prompt(`New username for @${a.username}:`, a.username);
+            if (username == null || username.trim().toLowerCase() === a.username) return;
+            act(() => core.admin.editAccount(a.id, { username }));
+          });
+          const editName = el("button", { type: "button", class: "secondary" }, "Edit name");
+          editName.addEventListener("click", () => {
+            const display_name = prompt(`Name shown for @${a.username}:`, a.display_name || "");
+            if (display_name == null || display_name === a.display_name) return;
+            act(() => core.admin.editAccount(a.id, { display_name }));
+          });
+          buttons.push(rename, editName);
+        }
+
+        // Roles: project · role · remove, then Add role. Core roles are the superusers' to change; projects' are
+        // every admin's. Nobody changes their own.
+        const held = [...(a.role ? [{ app: "core", role: a.role }] : []), ...a.appRoles];
+        const canChange = (r) => !self && (r.app !== "core" || sup);
+        const rows = held.map((r) => {
+          const remove = canChange(r) && el("button", { type: "button", "aria-label": `Remove ${roleText(r)} from @${a.username}` }, "🗑");
+          if (remove) {
+            remove.addEventListener("click", () => {
+              if (!confirm(`Take away @${a.username}'s role: ${roleText(r)}?`)) return;
+              act(() => (r.app === "core" ? core.admin.removeRole(a.id) : core.admin.removeAppRole(a.id, r.app, r.role)));
+            });
+          }
+          return el("div", { class: "role" },
+            el("span", { class: "label" },
+              el("span", { class: "project" }, r.app === "core" ? "Core" : appTitle(r.app)),
+              el("span", { class: "name" }, r.app === "core" ? (r.role === "superuser" ? "Superuser" : "Admin") : roleTitle(r.app, r.role))),
+            remove);
         });
-        const rename2 = el("button", { type: "button", class: "secondary" }, "Edit name");
-        rename2.addEventListener("click", () => {
-          const display_name = prompt(`Name shown for @${a.username}:`, a.display_name || "");
-          if (display_name == null || display_name === a.display_name) return;
-          act(() => core.admin.editAccount(a.id, { display_name }));
-        });
-        buttons.push(rename, rename2);
-        const actions = el("div", { class: "row", id: `actions-${a.id}`, hidden: true }, ...buttons);
+        const choices = [...(sup ? [{ name: "core", title: "Core", roles: [{ role: "admin", title: "Admin" }, { role: "superuser", title: "Superuser" }] }] : []), ...apps];
+        let adder = null;
+        if (!self && choices.length) {
+          const project = el("select", { "aria-label": "Project" }, ...choices.map((c) => el("option", { value: c.name }, c.title)));
+          const role = el("select", { "aria-label": "Role" });
+          const fillRoles = () => role.replaceChildren(...choices.find((c) => c.name === project.value).roles
+            .map((r) => el("option", { value: r.role }, r.title)));
+          project.addEventListener("change", fillRoles);
+          fillRoles();
+          const add = el("button", { type: "button" }, "Add");
+          const cancel = el("button", { type: "button", class: "secondary" }, "Cancel");
+          const form = el("div", { class: "add", hidden: true }, project, role, add, cancel);
+          const open = el("button", { type: "button", class: "secondary" }, "Add role");
+          open.addEventListener("click", () => { form.hidden = false; open.hidden = true; });
+          cancel.addEventListener("click", () => { form.hidden = true; open.hidden = false; });
+          add.addEventListener("click", () => {
+            const r = { app: project.value, role: role.value };
+            if (r.app === "core" && !confirm(`Make @${a.username} ${r.role === "superuser" ? "a superuser (everything, everywhere)" : "a core admin"}?`)) return;
+            act(() => (r.app === "core" ? core.admin.setRole(a.id, r.role) : core.admin.giveAppRole(a.id, r.app, r.role)));
+          });
+          adder = [open, form];
+        }
+        const actions = el("div", { class: "menu", id: `actions-${a.id}`, hidden: true },
+          buttons.length > 0 && el("section", {}, el("h3", {}, "Account"), el("div", { class: "row" }, ...buttons)),
+          el("section", {}, el("h3", {}, "Roles"),
+            rows.length ? el("div", { class: "roles" }, ...rows) : el("p", { class: "empty" }, "No roles."),
+            adder));
         const gear = el("button", { type: "button", class: "gear", "aria-label": `Actions for @${a.username}`,
           "aria-expanded": "false", "aria-controls": `actions-${a.id}` }, "⚙️");
         gear.addEventListener("click", () => {
@@ -284,7 +348,7 @@
           el("div", { class: "acct" },
             el("div", { class: "info" },
               el("span", { class: "who" }, `${a.avatar ? `${a.avatar} ` : ""}${a.display_name || a.username}`,
-                ...a.roles.map((r) => el("span", { class: "tag" }, roleText(r))),
+                a.role && el("span", { class: "tag" }, a.role), // core roles only: project roles are in the ⚙️ menu
                 !a.active && el("span", { class: "tag off" }, "deactivated")),
               el("span", { class: "meta" }, `@${a.username}${self ? " (you)" : ""} · since ${when(a.created_at)}`)),
             gear),
@@ -298,7 +362,7 @@
     const entry = (e) => {
       const what = e.action === "made account"
         ? `${short(e.actor)} made their account${e.detail?.role ? ` (${roleText(e.detail)})` : ""}`
-        : `${short(e.actor)} ${e.action}${e.target ? ` ${short(e.target)}` : ""}${e.detail?.note ? ` (${e.detail.note})` : ""}`;
+        : `${short(e.actor)} ${e.action}${e.target ? ` ${short(e.target)}` : ""}${e.detail?.role ? ` (${roleText(e.detail)})` : ""}${e.detail?.note ? ` (${e.detail.note})` : ""}`;
       return el("div", { class: "entry" }, el("span", { class: "what" }, what), el("time", { datetime: e.at }, when(e.at)));
     };
     async function loadLog(more = false) {

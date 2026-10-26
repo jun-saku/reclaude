@@ -343,8 +343,13 @@ export async function signOut() {
 //   await admin.invites()                       [{ id, code, note, role, scope, made_at, expires_at, used_at, used_by: person }]
 //   await admin.makeInvite({ note, days, role, scope })   the new code (formatted)
 //   await admin.cancelInvite(id)
-//   await admin.accounts()                      superusers: [{ id, username, active, created_at, roles, display_name, avatar }]
+//   await admin.accounts()                      admins: [{ id, username, active, created_at, role (core: "admin",
+//                                               "superuser" or null), appRoles: [{ app, role }], display_name, avatar }]
 //   await admin.setActive(id, active), admin.resetKey(id) (the new key), admin.editAccount(id, { username, display_name, avatar })
+//                                               superusers
+//   await admin.apps()                          the projects and their roles: [{ name, title, roles: [{ role, title }] }]
+//   await admin.setRole(id, role), admin.removeRole(id)                  superusers: the core role, "admin" or "superuser"
+//   await admin.giveAppRole(id, app, role), admin.removeAppRole(id, app, role)   admins: a project's role
 //   await admin.log({ before })                 superusers: audit entries, newest first, LOG_PAGE at a time (before: an
 //                                               entry's id, for the page after it)
 // (person: { display_name, avatar, username? } or null.)
@@ -398,17 +403,30 @@ const supabaseAdmin = {
   makeInvite: ({ note, days, role, scope }) => call("make_invite", { role: role || null, scope: scope || "*", days, note: note || null }),
   cancelInvite: (id) => call("cancel_invite", { invite_id: id }),
   async accounts() {
-    const [accs, roles] = await Promise.all([
+    const [accs, roles, appRoles] = await Promise.all([
       rows(core().from("accounts").select("id, username, active, created_at").order("created_at")),
-      rows(core().from("roles").select("user_id, role, scope")),
+      rows(core().from("roles").select("user_id, role")),
+      rows(core().from("app_roles").select("user_id, app, role").order("app").order("role")),
     ]);
     const profs = await rows(profiles().select("id, display_name, avatar").in("id", accs.map((a) => a.id)));
     return accs.map((a) => ({
-      ...a, roles: roles.filter((r) => r.user_id === a.id).map(({ role, scope }) => ({ role, scope })),
+      ...a, role: roles.find((r) => r.user_id === a.id)?.role || null,
+      appRoles: appRoles.filter((r) => r.user_id === a.id).map(({ app, role }) => ({ app, role })),
       display_name: profs.find((p) => p.id === a.id)?.display_name || null, avatar: profs.find((p) => p.id === a.id)?.avatar || null,
     }));
   },
+  async apps() {
+    const [apps, names] = await Promise.all([
+      rows(core().from("apps").select("name, title").order("title")),
+      rows(core().from("app_role_names").select("app, role, title").order("title")),
+    ]);
+    return apps.map((a) => ({ ...a, roles: names.filter((n) => n.app === a.name).map(({ role, title }) => ({ role, title })) }));
+  },
   setActive: (id, active) => call("set_active", { target: id, make_active: active }),
+  setRole: (id, role) => call("set_role", { target: id, role }),
+  removeRole: (id) => call("remove_role", { target: id }),
+  giveAppRole: (id, app, role) => call("give_app_role", { target: id, app, role }),
+  removeAppRole: (id, app, role) => call("remove_app_role", { target: id, app, role }),
   resetKey: (id) => call("reset_key", { target: id }),
   editAccount: (id, { username, display_name, avatar }) =>
     call("edit_account", { target: id, new_username: username || null, new_display_name: display_name || null, new_avatar: avatar || null }),
@@ -466,12 +484,17 @@ const fakeAdmin = {
     return found;
   },
   accounts() {
-    this.super();
+    this.me();
     return Object.entries(fakeRead().accounts || {}).map(([username, a]) => ({ id: a.id, username, active: a.active !== false,
-      created_at: a.created_at, roles: a.roles || [], display_name: a.profile?.display_name || null, avatar: a.profile?.avatar || null }));
+      created_at: a.created_at, role: a.roles?.[0]?.role || null, appRoles: a.appRoles || [],
+      display_name: a.profile?.display_name || null, avatar: a.profile?.avatar || null }));
   },
-  change(id, fn) {
-    const [, me] = this.super();
+  // A made-up project, so the panel's project roles can be tried here.
+  apps() {
+    return [{ name: "pickleball", title: "Pickleball", roles: [{ role: "organiser", title: "Organiser" }, { role: "scorekeeper", title: "Scorekeeper" }] }];
+  },
+  change(id, fn, who = "super") {
+    const [, me] = this[who]();
     const db = fakeRead();
     const found = Object.entries(db.accounts || {}).find(([, a]) => a.id === id);
     if (!found) throw new CoreError("There's no such account.");
@@ -485,6 +508,38 @@ const fakeAdmin = {
       a.active = active;
       this.logged(db, active ? "reactivated" : "deactivated", id);
     });
+  },
+  setRole(id, role) {
+    return this.change(id, (db, [, a], me) => {
+      if (a.id === me.id) throw new CoreError("You can't change your own roles.");
+      a.roles = [{ role, scope: "*" }];
+      this.logged(db, "gave role", id, { app: "core", role });
+    });
+  },
+  removeRole(id) {
+    return this.change(id, (db, [, a], me) => {
+      if (a.id === me.id) throw new CoreError("You can't change your own roles.");
+      const gone = a.roles?.[0];
+      a.roles = [];
+      if (gone) this.logged(db, "removed role", id, { app: "core", role: gone.role });
+    });
+  },
+  giveAppRole(id, app, role) {
+    return this.change(id, (db, [, a], me) => {
+      if (a.id === me.id) throw new CoreError("You can't change your own roles.");
+      if (!this.apps().some((p) => p.name === app && p.roles.some((r) => r.role === role))) throw new CoreError("That project has no such role.");
+      if ((a.appRoles ||= []).some((r) => r.app === app && r.role === role)) return;
+      a.appRoles.push({ app, role });
+      this.logged(db, "gave role", id, { app, role });
+    }, "me");
+  },
+  removeAppRole(id, app, role) {
+    return this.change(id, (db, [, a], me) => {
+      if (a.id === me.id) throw new CoreError("You can't change your own roles.");
+      const before = (a.appRoles || []).length;
+      a.appRoles = (a.appRoles || []).filter((r) => !(r.app === app && r.role === role));
+      if (a.appRoles.length < before) this.logged(db, "removed role", id, { app, role });
+    }, "me");
   },
   resetKey(id) {
     return this.change(id, (db, [, a], me) => {
@@ -525,6 +580,14 @@ export const admin = {
   accounts: async () => backend().accounts(),
   setActive: async (id, active) => { await backend().setActive(id, active); },
   resetKey: async (id) => formatKey(await backend().resetKey(id)),
+  apps: async () => backend().apps(),
+  async setRole(id, role) {
+    if (!["admin", "superuser"].includes(role)) throw new CoreError("Pick a role.");
+    await backend().setRole(id, role);
+  },
+  removeRole: async (id) => { await backend().removeRole(id); },
+  giveAppRole: async (id, app, role) => { await backend().giveAppRole(id, app, role); },
+  removeAppRole: async (id, app, role) => { await backend().removeAppRole(id, app, role); },
   async editAccount(id, { username, display_name, avatar } = {}) {
     const name = display_name == null ? null : cleanName(display_name);
     if (display_name != null && !name) throw new CoreError("That name can't be used. Try letters, numbers or emoji (up to 24).");

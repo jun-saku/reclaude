@@ -4,7 +4,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 select plan(32);
 
--- Anonymous sign-ins: S (becomes the superuser), A (an admin of pickleball), U (a plain account), N and M (new people).
+-- Anonymous sign-ins: S (becomes the superuser), A (an admin), U (a plain account), N and M (new people).
 insert into auth.users (id, aud, role, is_anonymous) values
   ('00000000-0000-0000-0000-000000000005', 'authenticated', 'authenticated', true),
   ('00000000-0000-0000-0000-00000000000a', 'authenticated', 'authenticated', true),
@@ -22,16 +22,16 @@ reset role;
 select is((select code from core.invites where note = 'first superuser'), null, 'a used invite''s code is cleared');
 set local role authenticated;
 set local request.jwt.claims = '{"sub": "00000000-0000-0000-0000-000000000005", "role": "authenticated"}';
-do $$ begin perform set_config('t.admin', core.make_invite('admin', 'pickleball'), true); end $$;
+do $$ begin perform set_config('t.admin', core.make_invite('admin'), true); end $$;
 do $$ begin perform set_config('t.user', core.make_invite(note => 'for Uma'), true); end $$;
 select is((select code from core.invites where note = 'for Uma'), current_setting('t.user'), 'the superuser can read a pending invite''s code');
 select throws_ok($$ select core.make_invite(note => '<b>x</b>') $$, '23514', null, 'notes with < > & are refused');
 select throws_ok($$ select core.make_invite(note => repeat('x', 61)) $$, '23514', null, 'notes are at most 60 characters');
 select ok(core.make_invite(note => '  ') is not null, 'a blank note is no note');
-select throws_ok($$ select core.make_invite('user', 'pickleball') $$, '23514', null, 'there is no "user" role (a plain account is one)');
+select throws_ok($$ select core.make_invite('user') $$, '23514', null, 'there is no "user" role (a plain account is one)');
 
 set local request.jwt.claims = '{"sub": "00000000-0000-0000-0000-00000000000a", "role": "authenticated"}';
-select lives_ok($$ select core.make_account('ada', 'AAAAAAAAAAAAAAAA', current_setting('t.admin')) $$, 'A joins as an admin of pickleball');
+select lives_ok($$ select core.make_account('ada', 'AAAAAAAAAAAAAAAA', current_setting('t.admin')) $$, 'A joins as an admin');
 set local request.jwt.claims = '{"sub": "00000000-0000-0000-0000-000000000001", "role": "authenticated"}';
 select lives_ok($$ select core.make_account('uma', 'VVVVVVVVVVVVVVVV', current_setting('t.user')) $$, 'U joins with a plain invite');
 
@@ -50,7 +50,7 @@ set local request.jwt.claims = '{"sub": "00000000-0000-0000-0000-00000000000a", 
 select ok(core.is_admin(), 'an admin of any app is an admin');
 do $$ begin perform set_config('t.byadmin', core.make_invite(note => 'for Ned', days => 3), true); end $$;
 do $$ begin perform set_config('t.cancel', core.make_invite(note => 'for nobody'), true); end $$;
-select throws_ok($$ select core.make_invite('admin', 'pickleball') $$, '42501', null, 'an admin cannot make invites that give a role');
+select throws_ok($$ select core.make_invite('admin') $$, '42501', null, 'an admin cannot make invites that give a role');
 select is((select count(*) from core.invites), 2::bigint, 'an admin sees only their own invites');
 select is((select code from core.invites where note = 'for Ned'), current_setting('t.byadmin'), 'with their codes');
 select throws_ok($$ select core.cancel_invite((select id from core.invites where note = 'for Uma' limit 1)) $$, '42501', null,
