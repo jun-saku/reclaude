@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#161618" media="(prefers-color-scheme: dark)">
+  <title>Admin</title>
+  <meta name="description" content="Invites, accounts and the log, for admins.">
+  <link rel="stylesheet" href="../../shared/base.css">
+  <style>
+    .view { display: flex; flex-direction: column; gap: 12px; }
+    .list { display: flex; flex-direction: column; gap: 8px; }
+    .item { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; }
+    .item.off { opacity: 0.75; }
+    .item .top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+    .item .who { font-weight: 650; overflow-wrap: anywhere; }
+    .item .meta { color: var(--muted); font-size: 0.9rem; }
+    .item .row { justify-content: flex-start; }
+    .acct { display: flex; align-items: center; gap: 8px; }
+    .acct .info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .acct .info .who { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+    .gear { flex: none; width: 44px; padding: 0; font-size: 1.2rem; background: var(--soft); color: var(--text); }
+    .gear[aria-expanded="true"] { box-shadow: 0 0 0 2px var(--accent); }
+    .entries { display: flex; flex-direction: column; }
+    .entry { display: flex; gap: 10px; align-items: baseline; padding: 8px 0; border-top: 1px solid var(--line); font-size: 0.9rem; }
+    .entry:first-child { border-top: 0; }
+    .entry .what { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+    .entry time { flex: none; color: var(--muted); font-size: 0.8rem; }
+    .item .row > button { flex: 1 0 auto; }
+    .code-text { font: 700 1.1rem/1.3 ui-monospace, Menlo, Consolas, monospace; letter-spacing: 0.04em; white-space: nowrap; }
+    .newcode { font: 700 clamp(1rem, 5.6vw, 1.35rem)/1.3 ui-monospace, Menlo, Consolas, monospace; letter-spacing: 0.04em;
+      text-align: center; white-space: nowrap; padding: 10px 6px; border-radius: 12px; background: var(--soft); user-select: all; }
+    .tag { display: inline-block; font-size: 0.8rem; font-weight: 650; padding: 2px 8px; border-radius: 999px; background: var(--soft); }
+    .tag.off { color: var(--danger); }
+    .empty { color: var(--muted); }
+    #tabs { flex: none; }
+    .name-row select { font: inherit; flex: 1; min-width: 0; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line);
+      background: var(--bg); color: var(--text); }
+    details summary { cursor: pointer; font-weight: 600; min-height: 44px; display: flex; align-items: center; }
+    .gate a { color: var(--accent); font-weight: 650; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="title-bar">
+      <a class="home-link" href="../../" aria-label="Home">‹</a>
+      <h1>Admin</h1>
+      <a class="me-link" href="../profile/" aria-label="Your profile">👤</a>
+    </div>
+
+    <section class="card gate" id="gate">
+      <p id="gate-text">Loading…</p>
+    </section>
+
+    <div class="seg" id="tabs" role="group" aria-label="Show" hidden>
+      <button type="button" data-tab="invites" aria-pressed="true">Invites</button>
+      <button type="button" data-tab="accounts" aria-pressed="false">Accounts</button>
+      <button type="button" data-tab="log" aria-pressed="false">Log</button>
+    </div>
+
+    <div class="view" id="t-invites" hidden>
+      <form class="card" id="new-invite">
+        <h2>New invite</h2>
+        <p class="hint">One code for one person. They type it on the Profile page to make their account.</p>
+        <label class="name-row"><span>For</span>
+          <input id="note" maxlength="60" autocomplete="off" placeholder="Who it's for (optional)"></label>
+        <div class="name-row"><span id="days-label">Lasts</span>
+          <div class="seg" id="days" role="group" aria-labelledby="days-label">
+            <button type="button" data-days="1" aria-pressed="false">1 day</button>
+            <button type="button" data-days="7" aria-pressed="true">7 days</button>
+            <button type="button" data-days="30" aria-pressed="false">30 days</button>
+          </div>
+        </div>
+        <label class="name-row" id="role-row" hidden><span>Role</span>
+          <select id="role">
+            <option value="">None</option>
+            <option value="user">User</option>
+            <option value="admin">Admin</option>
+          </select></label>
+        <label class="name-row" id="scope-row" hidden><span>App</span>
+          <input id="scope" maxlength="31" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="e.g. pickleball"></label>
+        <button id="make">Make invite</button>
+        <div class="view" id="made" hidden>
+          <p class="newcode" id="made-code"></p>
+          <div class="row"><button type="button" id="share-made">Share</button><button type="button" class="secondary" id="copy-made">Copy code</button></div>
+        </div>
+        <p class="error" id="invite-error" role="alert"></p>
+      </form>
+      <section class="card">
+        <h2>Waiting to be used</h2>
+        <div class="list" id="pending"></div>
+      </section>
+      <section class="card">
+        <h2>Used</h2>
+        <div class="list" id="used"></div>
+        <details><summary>Cancelled and too old</summary><div class="list" id="old"></div></details>
+      </section>
+    </div>
+
+    <div class="view" id="t-accounts" hidden>
+      <section class="card">
+        <h2>Accounts</h2>
+        <div class="list" id="accounts"></div>
+        <p class="error" id="account-error" role="alert"></p>
+      </section>
+    </div>
+
+    <div class="view" id="t-log" hidden>
+      <section class="card">
+        <h2>Log</h2>
+        <p class="hint">Everything done to accounts and invites, newest first.</p>
+        <div class="entries" id="log"></div>
+        <button class="secondary" id="more-log" hidden>Show more</button>
+        <p class="error" id="log-error" role="alert"></p>
+      </section>
+    </div>
+  </main>
+  <script type="module">
+    import * as core from "../../shared/core.js";
+    const $ = (id) => document.getElementById(id);
+    // Builds an element: el("p", { class: "meta" }, "text", child…). Text is never read as HTML.
+    function el(tag, attrs = {}, ...kids) {
+      const e = document.createElement(tag);
+      for (const [k, v] of Object.entries(attrs)) if (v != null && v !== false) e.setAttribute(k, v === true ? "" : v);
+      e.append(...kids.flat().filter((k) => k != null && k !== false));
+      return e;
+    }
+    const when = (iso) => new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    const left = (iso) => {
+      const h = Math.round((new Date(iso) - Date.now()) / 36e5);
+      return h >= 48 ? `${Math.round(h / 24)} days left` : h >= 1 ? `${h} hours left` : "less than an hour left";
+    };
+    const name = (p) => (p ? `${p.avatar ? `${p.avatar} ` : ""}${p.display_name}${p.username && p.username !== p.display_name ? ` (@${p.username})` : ""}` : "someone");
+    const roleText = (r) => `${r.role}${r.scope && r.scope !== "*" ? ` of ${r.scope}` : ""}`;
+    const message = (err) => (err instanceof core.CoreError ? err.message : "Something went wrong. Try again.");
+    const inviteText = (code) => `Your reclaude invite code: ${code}\nMake your account on the Profile page: ${new URL("../profile/", location.href).href}`;
+    async function copy(text, button, label) {
+      try {
+        await navigator.clipboard.writeText(text);
+        button.textContent = "Copied ✓";
+        setTimeout(() => { button.textContent = label; }, 2000);
+      } catch { alert(text); }
+    }
+    async function share(text, button, label) {
+      if (navigator.share) { try { await navigator.share({ text }); return; } catch (err) { if (err.name === "AbortError") return; } }
+      copy(text, button, label);
+    }
+
+    let me = null; // this device's account
+    let tab = "invites";
+
+    // ---------- who's here ----------
+    async function start() {
+      me = await core.account();
+      if (!core.isAdmin(me)) {
+        $("gate-text").replaceChildren(me
+          ? "This page is for admins. Your account isn't one."
+          : el("span", {}, "This page is for admins. Sign in to your account on the ", el("a", { href: "../profile/" }, "Profile page"), " first."));
+        return;
+      }
+      $("gate").hidden = true;
+      const sup = core.isSuperuser(me);
+      $("tabs").hidden = !sup; // admins only have invites
+      $("role-row").hidden = !sup;
+      show("invites");
+    }
+
+    function show(name) {
+      tab = name;
+      for (const b of $("tabs").children) b.setAttribute("aria-pressed", String(b.dataset.tab === name));
+      for (const t of ["invites", "accounts", "log"]) $(`t-${t}`).hidden = t !== name;
+      ({ invites: loadInvites, accounts: loadAccounts, log: loadLog })[name]();
+    }
+    for (const b of $("tabs").children) b.addEventListener("click", () => show(b.dataset.tab));
+
+    // ---------- invites ----------
+    let days = 7;
+    for (const b of $("days").children) {
+      b.addEventListener("click", () => {
+        days = Number(b.dataset.days);
+        for (const o of $("days").children) o.setAttribute("aria-pressed", String(o === b));
+      });
+    }
+    $("role").addEventListener("change", () => { $("scope-row").hidden = !$("role").value; });
+
+    $("new-invite").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      $("make").disabled = true;
+      $("invite-error").textContent = "";
+      try {
+        const role = $("role").value || null;
+        const scope = role ? $("scope").value.trim().toLowerCase() : "*";
+        if (role && !/^[a-z][a-z0-9_]{0,30}$/.test(scope)) throw new core.CoreError("Which app is the role for? e.g. pickleball");
+        const code = await core.admin.makeInvite({ note: $("note").value, days, role, scope });
+        $("made-code").textContent = code;
+        $("made").hidden = false;
+        $("note").value = "";
+        loadInvites();
+      } catch (err) { $("invite-error").textContent = message(err); }
+      $("make").disabled = false;
+    });
+    $("copy-made").addEventListener("click", () => copy($("made-code").textContent, $("copy-made"), "Copy code"));
+    $("share-made").addEventListener("click", () => share(inviteText($("made-code").textContent), $("share-made"), "Share"));
+
+    async function loadInvites() {
+      let list;
+      try { list = await core.admin.invites(); } catch (err) { $("invite-error").textContent = message(err); return; }
+      const now = Date.now();
+      const pending = list.filter((i) => !i.used_at && new Date(i.expires_at) > now);
+      const used = list.filter((i) => i.used_at);
+      const old = list.filter((i) => !i.used_at && new Date(i.expires_at) <= now);
+      const tags = (i) => [i.role && el("span", { class: "tag" }, roleText(i))];
+      $("pending").replaceChildren(...(pending.length ? pending.map((i) => {
+        const copyB = el("button", { type: "button", class: "secondary" }, "Copy");
+        const shareB = el("button", { type: "button" }, "Share");
+        const cancelB = el("button", { type: "button", class: "secondary" }, "Cancel");
+        copyB.addEventListener("click", () => copy(core.formatKey(i.code), copyB, "Copy"));
+        shareB.addEventListener("click", () => share(inviteText(core.formatKey(i.code)), shareB, "Share"));
+        cancelB.addEventListener("click", async () => {
+          if (!confirm(`Cancel the invite${i.note ? ` ${i.note}` : ""}? Its code stops working.`)) return;
+          try { await core.admin.cancelInvite(i.id); loadInvites(); } catch (err) { $("invite-error").textContent = message(err); }
+        });
+        return el("div", { class: "item" },
+          el("div", { class: "top" }, el("span", { class: "who" }, i.note || "No note"), ...tags(i)),
+          i.code ? el("span", { class: "code-text" }, core.formatKey(i.code)) : el("span", { class: "meta" }, "Code shown only when it was made."),
+          el("span", { class: "meta" }, `${left(i.expires_at)}${i.made_by && i.made_by.username !== me.username ? ` · by ${name(i.made_by)}` : ""}`),
+          el("div", { class: "row" }, i.code && shareB, i.code && copyB, cancelB));
+      }) : [el("p", { class: "empty" }, "None. Make one above.")]));
+      $("used").replaceChildren(...(used.length ? used.map((i) => el("div", { class: "item" },
+        el("div", { class: "top" }, el("span", { class: "who" }, name(i.used_by)), ...tags(i)),
+        el("span", { class: "meta" }, `${i.note ? `${i.note} · ` : ""}joined ${when(i.used_at)}`))) : [el("p", { class: "empty" }, "Nobody yet.")]));
+      $("old").replaceChildren(...(old.length ? old.map((i) => el("div", { class: "item off" },
+        el("span", { class: "who" }, i.note || "No note"), el("span", { class: "meta" }, `ended ${when(i.expires_at)}`))) : [el("p", { class: "empty" }, "None.")]));
+    }
+
+    // ---------- accounts (superusers) ----------
+    async function loadAccounts() {
+      let list;
+      try { list = await core.admin.accounts(); } catch (err) { $("account-error").textContent = message(err); return; }
+      $("account-error").textContent = "";
+      $("accounts").replaceChildren(...list.map((a) => {
+        const self = a.id === me.id || a.username === me.username;
+        const act = async (fn) => { try { await fn(); loadAccounts(); } catch (err) { $("account-error").textContent = message(err); } };
+        const buttons = [];
+        if (!self) {
+          const toggle = el("button", { type: "button", class: "secondary" }, a.active ? "Deactivate" : "Reactivate");
+          toggle.addEventListener("click", () => {
+            if (a.active && !confirm(`Deactivate @${a.username}? They're signed out everywhere and can't sign in. Their data stays.`)) return;
+            act(() => core.admin.setActive(a.id, !a.active));
+          });
+          const reset = el("button", { type: "button", class: "secondary" }, "New key");
+          reset.addEventListener("click", async () => {
+            if (!confirm(`Make a new key for @${a.username}? Their old key stops working and they're signed out.`)) return;
+            try {
+              const key = await core.admin.resetKey(a.id);
+              prompt(`New key for @${a.username}. Pass it on to them: it's shown only now.`, key);
+              loadAccounts();
+            } catch (err) { $("account-error").textContent = message(err); }
+          });
+          buttons.push(toggle, reset);
+        }
+        const rename = el("button", { type: "button", class: "secondary" }, "Rename");
+        rename.addEventListener("click", () => {
+          const username = prompt(`New username for @${a.username}:`, a.username);
+          if (username == null || username.trim().toLowerCase() === a.username) return;
+          act(() => core.admin.editAccount(a.id, { username }));
+        });
+        const rename2 = el("button", { type: "button", class: "secondary" }, "Edit name");
+        rename2.addEventListener("click", () => {
+          const display_name = prompt(`Name shown for @${a.username}:`, a.display_name || "");
+          if (display_name == null || display_name === a.display_name) return;
+          act(() => core.admin.editAccount(a.id, { display_name }));
+        });
+        buttons.push(rename, rename2);
+        const actions = el("div", { class: "row", id: `actions-${a.id}`, hidden: true }, ...buttons);
+        const gear = el("button", { type: "button", class: "gear", "aria-label": `Actions for @${a.username}`,
+          "aria-expanded": "false", "aria-controls": `actions-${a.id}` }, "⚙️");
+        gear.addEventListener("click", () => {
+          const open = actions.hidden;
+          actions.hidden = !open;
+          gear.setAttribute("aria-expanded", String(open));
+        });
+        return el("div", { class: `item${a.active ? "" : " off"}` },
+          el("div", { class: "acct" },
+            el("div", { class: "info" },
+              el("span", { class: "who" }, `${a.avatar ? `${a.avatar} ` : ""}${a.display_name || a.username}`,
+                ...a.roles.map((r) => el("span", { class: "tag" }, roleText(r))),
+                !a.active && el("span", { class: "tag off" }, "deactivated")),
+              el("span", { class: "meta" }, `@${a.username}${self ? " (you)" : ""} · since ${when(a.created_at)}`)),
+            gear),
+          actions);
+      }));
+    }
+
+    // ---------- log (superusers) ----------
+    let oldest = null; // the id of the last log entry shown
+    const short = (p) => (p ? (p.username ? `@${p.username}` : p.display_name) : "someone");
+    const entry = (e) => {
+      const what = e.action === "made account"
+        ? `${short(e.actor)} made their account${e.detail?.role ? ` (${roleText(e.detail)})` : ""}`
+        : `${short(e.actor)} ${e.action}${e.target ? ` ${short(e.target)}` : ""}${e.detail?.note ? ` (${e.detail.note})` : ""}`;
+      return el("div", { class: "entry" }, el("span", { class: "what" }, what), el("time", { datetime: e.at }, when(e.at)));
+    };
+    async function loadLog(more = false) {
+      $("more-log").disabled = true;
+      $("log-error").textContent = "";
+      let list;
+      try { list = await core.admin.log(more ? { before: oldest } : {}); } catch (err) {
+        $("log-error").textContent = message(err);
+        $("more-log").disabled = false;
+        return;
+      }
+      if (!more) $("log").replaceChildren(...(list.length ? [] : [el("p", { class: "empty" }, "Nothing yet.")]));
+      $("log").append(...list.map(entry));
+      if (list.length) oldest = list[list.length - 1].id;
+      $("more-log").hidden = list.length < core.LOG_PAGE;
+      $("more-log").disabled = false;
+    }
+    $("more-log").addEventListener("click", () => loadLog(true));
+
+    start();
+  </script>
+</body>
+</html>
