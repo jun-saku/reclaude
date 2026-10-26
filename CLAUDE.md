@@ -186,11 +186,14 @@ only its own `projects/<name>/` folder; engine changes to `shared/` or the rules
   sign-in can become an account (a username and a personal key made on the device and shown once; same user id, so
   its data comes along) to use the profile on other devices. No email or other personal data: the sign-in is
   Supabase's email + password with a made-up `<username>@users.reclaude.invalid` address. Accounts are never deleted,
-  only deactivated (data kept), and can hold roles (`core.roles`: superuser, or admin of an app; policies use
-  `core.has_role(role, app)`). Accounts are invite-only, one code per person: admins (of any app) make plain invites
+  only deactivated (data kept), and can hold roles: a core role (`core.roles`: superuser or admin, for the whole site;
+  `core.has_role`, `core.is_admin`) and project roles each project defines for itself (its migration adds itself to
+  `core.apps` and its roles to `core.app_role_names`; its policies check `core.has_app_role(app, role)`, which a superuser
+  always passes). Accounts are invite-only, one code per person: admins (of any app) make plain invites
   and superusers also ones that give a role; a pending invite's code stays readable to its maker (and superusers),
   with an optional note, until it's used or cancelled (`…_core_invite_codes.sql`). Superusers also deactivate, reset
-  keys, edit accounts and give or take roles (`…_core_set_roles.sql`; never their own, so a superuser always stays); every change is in `core.audit`. The first superuser's invite comes from running `select core.first_invite();` in the dashboard's SQL
+  keys, edit accounts and give or take core roles; admins give or take project roles (`…_core_set_roles.sql`; nobody
+  changes their own, so a superuser always stays); every change is in `core.audit`. The first superuser's invite comes from running `select core.first_invite();` in the dashboard's SQL
   editor (once, while there's none).
 - The free plan pauses an idle project (until someone resumes it in the dashboard; no data is lost), so nothing the
   games need may depend on Supabase: names and avatars work from the device's copy and Firebase rooms. Accounts and

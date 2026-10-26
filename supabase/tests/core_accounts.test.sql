@@ -74,9 +74,9 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub": "00000000-0000-0000-0000-00000000000a", "role": "authenticated"}';
 select throws_ok($$ select core.make_invite(days => 0) $$, '22023', null, 'an invite lasts at least a day');
 select throws_ok($$ select core.make_invite(days => 31) $$, '22023', null, 'and at most 30 days');
-select throws_ok($$ select core.make_invite('superuser', 'pickleball') $$, '23514', null, 'superusers are for every app');
+select throws_ok($$ select core.make_invite('admin', 'pickleball') $$, '23514', null, 'core roles are for every project');
 do $$ begin perform set_config('t.plain', core.make_invite(), true); end $$;
-do $$ begin perform set_config('t.admin', core.make_invite('admin', 'pickleball', 3), true); end $$;
+do $$ begin perform set_config('t.admin', core.make_invite('admin', '*', 3), true); end $$;
 do $$ begin perform set_config('t.cancel', core.make_invite(), true); end $$;
 select lives_ok($$ select core.cancel_invite((select max(id) from core.invites)) $$, 'A cancels an invite');
 
@@ -101,12 +101,12 @@ select throws_ok($$ select core.cancel_invite(1) $$, '42501', null, 'B cannot ca
 select throws_ok($$ insert into core.roles (user_id, role) values ('00000000-0000-0000-0000-00000000000b', 'superuser') $$, '42501', null, 'B cannot give themselves a role');
 select throws_ok($$ update core.accounts set active = true $$, '42501', null, 'B cannot change accounts directly');
 
--- C: an admin of pickleball only.
+-- C: a core admin.
 set local request.jwt.claims = '{"sub": "00000000-0000-0000-0000-00000000000c", "role": "authenticated"}';
 select lives_ok($$ select core.make_account('cyd', 'CCCCCCCCCCCCCCCC', current_setting('t.admin')) $$, 'C makes an account with an admin invite');
-select ok(core.has_role('admin', 'pickleball') and not core.has_role('superuser', 'pickleball'), 'C is an admin of pickleball, no more');
-select ok(not core.has_role('admin', 'plan') and not core.has_role('admin') and not core.is_superuser(), 'but nothing more');
-select throws_ok($$ select core.make_invite('admin', 'pickleball') $$, '42501', null, 'an admin cannot make invites that give a role');
+select ok(core.has_role('admin') and core.has_role('admin', 'pickleball'), 'C is an admin, for every project');
+select ok(not core.has_role('superuser') and not core.is_superuser(), 'but no superuser');
+select throws_ok($$ select core.make_invite('admin') $$, '42501', null, 'an admin cannot make invites that give a role');
 
 -- A, the superuser, sees everything.
 set local request.jwt.claims = '{"sub": "00000000-0000-0000-0000-00000000000a", "role": "authenticated"}';
