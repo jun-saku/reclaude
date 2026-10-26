@@ -163,11 +163,13 @@ begin
   end if;
 
   perform core.set_key(me, key);
+  perform set_config('core.account_write', 'on', true);
   update auth.users set
     email = core.account_email(username), email_confirmed_at = now(), is_anonymous = false,
     raw_app_meta_data = coalesce(raw_app_meta_data, '{}') || '{"provider": "email", "providers": ["email"]}',
     updated_at = now()
   where id = me;
+  perform set_config('core.account_write', '', true);
   insert into auth.identities (provider_id, user_id, identity_data, provider, last_sign_in_at, created_at, updated_at)
   values (me::text, me, jsonb_build_object('sub', me::text, 'email', core.account_email(username),
     'email_verified', true), 'email', now(), now(), now());
@@ -290,7 +292,9 @@ begin
       raise exception 'That username is taken.' using errcode = 'RCTKN';
     end if;
     update core.accounts set username = new_username where id = target;
+    perform set_config('core.account_write', 'on', true);
     update auth.users set email = core.account_email(new_username), updated_at = now() where id = target;
+    perform set_config('core.account_write', '', true);
     update auth.identities set identity_data = identity_data || jsonb_build_object('email', core.account_email(new_username)),
       updated_at = now()
     where user_id = target and provider = 'email';
@@ -323,13 +327,13 @@ $$;
 
 -- ---------- account sign-ins stay the database's ----------
 
--- Nobody but these functions (or the dashboard) gives an address of ours to a sign-in, or changes one: signing up
--- with an account's address, or moving an account to a real address, is refused. (Supabase's own sign-in service
--- runs as another role, so its writes are checked; the functions above run as postgres, their owner.)
+-- Nobody but make_account and edit_account gives an address of ours to a sign-in, or changes one: signing up with an
+-- account's address, or moving an account to a real address, is refused. Those two mark their own writes (a setting
+-- for that moment of the transaction, which pages can't set); Supabase's sign-in service and the dashboard can't.
 create function core.guard_account_emails() returns trigger
 language plpgsql set search_path = '' as $$
 begin
-  if current_user = 'postgres' then return new; end if;
+  if current_setting('core.account_write', true) = 'on' then return new; end if;
   if (new.email ilike '%@users.reclaude.invalid' and (tg_op = 'INSERT' or new.email is distinct from old.email))
      or (coalesce(new.email_change, '') ilike '%@users.reclaude.invalid'
        and (tg_op = 'INSERT' or coalesce(new.email_change, '') <> coalesce(old.email_change, ''))) then

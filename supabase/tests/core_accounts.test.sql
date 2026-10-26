@@ -174,8 +174,8 @@ select is((select display_name || avatar from core.profiles where id = '00000000
 select is((select array_agg(action order by id) from core.audit where target = '00000000-0000-0000-0000-00000000000b'),
   array['made account', 'deactivated', 'reactivated', 'reset key', 'changed key', 'edited account'], 'every change is in the audit log');
 
--- Account addresses stay the database's: Supabase's sign-in service can't hand one out or change one.
-set local role supabase_auth_admin;
+-- Account addresses stay the database's: nothing else (Supabase's sign-in service, the dashboard) can hand one out
+-- or change one.
 select throws_ok($$ insert into auth.users (id, aud, role, email) values (gen_random_uuid(), 'authenticated', 'authenticated', 'jun2@users.reclaude.invalid') $$,
   '42501', null, 'signing up with an account address is refused');
 select throws_ok($$ update auth.users set email = 'ben@example.com' where id = '00000000-0000-0000-0000-00000000000b' $$, '42501', null, 'an account cannot move to a real address');
@@ -183,7 +183,6 @@ select throws_ok($$ update auth.users set email_change = 'ben@example.com' where
 select throws_ok($$ update auth.users set email = 'cyd@users.reclaude.invalid' where id = '00000000-0000-0000-0000-00000000000d' $$, '42501', null, 'nor can an anonymous user take an account address');
 select lives_ok($$ update auth.users set email = email, email_change = '', updated_at = now() where id = '00000000-0000-0000-0000-00000000000b' $$, 'other sign-in updates are fine');
 select lives_ok($$ insert into auth.users (id, aud, role, email) values (gen_random_uuid(), 'authenticated', 'authenticated', 'someone@example.com') $$, 'and other addresses are fine');
-reset role;
 
 -- Accounts are never deleted.
 select throws_ok($$ delete from auth.users where id = '00000000-0000-0000-0000-00000000000b' $$, '23503', null, 'an account''s sign-in cannot be deleted');
