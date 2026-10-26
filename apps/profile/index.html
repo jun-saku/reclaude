@@ -20,13 +20,33 @@
     .avatars button { padding: 0; font-size: 1.5rem; background: var(--soft); color: var(--text); }
     .avatars button.none { font-size: 0.95rem; }
     .avatars button[aria-pressed="true"] { background: var(--panel); box-shadow: 0 0 0 3px var(--accent); }
-    .done { font-size: 0.95rem; text-align: center; }
-    .done:empty { display: none; }
+    /* A green ring round your avatar: your profile is saved and backed up (none: only on this phone so far). */
+    .preview .avatar.synced { box-shadow: 0 0 0 3px var(--good); }
+    .sr-only { position: absolute; clip-path: inset(50%); white-space: nowrap; pointer-events: none; } /* for screen readers only */
+    #account-fold summary { cursor: pointer; padding: 11px 0; margin: -11px 0; }
+    #account-fold summary h2 { display: inline; }
+    #account-fold[open] { display: flex; flex-direction: column; gap: 12px; }
     .view { display: flex; flex-direction: column; gap: 12px; }
-    #account .row > button { flex: 1 0 auto; }
+    :is(#account, #form) .row > button { flex: 1 0 auto; }
     .key { font: 700 clamp(1rem, 5.6vw, 1.35rem)/1.3 ui-monospace, Menlo, Consolas, monospace; letter-spacing: 0.04em; text-align: center; white-space: nowrap;
       padding: 10px 6px; border-radius: 12px; background: var(--soft); user-select: all; }
     .name-row input.upper { text-transform: uppercase; }
+    /* The account forms: each label above its field, the field full width. */
+    .field { display: flex; flex-direction: column; gap: 6px; font-weight: 650; }
+    .field input { width: 100%; min-width: 0; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line);
+      background: var(--bg); color: var(--text); font-weight: 500; }
+    .field input.code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: clamp(0.9rem, 4.6vw, 1.05rem);
+      padding-inline: 10px; text-transform: uppercase; }
+    .field .note { font-weight: 400; font-size: 0.9rem; color: var(--muted); }
+    .field .note.bad { color: var(--danger); }
+    .with-button { display: flex; gap: 8px; }
+    .with-button input { flex: 1; }
+    .with-button button { flex: none; width: 44px; padding: 0; font-size: 1.15rem; }
+    .with-button button[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--accent); }
+    .switch { text-align: center; font-size: 0.95rem; color: var(--muted); }
+    .switch button { background: none; color: var(--accent); padding: 0 4px; text-decoration: underline; font-weight: 650; }
+    .settings summary { cursor: pointer; font-weight: 600; padding: 11px 0; }
+    .settings[open] { display: flex; flex-direction: column; gap: 12px; }
     a.button { display: flex; align-items: center; justify-content: center; min-height: 44px; border-radius: 12px;
       background: var(--soft); color: var(--text); font-weight: 650; text-decoration: none; }
   </style>
@@ -38,29 +58,37 @@
       <h1>Profile</h1>
     </div>
     <section class="card" id="form">
-      <div class="preview" aria-hidden="true"><span class="avatar" id="preview-avatar">🙂</span><span class="name" id="preview-name"></span></div>
-      <label class="name-row"><span>Your name</span>
-        <input id="name" maxlength="24" autocomplete="nickname" enterkeyhint="done" placeholder="So friends know it's you"></label>
-      <h2 id="avatar-label">Avatar</h2>
-      <div class="avatars" id="avatars" role="group" aria-labelledby="avatar-label"></div>
-      <button id="save">Save</button>
-      <p class="error" id="error" role="alert"></p>
-      <p class="done" id="done" role="status"></p>
+      <div class="preview"><span class="avatar" id="preview-avatar">🙂</span><span class="name" id="preview-name"></span></div>
+      <button class="secondary" id="edit" hidden>Edit profile</button>
+      <div class="view" id="editor">
+        <label class="name-row"><span>Your name</span>
+          <input id="name" maxlength="24" autocomplete="nickname" enterkeyhint="done" placeholder="So friends know it's you"></label>
+        <h2 id="avatar-label">Avatar</h2>
+        <div class="avatars" id="avatars" role="group" aria-labelledby="avatar-label"></div>
+        <div class="row"><button id="save">Save</button><button type="button" class="secondary" id="cancel-edit" hidden>Cancel</button></div>
+        <p class="error" id="error" role="alert"></p>
+      </div>
+      <p class="sr-only" id="done" role="status"></p>
     </section>
 
     <section class="card" id="account" aria-labelledby="account-title">
-      <h2 id="account-title">Account</h2>
+      <details id="account-fold">
+      <summary><h2 id="account-title">Account</h2></summary>
       <div class="view" id="v-none">
         <p>Make an account to use your profile on your other devices too. You need an invite code.</p>
         <div class="row"><button id="to-make">Make an account</button><button class="secondary" id="to-signin">Sign in</button></div>
       </div>
       <form class="view" id="v-make" hidden>
-        <label class="name-row"><span>Username</span>
-          <input id="make-user" maxlength="20" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="e.g. sam_12"></label>
-        <label class="name-row"><span>Invite code</span>
-          <input id="make-invite" class="upper" maxlength="24" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX-XXXX"></label>
-        <p class="hint">A username is 3 to 20 lowercase letters, numbers or _. Only you and the superuser see it.</p>
-        <div class="row"><button id="make">Make account</button><button type="button" class="secondary cancel">Cancel</button></div>
+        <p>Your profile goes with your account, so you can use it on your other devices too.</p>
+        <label class="field">Invite code
+          <input id="make-invite" class="code" maxlength="19" autocomplete="off" autocapitalize="characters" spellcheck="false" inputmode="text" placeholder="XXXX-XXXX-XXXX-XXXX">
+          <span class="note">From whoever invited you.</span></label>
+        <label class="field">Username
+          <input id="make-user" maxlength="20" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="e.g. sam_12">
+          <span class="note" id="make-user-note">3 to 20 letters, numbers or _. Only you and admins see it.</span></label>
+        <button id="make" disabled>Make account</button>
+        <button type="button" class="secondary cancel">Cancel</button>
+        <p class="switch">Already have an account?<button type="button" class="to-signin">Sign in</button></p>
       </form>
       <form class="view" id="v-key" hidden>
         <p>Your key for <strong id="key-user"></strong>:</p>
@@ -72,11 +100,17 @@
         <button id="key-done" disabled>I've saved my key</button>
       </form>
       <form class="view" id="v-signin" hidden>
-        <label class="name-row"><span>Username</span>
+        <p>Sign in with the username and key you saved when you made your account.</p>
+        <label class="field">Username
           <input id="signin-user" maxlength="20" autocomplete="username" autocapitalize="none" spellcheck="false"></label>
-        <label class="name-row"><span>Key</span>
-          <input id="signin-key" type="password" maxlength="24" autocomplete="current-password" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX-XXXX"></label>
-        <div class="row"><button id="signin">Sign in</button><button type="button" class="secondary cancel">Cancel</button></div>
+        <div class="field"><label for="signin-key">Key</label>
+          <div class="with-button">
+            <input id="signin-key" class="code" type="password" maxlength="19" autocomplete="current-password" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX-XXXX">
+            <button type="button" class="secondary" id="show-key" aria-pressed="false" aria-controls="signin-key" aria-label="Show key">👁</button>
+          </div></div>
+        <button id="signin" disabled>Sign in</button>
+        <button type="button" class="secondary cancel">Cancel</button>
+        <p class="switch">Have an invite code?<button type="button" class="to-make">Make an account</button></p>
       </form>
       <div class="view" id="v-choose" hidden>
         <p>This phone and your account have different profiles. Which one do you want to keep?</p>
@@ -84,11 +118,17 @@
         <button class="secondary" id="keep-account"></button>
       </div>
       <div class="view" id="v-in" hidden>
-        <p>Signed in as <strong id="in-user"></strong>. Your profile is backed up to your account.</p>
-        <div class="row"><button class="secondary" id="change-key">New key</button><button class="secondary" id="sign-out">Sign out</button></div>
+        <p>Signed in as <strong id="in-user"></strong>.</p>
         <a class="button" id="to-admin" href="../admin/" hidden>Admin panel</a>
+        <button class="secondary" id="sign-out">Sign out</button>
+        <details class="settings">
+          <summary>Settings</summary>
+          <p class="hint">A new key replaces your old one and signs out your other devices.</p>
+          <button class="secondary" id="change-key">New key</button>
+        </details>
       </div>
       <p class="error" id="account-error" role="alert"></p>
+      </details>
     </section>
 
     <p class="hint">Saving also sets your name in the games. Your profile is kept on this phone, so it works offline too: clearing the browser's data starts a new one, unless you have an account.</p>
@@ -98,7 +138,11 @@
     import * as core from "../../shared/core.js";
     const $ = (id) => document.getElementById(id);
     const AVATARS = [["🦊", "Fox"], ["🐼", "Panda"], ["🐸", "Frog"], ["🐯", "Tiger"], ["🐙", "Octopus"], ["🦄", "Unicorn"],
-      ["🐧", "Penguin"], ["🐢", "Turtle"], ["🦉", "Owl"], ["🐝", "Bee"], ["🌵", "Cactus"], ["🍄", "Mushroom"]];
+      ["🐧", "Penguin"], ["🐢", "Turtle"], ["🦉", "Owl"], ["🐝", "Bee"], ["🌵", "Cactus"], ["🍄", "Mushroom"],
+      ["🐶", "Dog"], ["🐱", "Cat"], ["🐰", "Rabbit"], ["🐻", "Bear"], ["🐨", "Koala"], ["🦁", "Lion"],
+      ["🐵", "Monkey"], ["🐷", "Pig"], ["🐮", "Cow"], ["🐔", "Chicken"], ["🦋", "Butterfly"], ["🐞", "Ladybird"],
+      ["🐬", "Dolphin"], ["🐳", "Whale"], ["🦖", "Dinosaur"], ["🐉", "Dragon"], ["🌻", "Sunflower"], ["🍀", "Clover"],
+      ["🌈", "Rainbow"], ["⭐", "Star"], ["🍕", "Pizza"], ["🍩", "Doughnut"], ["⚽", "Football"], ["🎸", "Guitar"]];
     let avatar = null;
     let saved = null; // the profile as last loaded or saved: Save stays off until something differs
 
@@ -120,22 +164,36 @@
       for (const b of $("avatars").children) b.setAttribute("aria-pressed", String(b.dataset.avatar === (avatar || "")));
       $("save").disabled = !name || (saved && name === saved.display_name && (avatar || null) === (saved.avatar || null));
       $("error").textContent = $("name").value.trim() && !name ? "That name can't be used. Try letters, numbers or emoji (up to 24)." : "";
+      // The ring: saved and backed up, and not being changed right now.
+      const unchanged = saved && name === saved.display_name && (avatar || null) === (saved.avatar || null);
+      $("preview-avatar").classList.toggle("synced", synced && !!unchanged);
       $("done").textContent = "";
     }
+    let synced = false; // Supabase has this profile
 
     // The profile shows straight away from this phone. A phone without one may still have one with Supabase (from
     // an earlier visit); one not yet backed up is sent now. Neither holds anything up.
+    // With a profile, the card shows it with Edit profile; the name and avatars open only while editing.
+    function editing(on) {
+      $("editor").hidden = !on;
+      $("edit").hidden = on || !saved;
+      $("cancel-edit").hidden = !saved;
+    }
     function fill(me) {
       saved = me;
       $("name").value = me?.display_name || "";
       avatar = me?.avatar || null;
       $("save").textContent = me ? "Save" : "Create profile";
       show();
+      editing(!me);
     }
+    $("edit").addEventListener("click", () => { editing(true); $("name").focus(); });
+    $("cancel-edit").addEventListener("click", () => fill(saved));
     function start() {
+      synced = !!core.localProfile() && !core.localProfile().pending;
       fill(core.localProfile());
-      if (saved) core.backUpProfile();
-      else core.loadProfile().then((me) => { if (me && !saved && !$("name").value) fill(me); });
+      if (saved) core.backUpProfile().then((ok) => { synced = ok; show(); });
+      else core.loadProfile().then((me) => { if (me && !saved && !$("name").value) { synced = true; fill(me); } });
     }
 
     $("name").addEventListener("input", show);
@@ -146,10 +204,9 @@
       try {
         const { backedUp } = await core.saveProfile({ display_name: $("name").value, avatar });
         $("name").value = core.cleanName($("name").value);
-        saved = { display_name: $("name").value, avatar };
-        show();
-        $("save").textContent = "Save";
-        $("done").textContent = backedUp ? "Saved ✓" : "Saved on this phone ✓";
+        synced = backedUp;
+        fill({ display_name: $("name").value, avatar });
+        $("done").textContent = backedUp ? "Saved" : "Saved on this phone";
       } catch (err) {
         $("error").textContent = err instanceof core.CoreError ? err.message : "Something went wrong. Try again.";
         $("save").disabled = false;
@@ -161,10 +218,42 @@
     let account = null;
     let shownKey = null; // { username, key } while the key screen is up
     let choice = null; // { here, theirs } while choosing a profile after signing in
+    const TITLES = { make: "Make an account", key: "Your key", signin: "Sign in", choose: "Which profile?" };
     function view(name) {
       for (const v of views) $(`v-${v}`).hidden = v !== name;
+      $("account-title").textContent = TITLES[name] || "Account";
       $("account-error").textContent = "";
     }
+    // Codes and keys group themselves as they're typed (XXXX-XXXX-XXXX-XXXX), keeping the cursor in place.
+    function formatCode(input) {
+      const before = core.cleanKey(input.value.slice(0, input.selectionStart)).length;
+      input.value = core.formatKey(input.value.slice(0, 40)).slice(0, 19);
+      const at = before + Math.floor(Math.max(before - 1, 0) / 4);
+      input.setSelectionRange(at, at);
+    }
+    function checkMake() {
+      const typed = $("make-user").value;
+      const lower = typed.toLowerCase();
+      if (lower !== typed) $("make-user").value = lower;
+      const user = core.cleanUsername(lower);
+      const bad = lower.trim() !== "" && !user && !(lower.length < 3 && /^[a-z0-9_]*$/.test(lower));
+      $("make-user-note").classList.toggle("bad", bad);
+      $("make-user-note").textContent = bad ? "Use only letters, numbers or _ (3 to 20)." : "3 to 20 letters, numbers or _. Only you and admins see it.";
+      $("make").disabled = !user || core.cleanKey($("make-invite").value).length !== 16;
+    }
+    const checkSignin = () => {
+      $("signin").disabled = !core.cleanUsername($("signin-user").value) || core.cleanKey($("signin-key").value).length !== 16;
+    };
+    $("make-invite").addEventListener("input", () => { formatCode($("make-invite")); checkMake(); });
+    $("make-user").addEventListener("input", checkMake);
+    $("signin-key").addEventListener("input", () => { formatCode($("signin-key")); checkSignin(); });
+    $("signin-user").addEventListener("input", checkSignin);
+    $("show-key").addEventListener("click", () => {
+      const show = $("signin-key").type === "password";
+      $("signin-key").type = show ? "text" : "password";
+      $("show-key").setAttribute("aria-label", show ? "Hide key" : "Show key");
+      $("show-key").setAttribute("aria-pressed", String(show));
+    });
     const face = (p) => `${p.avatar || "🙂"} ${p.display_name}`;
     const busy = (button, on) => { button.disabled = on; };
     const fail = (err) => {
@@ -172,12 +261,13 @@
     };
     function signedInView() {
       $("in-user").textContent = account.username;
+      document.querySelector(".settings").open = false;
       $("to-admin").hidden = !core.isAdmin(account);
       view("in");
     }
     async function loadAccount() {
       account = await core.account();
-      if (account) signedInView(); else view("none");
+      if (account) { $("account-fold").open = true; signedInView(); } else view("none");
     }
     function showKey({ username, key }) {
       shownKey = { username, key };
@@ -188,8 +278,12 @@
       view("key");
     }
 
-    $("to-make").addEventListener("click", () => { view("make"); $("make-user").focus(); });
-    $("to-signin").addEventListener("click", () => { view("signin"); $("signin-user").focus(); });
+    const toMake = () => { view("make"); checkMake(); $("make-invite").focus(); };
+    const toSignin = () => { view("signin"); checkSignin(); $("signin-user").focus(); };
+    $("to-make").addEventListener("click", toMake);
+    $("to-signin").addEventListener("click", toSignin);
+    document.querySelector("#v-signin .to-make").addEventListener("click", toMake);
+    document.querySelector("#v-make .to-signin").addEventListener("click", toSignin);
     for (const b of document.querySelectorAll("#account .cancel")) b.addEventListener("click", () => view("none"));
 
     $("v-make").addEventListener("submit", async (e) => {
