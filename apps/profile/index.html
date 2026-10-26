@@ -27,6 +27,20 @@
     .key { font: 700 clamp(1rem, 5.6vw, 1.35rem)/1.3 ui-monospace, Menlo, Consolas, monospace; letter-spacing: 0.04em; text-align: center; white-space: nowrap;
       padding: 10px 6px; border-radius: 12px; background: var(--soft); user-select: all; }
     .name-row input.upper { text-transform: uppercase; }
+    /* The account forms: each label above its field, the field full width. */
+    .field { display: flex; flex-direction: column; gap: 6px; font-weight: 650; }
+    .field input { width: 100%; min-width: 0; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line);
+      background: var(--bg); color: var(--text); font-weight: 500; }
+    .field input.code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: clamp(0.9rem, 4.6vw, 1.05rem);
+      padding-inline: 10px; text-transform: uppercase; }
+    .field .note { font-weight: 400; font-size: 0.9rem; color: var(--muted); }
+    .field .note.bad { color: var(--danger); }
+    .with-button { display: flex; gap: 8px; }
+    .with-button input { flex: 1; }
+    .with-button button { flex: none; width: 44px; padding: 0; font-size: 1.15rem; }
+    .with-button button[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--accent); }
+    .switch { text-align: center; font-size: 0.95rem; color: var(--muted); }
+    .switch button { background: none; color: var(--accent); padding: 0 4px; text-decoration: underline; font-weight: 650; }
     .settings summary { cursor: pointer; font-weight: 600; padding: 11px 0; }
     .settings[open] { display: flex; flex-direction: column; gap: 12px; }
     a.button { display: flex; align-items: center; justify-content: center; min-height: 44px; border-radius: 12px;
@@ -60,12 +74,16 @@
         <div class="row"><button id="to-make">Make an account</button><button class="secondary" id="to-signin">Sign in</button></div>
       </div>
       <form class="view" id="v-make" hidden>
-        <label class="name-row"><span>Username</span>
-          <input id="make-user" maxlength="20" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="e.g. sam_12"></label>
-        <label class="name-row"><span>Invite code</span>
-          <input id="make-invite" class="upper" maxlength="24" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX-XXXX"></label>
-        <p class="hint">A username is 3 to 20 lowercase letters, numbers or _. Only you and the superuser see it.</p>
-        <div class="row"><button id="make">Make account</button><button type="button" class="secondary cancel">Cancel</button></div>
+        <p>Your profile goes with your account, so you can use it on your other devices too.</p>
+        <label class="field">Invite code
+          <input id="make-invite" class="code" maxlength="19" autocomplete="off" autocapitalize="characters" spellcheck="false" inputmode="text" placeholder="XXXX-XXXX-XXXX-XXXX">
+          <span class="note">From whoever invited you.</span></label>
+        <label class="field">Username
+          <input id="make-user" maxlength="20" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="e.g. sam_12">
+          <span class="note" id="make-user-note">3 to 20 letters, numbers or _. Only you and admins see it.</span></label>
+        <button id="make" disabled>Make account</button>
+        <button type="button" class="secondary cancel">Cancel</button>
+        <p class="switch">Already have an account?<button type="button" class="to-signin">Sign in</button></p>
       </form>
       <form class="view" id="v-key" hidden>
         <p>Your key for <strong id="key-user"></strong>:</p>
@@ -77,11 +95,17 @@
         <button id="key-done" disabled>I've saved my key</button>
       </form>
       <form class="view" id="v-signin" hidden>
-        <label class="name-row"><span>Username</span>
+        <p>Sign in with the username and key you saved when you made your account.</p>
+        <label class="field">Username
           <input id="signin-user" maxlength="20" autocomplete="username" autocapitalize="none" spellcheck="false"></label>
-        <label class="name-row"><span>Key</span>
-          <input id="signin-key" type="password" maxlength="24" autocomplete="current-password" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX-XXXX"></label>
-        <div class="row"><button id="signin">Sign in</button><button type="button" class="secondary cancel">Cancel</button></div>
+        <div class="field"><label for="signin-key">Key</label>
+          <div class="with-button">
+            <input id="signin-key" class="code" type="password" maxlength="19" autocomplete="current-password" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX-XXXX">
+            <button type="button" class="secondary" id="show-key" aria-pressed="false" aria-controls="signin-key" aria-label="Show key">👁</button>
+          </div></div>
+        <button id="signin" disabled>Sign in</button>
+        <button type="button" class="secondary cancel">Cancel</button>
+        <p class="switch">Have an invite code?<button type="button" class="to-make">Make an account</button></p>
       </form>
       <div class="view" id="v-choose" hidden>
         <p>This phone and your account have different profiles. Which one do you want to keep?</p>
@@ -178,10 +202,42 @@
     let account = null;
     let shownKey = null; // { username, key } while the key screen is up
     let choice = null; // { here, theirs } while choosing a profile after signing in
+    const TITLES = { make: "Make an account", key: "Your key", signin: "Sign in", choose: "Which profile?" };
     function view(name) {
       for (const v of views) $(`v-${v}`).hidden = v !== name;
+      $("account-title").textContent = TITLES[name] || "Account";
       $("account-error").textContent = "";
     }
+    // Codes and keys group themselves as they're typed (XXXX-XXXX-XXXX-XXXX), keeping the cursor in place.
+    function formatCode(input) {
+      const before = core.cleanKey(input.value.slice(0, input.selectionStart)).length;
+      input.value = core.formatKey(input.value.slice(0, 40)).slice(0, 19);
+      const at = before + Math.floor(Math.max(before - 1, 0) / 4);
+      input.setSelectionRange(at, at);
+    }
+    function checkMake() {
+      const typed = $("make-user").value;
+      const lower = typed.toLowerCase();
+      if (lower !== typed) $("make-user").value = lower;
+      const user = core.cleanUsername(lower);
+      const bad = lower.trim() !== "" && !user && !(lower.length < 3 && /^[a-z0-9_]*$/.test(lower));
+      $("make-user-note").classList.toggle("bad", bad);
+      $("make-user-note").textContent = bad ? "Use only letters, numbers or _ (3 to 20)." : "3 to 20 letters, numbers or _. Only you and admins see it.";
+      $("make").disabled = !user || core.cleanKey($("make-invite").value).length !== 16;
+    }
+    const checkSignin = () => {
+      $("signin").disabled = !core.cleanUsername($("signin-user").value) || core.cleanKey($("signin-key").value).length !== 16;
+    };
+    $("make-invite").addEventListener("input", () => { formatCode($("make-invite")); checkMake(); });
+    $("make-user").addEventListener("input", checkMake);
+    $("signin-key").addEventListener("input", () => { formatCode($("signin-key")); checkSignin(); });
+    $("signin-user").addEventListener("input", checkSignin);
+    $("show-key").addEventListener("click", () => {
+      const show = $("signin-key").type === "password";
+      $("signin-key").type = show ? "text" : "password";
+      $("show-key").setAttribute("aria-label", show ? "Hide key" : "Show key");
+      $("show-key").setAttribute("aria-pressed", String(show));
+    });
     const face = (p) => `${p.avatar || "🙂"} ${p.display_name}`;
     const busy = (button, on) => { button.disabled = on; };
     const fail = (err) => {
@@ -206,8 +262,12 @@
       view("key");
     }
 
-    $("to-make").addEventListener("click", () => { view("make"); $("make-user").focus(); });
-    $("to-signin").addEventListener("click", () => { view("signin"); $("signin-user").focus(); });
+    const toMake = () => { view("make"); checkMake(); $("make-invite").focus(); };
+    const toSignin = () => { view("signin"); checkSignin(); $("signin-user").focus(); };
+    $("to-make").addEventListener("click", toMake);
+    $("to-signin").addEventListener("click", toSignin);
+    document.querySelector("#v-signin .to-make").addEventListener("click", toMake);
+    document.querySelector("#v-make .to-signin").addEventListener("click", toSignin);
     for (const b of document.querySelectorAll("#account .cancel")) b.addEventListener("click", () => view("none"));
 
     $("v-make").addEventListener("submit", async (e) => {
