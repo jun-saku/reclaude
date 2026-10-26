@@ -23,7 +23,7 @@ create table core.accounts (
 -- Roles, by app: scope is an app's schema name, or '*' for every app. A superuser can do everything everywhere.
 create table core.roles (
   user_id uuid not null references core.accounts (id),
-  role text not null check (role in ('superuser', 'admin', 'subadmin')),
+  role text not null check (role in ('superuser', 'admin', 'user')),
   scope text not null default '*' check (scope = '*' or scope ~ '^[a-z][a-z0-9_]{0,30}$'),
   granted_by uuid references core.accounts (id),
   granted_at timestamptz not null default now(),
@@ -35,7 +35,7 @@ create table core.roles (
 create table core.invites (
   id bigint generated always as identity primary key,
   code_hash text not null unique,
-  role text check (role in ('superuser', 'admin', 'subadmin')),
+  role text check (role in ('superuser', 'admin', 'user')),
   scope text not null default '*' check (scope = '*' or scope ~ '^[a-z][a-z0-9_]{0,30}$'),
   made_by uuid references core.accounts (id), -- null: core.first_invite()
   made_at timestamptz not null default now(),
@@ -71,15 +71,15 @@ language sql stable security definer set search_path = '' as $$
   select not exists (select 1 from core.accounts where id = (select auth.uid()) and not active);
 $$;
 
--- true if the signed-in user is an active account with this role or a higher one (subadmin < admin < superuser),
+-- true if the signed-in user is an active account with this role or a higher one (user < admin < superuser),
 -- for this app or every app.
 create function core.has_role(min_role text, app text default '*') returns boolean
 language sql stable security definer set search_path = '' as $$
   select exists (
     select 1 from core.roles r join core.accounts a on a.id = r.user_id
     where r.user_id = (select auth.uid()) and a.active and (r.scope = '*' or r.scope = app)
-      and array_position(array['subadmin', 'admin', 'superuser'], r.role)
-        >= array_position(array['subadmin', 'admin', 'superuser'], min_role));
+      and array_position(array['user', 'admin', 'superuser'], r.role)
+        >= array_position(array['user', 'admin', 'superuser'], min_role));
 $$;
 
 create function core.is_superuser() returns boolean

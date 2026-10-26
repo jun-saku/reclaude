@@ -184,7 +184,7 @@ only its own `projects/<name>/` folder; engine changes to `shared/` or the rules
   sign-in can become an account (a username and a personal key made on the device and shown once; same user id, so
   its data comes along) to use the profile on other devices. No email or other personal data: the sign-in is
   Supabase's email + password with a made-up `<username>@users.reclaude.invalid` address. Accounts are never deleted,
-  only deactivated (data kept), and can hold roles (`core.roles`: superuser, admin, subadmin, per app; policies use
+  only deactivated (data kept), and can hold roles (`core.roles`: superuser, admin, user, per app; policies use
   `core.has_role(role, app)`). Superusers make invites, deactivate, reset keys and edit accounts; every change is in
   `core.audit`. The first superuser's invite comes from running `select core.first_invite();` in the dashboard's SQL
   editor (once, while there's none).
