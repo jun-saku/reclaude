@@ -17,6 +17,16 @@
     .item .who { font-weight: 650; overflow-wrap: anywhere; }
     .item .meta { color: var(--muted); font-size: 0.9rem; }
     .item .row { justify-content: flex-start; }
+    .acct { display: flex; align-items: center; gap: 8px; }
+    .acct .info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .acct .info .who { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+    .gear { flex: none; width: 44px; padding: 0; font-size: 1.2rem; background: var(--soft); color: var(--text); }
+    .gear[aria-expanded="true"] { box-shadow: 0 0 0 2px var(--accent); }
+    .entries { display: flex; flex-direction: column; }
+    .entry { display: flex; gap: 10px; align-items: baseline; padding: 8px 0; border-top: 1px solid var(--line); font-size: 0.9rem; }
+    .entry:first-child { border-top: 0; }
+    .entry .what { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+    .entry time { flex: none; color: var(--muted); font-size: 0.8rem; }
     .item .row > button { flex: 1 0 auto; }
     .code-text { font: 700 1.1rem/1.3 ui-monospace, Menlo, Consolas, monospace; letter-spacing: 0.04em; white-space: nowrap; }
     .newcode { font: 700 clamp(1rem, 5.6vw, 1.35rem)/1.3 ui-monospace, Menlo, Consolas, monospace; letter-spacing: 0.04em;
@@ -100,7 +110,9 @@
       <section class="card">
         <h2>Log</h2>
         <p class="hint">Everything done to accounts and invites, newest first.</p>
-        <div class="list" id="log"></div>
+        <div class="entries" id="log"></div>
+        <button class="secondary" id="more-log" hidden>Show more</button>
+        <p class="error" id="log-error" role="alert"></p>
       </section>
     </div>
   </main>
@@ -261,27 +273,51 @@
           act(() => core.admin.editAccount(a.id, { display_name }));
         });
         buttons.push(rename, rename2);
+        const actions = el("div", { class: "row", id: `actions-${a.id}`, hidden: true }, ...buttons);
+        const gear = el("button", { type: "button", class: "gear", "aria-label": `Actions for @${a.username}`,
+          "aria-expanded": "false", "aria-controls": `actions-${a.id}` }, "⚙️");
+        gear.addEventListener("click", () => {
+          const open = actions.hidden;
+          actions.hidden = !open;
+          gear.setAttribute("aria-expanded", String(open));
+        });
         return el("div", { class: `item${a.active ? "" : " off"}` },
-          el("div", { class: "top" },
-            el("span", { class: "who" }, `${a.avatar ? `${a.avatar} ` : ""}${a.display_name || a.username}`),
-            ...a.roles.map((r) => el("span", { class: "tag" }, roleText(r))),
-            !a.active && el("span", { class: "tag off" }, "deactivated")),
-          el("span", { class: "meta" }, `@${a.username}${self ? " (you)" : ""} · since ${when(a.created_at)}`),
-          el("div", { class: "row" }, ...buttons));
+          el("div", { class: "acct" },
+            el("div", { class: "info" },
+              el("span", { class: "who" }, `${a.avatar ? `${a.avatar} ` : ""}${a.display_name || a.username}`,
+                ...a.roles.map((r) => el("span", { class: "tag" }, roleText(r))),
+                !a.active && el("span", { class: "tag off" }, "deactivated")),
+              el("span", { class: "meta" }, `@${a.username}${self ? " (you)" : ""} · since ${when(a.created_at)}`)),
+            gear),
+          actions);
       }));
     }
 
     // ---------- log (superusers) ----------
-    async function loadLog() {
+    let oldest = null; // the id of the last log entry shown
+    const short = (p) => (p ? (p.username ? `@${p.username}` : p.display_name) : "someone");
+    const entry = (e) => {
+      const what = e.action === "made account"
+        ? `${short(e.actor)} made their account${e.detail?.role ? ` (${roleText(e.detail)})` : ""}`
+        : `${short(e.actor)} ${e.action}${e.target ? ` ${short(e.target)}` : ""}${e.detail?.note ? ` (${e.detail.note})` : ""}`;
+      return el("div", { class: "entry" }, el("span", { class: "what" }, what), el("time", { datetime: e.at }, when(e.at)));
+    };
+    async function loadLog(more = false) {
+      $("more-log").disabled = true;
+      $("log-error").textContent = "";
       let list;
-      try { list = await core.admin.log(); } catch (err) { $("log").replaceChildren(el("p", { class: "error" }, message(err))); return; }
-      $("log").replaceChildren(...(list.length ? list.map((e) => {
-        const what = e.action === "made account"
-          ? `${name(e.actor)} made their account${e.detail?.role ? ` (${roleText(e.detail)})` : ""}`
-          : `${name(e.actor)} ${e.action}${e.target ? ` ${name(e.target)}` : ""}${e.detail?.note ? ` (${e.detail.note})` : ""}`;
-        return el("div", { class: "item" }, el("span", {}, what), el("span", { class: "meta" }, when(e.at)));
-      }) : [el("p", { class: "empty" }, "Nothing yet.")]));
+      try { list = await core.admin.log(more ? { before: oldest } : {}); } catch (err) {
+        $("log-error").textContent = message(err);
+        $("more-log").disabled = false;
+        return;
+      }
+      if (!more) $("log").replaceChildren(...(list.length ? [] : [el("p", { class: "empty" }, "Nothing yet.")]));
+      $("log").append(...list.map(entry));
+      if (list.length) oldest = list[list.length - 1].id;
+      $("more-log").hidden = list.length < core.LOG_PAGE;
+      $("more-log").disabled = false;
     }
+    $("more-log").addEventListener("click", () => loadLog(true));
 
     start();
   </script>

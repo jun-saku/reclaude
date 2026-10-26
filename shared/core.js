@@ -345,9 +345,11 @@ export async function signOut() {
 //   await admin.cancelInvite(id)
 //   await admin.accounts()                      superusers: [{ id, username, active, created_at, roles, display_name, avatar }]
 //   await admin.setActive(id, active), admin.resetKey(id) (the new key), admin.editAccount(id, { username, display_name, avatar })
-//   await admin.log()                           superusers: the latest 100 audit entries, newest first
+//   await admin.log({ before })                 superusers: audit entries, newest first, LOG_PAGE at a time (before: an
+//                                               entry's id, for the page after it)
 // (person: { display_name, avatar, username? } or null.)
 const ADMIN_ROLES = ["admin", "superuser"];
+export const LOG_PAGE = 25;
 export const isAdmin = (acc) => !!acc?.active && !!acc.roles?.some((r) => ADMIN_ROLES.includes(r.role));
 export const isSuperuser = (acc) => !!acc?.active && !!acc.roles?.some((r) => r.role === "superuser");
 
@@ -410,8 +412,10 @@ const supabaseAdmin = {
   resetKey: (id) => call("reset_key", { target: id }),
   editAccount: (id, { username, display_name, avatar }) =>
     call("edit_account", { target: id, new_username: username || null, new_display_name: display_name || null, new_avatar: avatar || null }),
-  async log() {
-    const list = await rows(core().from("audit").select("id, at, actor, action, target, detail").order("id", { ascending: false }).limit(100));
+  async log(before) {
+    let query = core().from("audit").select("id, at, actor, action, target, detail").order("id", { ascending: false }).limit(LOG_PAGE);
+    if (before) query = query.lt("id", before);
+    const list = await rows(query);
     const who = await people(list.flatMap((e) => [e.actor, e.target]));
     return list.map((e) => ({ ...e, actor: who[e.actor] || null, target: who[e.target] || null }));
   },
@@ -501,10 +505,11 @@ const fakeAdmin = {
       this.logged(db, "edited account", id);
     });
   },
-  log() {
+  log(before) {
     this.super();
     const db = fakeRead();
-    return (db.log || []).map((e) => ({ ...e, actor: this.person(db, e.actor), target: this.person(db, e.target) }));
+    return (db.log || []).filter((e) => !before || e.id < before).slice(0, LOG_PAGE)
+      .map((e) => ({ ...e, actor: this.person(db, e.actor), target: this.person(db, e.target) }));
   },
 };
 
@@ -525,5 +530,5 @@ export const admin = {
     if (display_name != null && !name) throw new CoreError("That name can't be used. Try letters, numbers or emoji (up to 24).");
     await backend().editAccount(id, { username: username == null ? null : checkUsername(username), display_name: name, avatar });
   },
-  log: async () => backend().log(),
+  log: async ({ before } = {}) => backend().log(before),
 };
