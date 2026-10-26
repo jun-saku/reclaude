@@ -348,8 +348,7 @@
           el("div", { class: "acct" },
             el("div", { class: "info" },
               el("span", { class: "who" }, `${a.avatar ? `${a.avatar} ` : ""}${a.display_name || a.username}`,
-                a.role && el("span", { class: "tag" }, a.role),
-                ...a.appRoles.map((r) => el("span", { class: "tag" }, roleText(r))),
+                a.role && el("span", { class: "tag" }, a.role), // core roles only: project roles are in the ⚙️ menu
                 !a.active && el("span", { class: "tag off" }, "deactivated")),
               el("span", { class: "meta" }, `@${a.username}${self ? " (you)" : ""} · since ${when(a.created_at)}`)),
             gear),
