@@ -24,10 +24,18 @@ Other games: a game is a module in `src/games/` listed in `src/games.js` (see th
 advances it in steps of 1/30 s and sends each player its `view`. Check every input: players can send anything.
 `src/games/probe.js` is a minimal example (and what `tests/e2e/server.cjs` plays).
 
+## Spaces
+
+Places that are always there, where people with an account come and go (a pixel plaza, a drop-in game, a shared
+build): `/space/<name>/<area>`, one `Space` Durable Object per area, next to the game rooms on this same Worker. They
+sign in with Supabase (accounts only, `src/supabase.js`), save their world for good and sleep whenever nobody sends
+anything. See [SPACES.md](SPACES.md); a space is a module listed in `src/spaces.js`, the page side is
+`shared/space.js`.
+
 ## Running it
 
 - Locally, against the Firebase emulator: `npm ci && npm run dev` (port 8787; pages use it with
-  `?backend=emulator`). `tests/e2e.cjs` starts it by itself.
+  `?backend=emulator`). Spaces use it from any page on localhost, with a local Supabase (`supabase start`). `tests/e2e.cjs` starts it by itself.
 - Live: deployed from `main` by `.github/workflows/pages.yml` (job `worker`) with the `CLOUDFLARE_API_TOKEN` secret,
   which needs "Workers Scripts: Edit" on top of Pages. Its address, `play.reclaude.junsaku.dev`, is a custom domain
   added once in the Cloudflare dashboard (Workers & Pages → reclaude-games → Settings → Domains & Routes).

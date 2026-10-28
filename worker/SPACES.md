@@ -1,4 +1,4 @@
-# Spaces (design, not built yet)
+# Spaces
 
 A space is a place that's always there: people come and go, move around, and rack up points or build things, and
 the space remembers it. A hangout (a pixel plaza, office-style rooms), a drop-in game (fishing, a snake arena) or a
@@ -23,9 +23,11 @@ doesn't change. A space can link to a match (gather in a space, then start a Tan
 - The same Worker (`reclaude-games`, `play.reclaude.junsaku.dev`), with a second Durable Object class, `Space`:
   a `SPACES` binding and a `v2` migration (`new_sqlite_classes = ["Space"]`) in `wrangler.toml`.
 - `src/index.js` sends `/space/<name>/<area>` to `Space` (one object per area) and everything else to `GameRoom` as
-  now. `space` becomes a reserved project name in `scripts/build.mjs`.
-- Spaces are defined in code, in `src/spaces.js` (like `src/games.js`): a name that isn't listed is a 404, so nobody
-  can create spaces by typing addresses.
+  now. `Space` hands the work to `src/space.js`, which has no Cloudflare imports so the tests run it in Node.
+- Spaces are defined in code, in `src/spaces.js` (like `src/games.js`, with the list of what a space provides): a name
+  or area that isn't listed is closed at once (4004) without making a Durable Object, so nobody can create spaces by
+  typing addresses. `src/spaces/probe.js` is a minimal example, used by the tests.
+- Pages enter with `shared/space.js` (see the top of it), which signs in with `shared/core.js`.
 - No Firebase room, no database rules change.
 
 ## Who gets in
@@ -34,21 +36,22 @@ A space says who may enter; the server enforces it (the page only shows a friend
 
 - `access: "accounts"`: Supabase accounts only (the default). Later `"role:<app>/<role>"` for a project role.
 - The page connects and first sends `{ t: "hello", token: <Supabase access token> }`.
-- The server verifies the token with Supabase's public signing keys (as `src/auth.js` does for Firebase's), and
-  refuses anonymous users (`is_anonymous` in the token).
-- A token stays valid up to an hour after an account is deactivated, so the server also calls `core.is_active()`
-  (and `core.has_app_role` for role spaces) as that user, once per connection.
-- If Supabase can't be reached (the free plan pauses an idle project), the server refuses with a reason and the
+- The server (`src/supabase.js`) asks Supabase, as that person (their token and the public publishable key), for
+  their account and profile, once per connection. Supabase refuses a token it didn't sign or an expired one, so the
+  server needs no key of its own, whichever kind of signing key the project uses. No account (an anonymous sign-in),
+  or `active` false (a deactivated account, whose token can stay valid up to an hour), is refused. A role space
+  also asks `core.has_app_role`. The name and avatar shown are the account's profile (or its username).
+- If Supabase doesn't answer within 5 s (the free plan pauses an idle project), the server closes with 4010 and the
   page says "Spaces are asleep right now". Spaces fail closed; games, which never use Supabase, are unaffected.
 
 ## Limits
 
 Accounts are invite-only, so who can use spaces is already bounded. On top of that, per space:
 
-- One connection per account: a second tab replaces the first.
-- A cap on people per area (about 30); beyond it, "This space is full".
-- The message rate limit `GameRoom` already has (`MAX_RATE`), and the same message size limits.
-- An idle kick after a few minutes without input, so a forgotten tab doesn't keep a space awake.
+- One connection per account: a newer one replaces the older (which is told, and doesn't retry).
+- At most 30 people per area (a space can say fewer); beyond it, "This space is full".
+- At most 20 messages a second per connection, 1 KB each (8 KB for the hello).
+- Closed after 10 minutes without input, or 90 s without even a ping, freeing the place.
 
 No daily budget counter for now. Cloudflare's dashboard shows Durable Object usage per day; if it gets near the free
 allowance, add a counter that stops admitting people to spaces at a share of it, keeping the rest for games (which
@@ -61,17 +64,18 @@ are never refused, and would report their usage to it).
   time stored with them; an alarm only when something really must happen at a set time.
 - **Hibernation.** Connections are accepted with `ctx.acceptWebSocket`, so an area sleeps even with people
   connected when nobody does anything, and pings are answered with `setWebSocketAutoResponse` without waking it.
-  Phones send input only when it changes (unlike matches, which send every 100 ms).
-- **Small updates.** After the first full snapshot of the area, only what changed, at most 10 times a second (fewer
-  for slow spaces).
+  Phones send input only when it changes (unlike matches, which send every 100 ms) and ping every 20 s.
+- **Small updates.** A newcomer gets the whole area once; after that only events (what someone's input changed,
+  who came or went), as they happen. There's no clock running in the area: anything moving smoothly is drawn by
+  the phones between events.
 
 ## The saved world
 
-- Kept in the area's own storage, written in batches (every few seconds and when the last person leaves), never on
-  every move.
+- Kept in the area's own storage, written in batches (5 s after a change, and when the last person leaves), never
+  on every move; at most 100 KB.
 - Stored with a format version from day one. A change of format comes with code that upgrades old saves on load:
   reverting a PR doesn't undo stored data.
-- Never deleted by a timer, unlike match rooms.
+- Never deleted by a timer, unlike match rooms. A world saved by a newer version is never overwritten by older code.
 
 ## Areas
 
@@ -82,8 +86,9 @@ chunk of a build world) by reconnecting to the next one. A page only ever downlo
 ## Plan
 
 1. This note.
-2. Engine PR: `Space` class, routing, Supabase token and active check, limits, hibernation, saving with versions,
-   `shared/space.js`, and tests (allowed and refused sign-ins, join, move, leave, rejoin with the world kept).
+2. Engine: `Space` class, routing, Supabase sign-in and active check, limits, hibernation, saving with versions,
+   `shared/space.js`, and `tests/space.test.mjs` (sign-ins allowed and refused, join, move, leave, replaced tabs,
+   limits, waking from hibernation, upgrades). Done.
 3. First space: a pixel plaza (walk around with your avatar, emoji reactions), linked from the home page. Measure
    loading time, data and usage there.
 4. Something to do in it: fishing, a build canvas or office rooms.

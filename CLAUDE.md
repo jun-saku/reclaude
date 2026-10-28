@@ -55,7 +55,9 @@ The user usually works from their phone, so keep replies short and end with the 
 - `worker/`: the game server for real-time games (a Cloudflare Worker, one Durable Object per room, at
   `wss://play.reclaude.junsaku.dev`; see `worker/README.md`). Pages connect with `shared/server.js` once a room is
   playing; the server checks the player's Firebase sign-in and seat, runs the game (`worker/src/games/<name>.js`)
-  and sends it to everyone. Deployed from `main` (job `worker`, needs Workers permission on the Cloudflare token);
+  and sends it to everyone. It also runs spaces (`worker/SPACES.md`): persistent places where people with an account
+  come and go, signed in with Supabase, one Durable Object per area (`worker/src/spaces.js`; pages use
+  `shared/space.js`). Deployed from `main` (job `worker`, needs Workers permission on the Cloudflare token);
   locally `cd worker && npm ci && npm run dev`, which the e2e tests start themselves.
 - `site/_headers`: Cloudflare response headers for every path (no framing by other sites, nosniff, referrer and
   permissions policies).
@@ -71,7 +73,7 @@ The user usually works from their phone, so keep replies short and end with the 
 - `scripts/new-project.mjs`: creates a project from the template.
 - `scripts/rules.mjs`: generates `firebase/database.rules.json` (room rules repeat per seat). Edit the rules there, never
   the JSON, then run `node scripts/rules.mjs`; `npm run rules` fails if the two don't match.
-- `tests/`: dev-only tests, never published. `tests/worker-auth.test.mjs` checks the game server's sign-in check, `tests/feed.test.mjs` its feeds and `tests/kit.test.mjs` its Play again (all part
+- `tests/`: dev-only tests, never published. `tests/worker-auth.test.mjs` checks the game server's sign-in check, `tests/feed.test.mjs` its feeds, `tests/kit.test.mjs` its Play again and `tests/space.test.mjs` its spaces (all part
   of the `build` check). `tests/smoke.cjs` (run after the build: `node tests/smoke.cjs`) opens every
   page at 390px and fails on JavaScript errors, blocked scripts, sideways scroll, a game missing from the games page or
   its ‹ back link or profile icon, a missing link from the home page to the games, or a same-device game that won't start; it's part of the required `build` check, needs no

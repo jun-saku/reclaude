@@ -21,6 +21,8 @@
 import { DurableObject } from "cloudflare:workers";
 import { GAMES } from "./games.js";
 import { AuthError, readRoom, seatIn, verifyIdToken } from "./auth.js";
+import { Area, PATH as SPACE_PATH } from "./space.js";
+import { SPACES } from "./spaces.js";
 
 const TICK_MS = 1000 / 30;     // the game advances in steps of this (at most 15 of them per message)
 const SEND_MS = 100;           // and is sent to the players 10 times a second
@@ -44,12 +46,20 @@ function send(socket, msg) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    const m = PATH.exec(url.pathname);
-    if (!m || !GAMES[m[1]]) return new Response("Not found", { status: 404 });
+    const m = PATH.exec(url.pathname), s = SPACE_PATH.exec(url.pathname);
+    if (!(m && GAMES[m[1]]) && !s) return new Response("Not found", { status: 404 });
     if (request.headers.get("Upgrade") !== "websocket") return new Response("Expected a WebSocket", { status: 426 });
     const origin = request.headers.get("Origin") || "";
     if (!ORIGINS.some((r) => r.test(origin)) && !(env.EMULATOR === "1" && LOCAL.test(origin))) return new Response("Forbidden", { status: 403 });
-    const room = env.ROOMS.get(env.ROOMS.idFromName(`${m[1]}:${m[2]}:${m[3]}`));
+    if (s && !SPACES[s[1]]?.areas.includes(s[2])) {
+      // A page can't tell a 404 from a dropped connection (it would keep retrying): say so on the WebSocket.
+      const { 0: client, 1: socket } = new WebSocketPair();
+      socket.accept();
+      socket.close(4004, "No such space");
+      return new Response(null, { status: 101, webSocket: client });
+    }
+    // A space's area (src/space.js, SPACES.md) or a game room.
+    const room = s ? env.SPACES.get(env.SPACES.idFromName(`${s[1]}:${s[2]}`)) : env.ROOMS.get(env.ROOMS.idFromName(`${m[1]}:${m[2]}:${m[3]}`));
     try { return await room.fetch(request); } catch (err) {
       // The player went away mid-connect, or the room's server restarted: their page simply tries again.
       return new Response(`Try again (${String(err?.message || err).slice(0, 80)})`, { status: 503 });
@@ -175,5 +185,36 @@ export class GameRoom extends DurableObject {
   async alarm() {
     if ([...this.conns.values()].some((c) => c.seat !== null)) return;
     await this.ctx.storage.deleteAll();
+  }
+}
+
+// One area of a space (src/space.js does the work). WebSockets are accepted with hibernation, so the area sleeps
+// whenever nobody sends anything, and the phones' "ping" is answered without waking it.
+export class Space extends DurableObject {
+  constructor(ctx, env) {
+    super(ctx, env);
+    ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
+    this.area = new Area(ctx, env);
+  }
+
+  async fetch(request) {
+    const [, space, area] = SPACE_PATH.exec(new URL(request.url).pathname);
+    const { 0: client, 1: socket } = new WebSocketPair();
+    this.area.accept(socket, space, area);
+    return new Response(null, { status: 101, webSocket: client });
+  }
+
+  async webSocketMessage(ws, data) {
+    try { await this.area.message(ws, data); } catch (err) {
+      console.error("space:", err);
+      await this.area.close(ws, 1011, String(err?.message || err).slice(0, 100));
+    }
+  }
+  async webSocketClose(ws, code) {
+    try { ws.close(code === 1005 || code === 1006 ? 1000 : code, "Bye"); } catch {}
+    try { await this.area.gone(ws); } catch (err) { console.error("space:", err); }
+  }
+  async webSocketError(ws) {
+    try { await this.area.gone(ws); } catch (err) { console.error("space:", err); }
   }
 }
