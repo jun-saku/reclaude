@@ -89,6 +89,7 @@ chunk of a build world) by reconnecting to the next one. A page only ever downlo
 2. Engine: `Space` class, routing, Supabase sign-in and active check, limits, hibernation, saving with versions,
    `shared/space.js`, and `tests/space.test.mjs` (sign-ins allowed and refused, join, move, leave, replaced tabs,
    limits, waking from hibernation, upgrades). Done.
-3. First space: a pixel plaza (walk around with your avatar, emoji reactions), linked from the home page. Measure
-   loading time, data and usage there.
+3. First space: the Plaza (`apps/plaza/`, rules in `apps/plaza/space.js`): walk around with your avatar, emoji
+   reactions; listed on the home page on devices signed in to an account. Done; measure loading time, data and
+   usage there.
 4. Something to do in it: fishing, a build canvas or office rooms.

@@ -8,11 +8,13 @@ The user usually works from their phone, so keep replies short and end with the 
 - `https://reclaude.junsaku.dev/<name>/`: one project, from `projects/<name>/`. This is the address to share
   (Cloudflare Pages custom domain; `https://reclaude.pages.dev/<name>/` is the same site).
 - `https://reclaude.junsaku.dev/`: the home page (`site/index.html`), where the installed app opens: a row per
-  section (Games for now, then the apps) and the profile icon.
+  section (Games, then the apps) and the profile icon. Account-only apps (the Plaza) are listed only on devices
+  signed in to an account (`shared/me.js` `noteAccount`, set by `shared/core.js`); their server checks for itself.
 - `https://reclaude.junsaku.dev/games/`: the games page (`site/games/index.html`), a card linking to each game, and
   back home. Non-games (the calculator) aren't listed. Projects don't link to each other.
 - `https://reclaude.junsaku.dev/apps/<name>/`: one social app (from `apps/<name>/`), on Supabase, e.g. the Profile
-  page `/apps/profile/`, and the admin panel `/apps/admin/` (invites for admins; accounts and the log for superusers;
+  page `/apps/profile/`, the Plaza `/apps/plaza/` (a space: walk around and wave, accounts only; its rules in
+  `apps/plaza/space.js`, run by the game server), and the admin panel `/apps/admin/` (invites for admins; accounts and the log for superusers;
   linked from the Profile page for admins only, not from the home page). The database checks every admin action; the
   page can also be put behind Cloudflare Access.
 - Every page's title row: back `‹` (game → games page, games page and apps → home), the title, and the profile icon

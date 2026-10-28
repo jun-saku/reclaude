@@ -18,7 +18,9 @@
 // again. Otherwise it reconnects by itself, pings every 20 seconds (answered without waking the area), and closes
 // after 20 seconds in the background so a phone left on another app costs nothing, coming back with the page.
 // On this machine (localhost) it uses the local server (cd worker && npm run dev) and local Supabase, as core.js does.
-import { accessToken } from "../shared/core.js";
+// With ?backend=fake (the UI tests), pass the space's rules as { rules } and it runs here, in this page, with you
+// alone in it as your profile (no account needed): enter(name, area, handlers, { rules }).
+import { accessToken, localProfile } from "../shared/core.js";
 
 const LIVE = "wss://play.reclaude.junsaku.dev";
 const LOCAL = "ws://127.0.0.1:8787";
@@ -26,7 +28,9 @@ const PING_MS = 20_000;
 const HIDDEN_MS = 20_000;
 const CLOSED = new Set([4003, 4004, 4006, 4010]); // refused, no such space, full, Supabase asleep: retrying won't help now
 
-export function enter(name, area, { onWelcome = () => {}, onJoin = () => {}, onLeave = () => {}, onEvent = () => {}, onStatus = () => {} } = {}) {
+export function enter(name, area, handlers = {}, { rules } = {}) {
+  if (new URLSearchParams(location.search).get("backend") === "fake") return enterHere(area, handlers, rules);
+  const { onWelcome = () => {}, onJoin = () => {}, onLeave = () => {}, onEvent = () => {}, onStatus = () => {} } = handlers;
   const local = ["localhost", "127.0.0.1"].includes(location.hostname);
   const url = `${local ? LOCAL : LIVE}/space/${name}/${area}`;
   let ws = null, done = false, retry = 500, retryTimer = 0, pingTimer = 0, hiddenTimer = 0;
@@ -84,5 +88,31 @@ export function enter(name, area, { onWelcome = () => {}, onJoin = () => {}, onL
     },
     isConnected: () => ws?.readyState === WebSocket.OPEN,
     leave() { done = true; cleanup(); },
+  };
+}
+
+// ?backend=fake: the space's rules run in this page, kept in this browser, with only you in it.
+function enterHere(area, { onWelcome = () => {}, onEvent = () => {}, onStatus = () => {} }, rules) {
+  if (!rules) throw new Error("?backend=fake needs the space's rules: enter(name, area, handlers, { rules })");
+  const KEY = `space-fake-${area}`;
+  let world;
+  try { world = JSON.parse(localStorage.getItem(KEY)); } catch {}
+  world ||= rules.create(area);
+  const me = localProfile();
+  const person = { id: "me", name: me?.display_name || "You", avatar: me?.avatar || null };
+  const keep = () => { try { localStorage.setItem(KEY, JSON.stringify(world)); } catch {} };
+  const act = (event) => { keep(); if (event) setTimeout(() => onEvent(event, person.id)); };
+  let left = false;
+  setTimeout(() => {
+    if (left) return;
+    onStatus("connected");
+    const event = rules.join?.(world, person, { now: Date.now() });
+    onWelcome({ me: person.id, people: [person], view: rules.view(world, person.id) });
+    act(event);
+  });
+  return {
+    send(msg) { if (left) return false; act(rules.input(world, person.id, JSON.parse(JSON.stringify(msg)), { now: Date.now() })); return true; },
+    isConnected: () => !left,
+    leave() { left = true; },
   };
 }

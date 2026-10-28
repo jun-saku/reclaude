@@ -16,6 +16,13 @@ export function rememberMe(profile) {
   showMe();
 }
 
+// Whether this device is signed in to an account (its username), as shared/core.js last saw it: only for what pages
+// show (the home page lists the account-only apps when it's set). The server checks for itself, every time.
+export const ACCOUNT_KEY = "core-account";
+export function noteAccount(username) {
+  try { if (username) localStorage.setItem(ACCOUNT_KEY, username); else localStorage.removeItem(ACCOUNT_KEY); } catch {}
+}
+
 export function showMe(root = document) {
   const me = readMe();
   for (const a of root.querySelectorAll(".me-link")) {
