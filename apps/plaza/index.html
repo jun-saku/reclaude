@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#161618" media="(prefers-color-scheme: dark)">
+  <title>Plaza</title>
+  <meta name="description" content="Walk around a little square and wave at whoever's there.">
+  <link rel="stylesheet" href="../../shared/base.css">
+  <style>
+    :root {
+      --grass: #bfe0a6; --grass-2: #b3d899; --path: #e8dcc2; --water: #8cc7ea; --water-2: #a5d5f0;
+      --name-bg: rgba(255, 255, 255, 0.92); --name-text: #1d1d1f; --bubble: #ffffff;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --grass: #2f4a2a; --grass-2: #2a4326; --path: #5a5244; --water: #24506e; --water-2: #2b5d7e;
+        --name-bg: rgba(20, 20, 22, 0.88); --name-text: #ececef; --bubble: #2c2c31;
+      }
+    }
+    .board {
+      position: relative; width: 100%; aspect-ratio: 13 / 12; border-radius: 16px; overflow: hidden;
+      display: grid; grid-template-columns: repeat(13, 1fr); grid-template-rows: repeat(12, 1fr);
+      background: var(--grass); touch-action: manipulation; user-select: none; -webkit-user-select: none;
+      border: 1px solid var(--line);
+    }
+    .tile { display: grid; place-items: center; font-size: clamp(0.9rem, 4.6vw, 1.5rem); line-height: 1; cursor: pointer; }
+    .tile.g { background: var(--grass); }
+    .tile.g.alt { background: var(--grass-2); }
+    .tile.p { background: var(--path); }
+    .tile.w { background: var(--water); cursor: default; }
+    .tile.w.alt { background: var(--water-2); }
+    .tile.t { cursor: default; }
+    .target { position: absolute; width: calc(100% / 13); height: calc(100% / 12); border-radius: 50%;
+      box-shadow: inset 0 0 0 3px var(--accent); pointer-events: none; opacity: 0; transition: opacity 300ms; }
+    .target.on { opacity: 0.8; }
+    .person {
+      position: absolute; left: 0; top: 0; width: calc(100% / 13); height: calc(100% / 12);
+      display: grid; place-items: center; pointer-events: none; transition: transform 160ms linear;
+    }
+    .person .face { font-size: clamp(1.3rem, 6.6vw, 2rem); line-height: 1; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.25)); }
+    .person .label {
+      position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: -4px; max-width: 96px;
+      padding: 1px 6px; border-radius: 999px; background: var(--name-bg); color: var(--name-text);
+      font-size: 12px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .person.me .label { box-shadow: 0 0 0 2px var(--accent); }
+    .bubble {
+      position: absolute; bottom: 85%; left: 50%; transform: translateX(-50%); padding: 3px 7px; border-radius: 12px;
+      background: var(--bubble); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2); font-size: clamp(1.1rem, 5vw, 1.5rem);
+      line-height: 1.1; animation: pop 2.2s ease forwards;
+    }
+    @keyframes pop { 0% { opacity: 0; transform: translate(-50%, 6px) scale(0.6); } 10%, 80% { opacity: 1; transform: translate(-50%, 0) scale(1); } 100% { opacity: 0; transform: translate(-50%, -8px); } }
+    @media (prefers-reduced-motion: reduce) { .person { transition: none; } .bubble { animation-duration: 0.01s; animation-delay: 2s; animation-fill-mode: both; } }
+    .reactions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+    .reactions button { padding: 0; min-height: 44px; font-size: 1.35rem; background: var(--soft); color: var(--text); }
+    .closed { text-align: center; align-items: center; }
+    a.button { display: flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 18px; border-radius: 12px;
+      background: var(--accent); color: var(--on-accent); font-weight: 650; text-decoration: none; }
+    .closed .big { font-size: 2.6rem; line-height: 1; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="title-bar">
+      <a class="home-link" href="../../" aria-label="Home">‹</a>
+      <h1>Plaza</h1>
+      <a class="me-link" href="../profile/" aria-label="Your profile">👤</a>
+    </div>
+
+    <section id="here" hidden>
+      <div class="bar"><div class="players" id="players"></div></div>
+    </section>
+    <p class="status" id="status">Coming in…</p>
+    <div class="board" id="board" data-small-ok hidden></div>
+    <p class="hint" id="hint" hidden>Tap anywhere to walk there.</p>
+    <div class="reactions" id="reactions" role="group" aria-label="Reactions" hidden></div>
+
+    <section class="card closed" id="closed" hidden>
+      <span class="big" id="closed-icon" aria-hidden="true">🌙</span>
+      <h2 id="closed-title"></h2>
+      <p class="muted" id="closed-text"></p>
+      <div class="row"><button id="again" hidden>Play here</button><a class="button" id="to-profile" href="../profile/" hidden>Go to your profile</a></div>
+    </section>
+  </main>
+  <script type="module">
+    import * as space from "../../shared/space.js";
+    import rules, { MAP, W, H, REACTIONS } from "./space.js";
+
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+    const NAMES = ["Wave", "Smile", "Love", "Thumbs up", "Laugh", "Party", "Wow", "Coffee"];
+    const STEP_MS = 160;
+
+    // The map, drawn once.
+    const board = $("board");
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const c = MAP[y][x], d = document.createElement("div");
+      const alt = (x + y) % 2 ? " alt" : "";
+      d.className = "tile " + ({ ".": "g" + alt, "*": "g" + alt, "=": "g" + alt, "-": "p", "~": "w" + alt, T: "g t" }[c]);
+      d.textContent = { "*": "🌷", "=": "🪑", T: "🌳" }[c] || "";
+      if (c === "~" && x === 6 && y === 5) d.textContent = "⛲";
+      d.dataset.x = x; d.dataset.y = y;
+      board.append(d);
+    }
+    const target = document.createElement("div");
+    target.className = "target";
+    board.append(target);
+    $("reactions").innerHTML = REACTIONS.map((r, i) => `<button type="button" data-i="${i}" aria-label="${NAMES[i]}">${r}</button>`).join("");
+
+    // Who's here and where they stand. Each person walks their path a tile at a time.
+    let me = null, s = null;
+    const people = new Map(); // id → { name, avatar, at: [x, y], el, queue: [[x, y]…], timer }
+    function place(p) { p.el.style.transform = `translate(${p.at[0] * 100}%, ${p.at[1] * 100}%)`; }
+    function add(person, at) {
+      let p = people.get(person.id);
+      if (!p) {
+        const el = document.createElement("div");
+        el.className = "person" + (person.id === me ? " me" : "");
+        board.append(el);
+        p = { el, queue: [], timer: 0 };
+        people.set(person.id, p);
+      }
+      Object.assign(p, { name: person.name, avatar: person.avatar, at: at || p.at || [6, 1] });
+      p.el.innerHTML = `<span class="face">${esc(person.avatar || "🙂")}</span><span class="label">${esc(person.id === me ? "You" : person.name)}</span>`;
+      place(p);
+      chips();
+    }
+    function remove(id) {
+      const p = people.get(id);
+      if (!p) return;
+      clearTimeout(p.timer); p.el.remove(); people.delete(id); chips();
+    }
+    function walk(id, path) {
+      const p = people.get(id);
+      if (!p) return;
+      clearTimeout(p.timer);
+      p.queue = path.slice();
+      const step = () => {
+        const next = p.queue.shift();
+        if (!next) { if (id === me) target.classList.remove("on"); return; }
+        p.at = next; place(p);
+        p.timer = setTimeout(step, STEP_MS);
+      };
+      step();
+    }
+    function react(id, i) {
+      const p = people.get(id);
+      if (!p || !REACTIONS[i]) return;
+      p.el.querySelector(".bubble")?.remove();
+      const b = document.createElement("span");
+      b.className = "bubble"; b.textContent = REACTIONS[i];
+      p.el.append(b);
+      setTimeout(() => b.remove(), 2300);
+    }
+    function chips() {
+      const list = [...people.entries()].sort(([a], [b]) => (a === me ? -1 : b === me ? 1 : 0));
+      $("players").innerHTML = list.map(([id, p]) => `<span class="chip"><span class="face">${esc(p.avatar || "🙂")}</span>${esc(id === me ? "You" : p.name)}</span>`).join("");
+      $("status").textContent = people.size <= 1 ? "Just you here" : `${people.size} here`;
+    }
+
+    function showClosed(why) {
+      for (const id of ["here", "board", "hint", "reactions"]) $(id).hidden = true;
+      $("status").textContent = "";
+      const account = /accounts|Profile page/.test(why), elsewhere = /another tab|another device/.test(why);
+      $("closed-icon").textContent = account ? "🔑" : elsewhere ? "📱" : why.includes("full") ? "🚧" : "🌙";
+      $("closed-title").textContent = account ? "The Plaza is for accounts" : elsewhere ? "Playing on another device" : why.includes("full") ? "The Plaza is full" : "The Plaza is closed";
+      $("closed-text").textContent = account ? "Make an account or sign in to one on your Profile page, then come back."
+        : elsewhere ? "You're in the Plaza on another device or tab." : why;
+      $("again").hidden = account;
+      $("again").textContent = elsewhere ? "Play here" : "Try again";
+      $("to-profile").hidden = !account;
+      $("closed").hidden = false;
+    }
+
+    function enter() {
+      $("closed").hidden = true;
+      $("status").textContent = "Coming in…";
+      for (const id of [...people.keys()]) remove(id);
+      s = space.enter("plaza", "main", {
+        onWelcome({ me: id, people: here, view }) {
+          me = id;
+          for (const p of [...people.keys()]) remove(p);
+          for (const p of here) add(p, view.spots[p.id]);
+          for (const sel of ["here", "board", "hint", "reactions"]) $(sel).hidden = false;
+          chips();
+        },
+        onJoin: (p) => add(p, null),
+        onLeave: (id) => remove(id),
+        onEvent(e) {
+          if (e.path) walk(e.id, e.path);
+          else if (e.at && people.has(e.id)) { people.get(e.id).at = e.at; place(people.get(e.id)); }
+          if (Number.isInteger(e.react)) react(e.id, e.react);
+        },
+        onStatus(st, detail) {
+          if (st === "connecting" && people.size) $("status").textContent = "Reconnecting…";
+          if (st === "closed") showClosed(detail || "");
+        },
+      }, { rules });
+    }
+
+    board.addEventListener("click", (ev) => {
+      const t = ev.target.closest(".tile");
+      if (!t || !s || !people.has(me)) return;
+      const x = Number(t.dataset.x), y = Number(t.dataset.y);
+      if (!"~T".includes(MAP[y][x]) && s.send({ t: "go", x, y })) {
+        target.style.left = `${(x * 100) / W}%`; target.style.top = `${(y * 100) / H}%`;
+        target.classList.add("on");
+      }
+    });
+    $("reactions").addEventListener("click", (ev) => {
+      const b = ev.target.closest("button[data-i]");
+      if (b && s) s.send({ t: "react", i: Number(b.dataset.i) });
+    });
+    $("again").addEventListener("click", enter);
+    addEventListener("pagehide", () => s?.leave());
+    addEventListener("pageshow", (e) => { if (e.persisted) enter(); }); // back from the browser's page cache
+    enter();
+  </script>
+</body>
+</html>

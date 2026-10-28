@@ -13,6 +13,8 @@
 //                                   anything); the event (any small JSON object), if any, goes to everyone
 //   view(world, id) → object        the whole area as a newcomer gets it
 // Everything happens on people's messages: there's no clock running, so the area can sleep between them.
+// A space whose page also runs it with ?backend=fake keeps its rules next to the page (like kit games' game.js).
 import probe from "./spaces/probe.js";
+import plaza from "../../apps/plaza/space.js";
 
-export const SPACES = { probe };
+export const SPACES = { probe, plaza };

@@ -179,5 +179,28 @@ let threw = false;
 try { await connect("tA"); } catch { threw = true; }
 ok(threw && !future.store.get("world").world.n, "a world from a newer version is never overwritten");
 
+// ---------- the Plaza's rules (apps/plaza/space.js) ----------
+const { default: plaza, MAP, W, H, REACTIONS, route, walkable } = await import("../apps/plaza/space.js");
+ok(MAP.every((row) => row.length === W) && H === MAP.length && SPACES.plaza === plaza, "the Plaza's map is rectangular and the server runs it");
+const pw = plaza.create("main");
+const evJoin = plaza.join(pw, { id: "ann" }, { now: 0 });
+ok(evJoin && walkable(...pw.spots.ann), "someone new appears on a free walkable spot");
+plaza.join(pw, { id: "bo" }, { now: 0 });
+ok(pw.spots.bo.join() !== pw.spots.ann.join(), "the next newcomer gets another spot");
+const goal = [2, 9];
+const walked = plaza.input(pw, "ann", { t: "go", x: goal[0], y: goal[1] }, { now: 0 });
+ok(walked?.path.at(-1).join() === goal.join() && pw.spots.ann.join() === goal.join(), "walking finds a way to the tile and ends there");
+ok(walked.path.every(([x, y], i) => walkable(x, y) && Math.abs(x - (i ? walked.path[i - 1][0] : 6)) + Math.abs(y - (i ? walked.path[i - 1][1] : 1)) === 1), "one tile at a time, never through water or trees");
+const water = [6, 5];
+ok(!plaza.input(pw, "ann", { t: "go", x: water[0], y: water[1] }, { now: 0 }) && !plaza.input(pw, "ann", { t: "go", x: 0, y: 0 }, { now: 0 }), "the fountain and the trees can't be walked onto");
+ok(!plaza.input(pw, "ann", { t: "go", x: 99, y: 2 }, { now: 0 }) && !plaza.input(pw, "ann", { t: "go", x: "1", y: 2 }, { now: 0 }) && !plaza.input(pw, "ann", { t: "go", x: 2.5, y: 2 }, { now: 0 }), "off the map or not a tile: ignored");
+ok(!plaza.input(pw, "ghost", { t: "go", x: 2, y: 2 }, { now: 0 }), "someone who never joined can't move");
+ok(plaza.input(pw, "ann", { t: "react", i: 0 }, { now: 5000 })?.react === 0, "a reaction goes out");
+ok(!plaza.input(pw, "ann", { t: "react", i: 1 }, { now: 5500 }) && plaza.input(pw, "ann", { t: "react", i: 1 }, { now: 6100 }), "at most one reaction a second each");
+ok(!plaza.input(pw, "ann", { t: "react", i: REACTIONS.length }, { now: 9000 }) && !plaza.input(pw, "ann", { t: "react", i: "👋" }, { now: 9000 }), "only the listed reactions: no free text");
+ok(plaza.join(pw, { id: "ann" }, { now: 0 }) === null && pw.spots.ann.join() === goal.join(), "coming back, you're where you left");
+ok(route([1, 6], [11, 6])?.length >= 10, "the way round the fountain is found");
+ok(JSON.stringify(plaza.view(pw)).length < 1000, "the area's view is small");
+
 console.log(`\nFAILS: ${fails}`);
 process.exit(fails ? 1 : 0);

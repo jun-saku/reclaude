@@ -106,12 +106,22 @@
         <div class="info"><h2>Games</h2><p>Play alone, pass the phone around, or play friends online.</p></div>
         <span class="chevron" aria-hidden="true">›</span>
       </a></li>
+      <li id="plaza-row" hidden><a class="section" href="apps/plaza/">
+        <span class="icon" aria-hidden="true">⛲</span>
+        <div class="info"><h2>Plaza</h2><p>Walk around a little square and wave at whoever's there.</p></div>
+        <span class="chevron" aria-hidden="true">›</span>
+      </a></li>
     </ul>
     <div class="install" id="install" hidden>
       <button id="install-btn">📲 Install as an app</button>
       <p id="install-help"></p>
     </div>
   </main>
+  <script>
+    // The account-only apps, on devices signed in to an account (as shared/core.js last saw it: shared/me.js,
+    // "core-account"). Only what's shown: the Plaza's server checks for itself.
+    try { if (localStorage.getItem("core-account")) document.getElementById("plaza-row").hidden = false; } catch {}
+  </script>
   <script>
     // "Install as an app": Android and desktop Chrome offer it themselves (beforeinstallprompt); on an iPhone or iPad
     // it's Share, then Add to Home Screen. Hidden once it runs as an app.

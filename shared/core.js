@@ -23,7 +23,7 @@
 // It connects to the live project; on this machine (localhost, 127.0.0.1) to a local Supabase (`supabase start`,
 // which the security policy allows too); with ?backend=fake to nothing: this browser's storage only, for the UI tests.
 import { createClient } from "../shared/supabase-js.js";
-import { readMe, rememberMe } from "../shared/me.js";
+import { noteAccount, readMe, rememberMe } from "../shared/me.js";
 import { ROOM_NAME_MAX, myName, setMyName } from "../shared/rooms.js";
 
 const LIVE = { url: "https://xikukwpayubiyxcnlwme.supabase.co", key: "sb_publishable_Qqo7Kh391E381GR_zy9DVg_JImDyTVy" };
@@ -310,7 +310,10 @@ export async function backUpProfile() {
 // This device's account ({ username, active, roles: [{ role, scope }] }), or null (none, or Supabase unreachable).
 // Signs no one up.
 export async function account() {
-  try { return fake ? fakeAccounts.account() : await supabaseAccount(); } catch { return null; }
+  let acc;
+  try { acc = fake ? fakeAccounts.account() : await supabaseAccount(); } catch { return null; }
+  noteAccount(acc?.active ? acc.username : null); // (only when the answer is sure: not when Supabase is unreachable)
+  return acc;
 }
 
 // This device's sign-in (anonymous; made now if there's none) becomes an account, keeping its profile. Returns the
@@ -319,6 +322,7 @@ export async function makeAccount({ username, invite }) {
   const name = checkUsername(username);
   if (!cleanKey(invite)) throw explain({ code: "RCINV" });
   const key = fake ? await fakeAccounts.makeAccount(name, invite) : await supabaseMakeAccount(name, invite);
+  noteAccount(name);
   if (readMe()?.pending) await backUpProfile();
   return { username: name, key: formatKey(key) };
 }
@@ -329,7 +333,9 @@ export async function makeAccount({ username, invite }) {
 export async function signInAccount({ username, key }) {
   const name = cleanUsername(username);
   if (!name || cleanKey(key).length !== 16) throw explain({ code: "invalid_credentials" });
-  return fake ? fakeAccounts.signInAccount(name, key) : supabaseSignInAccount(name, key);
+  const profile = await (fake ? fakeAccounts.signInAccount(name, key) : supabaseSignInAccount(name, key));
+  noteAccount(name);
+  return profile;
 }
 
 // A new key for this device's account, to show once; the account's other devices are signed out.
@@ -340,6 +346,7 @@ export async function changeKey() {
 // Signs this device out of its account. Its profile stays here (and in the games).
 export async function signOut() {
   if (fake) fakeAccounts.signOut(); else await supabaseSignOut();
+  noteAccount(null);
 }
 
 // ---------- admin panel (apps/admin/) ----------
