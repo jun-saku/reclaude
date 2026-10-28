@@ -8,6 +8,8 @@
 //   await core.backUpProfile()                       sends a profile Supabase doesn't have yet; true once it does
 //   const me = await core.signIn()                   { id }: anonymous at first, remembered on this device
 //   await core.signedIn()                            { id } if this device already signed in, else null (signs no one up)
+//   await core.accessToken()                         this device's current sign-in token (for the game server's
+//                                                    spaces, shared/space.js), or null (none, or ?backend=fake)
 //   core.cleanName(text)                             the name as the database takes it, or "" if it can't be one
 //   core.useProfile(profile)                         makes it this device's profile (and the games' name)
 // Accounts (supabase/migrations/…_core_accounts.sql): a username and a personal key, to use your profile on other
@@ -232,6 +234,10 @@ const fakeAccounts = {
 // ---------- API ----------
 export const signIn = () => (fake ? fakeSignIn() : supabaseSignIn());
 export const signedIn = async () => (fake ? (fakeRead().id ? { id: fakeRead().id } : null) : supabaseSignedIn());
+export async function accessToken() {
+  if (fake) return null;
+  try { return (await sb().auth.getSession()).data.session?.access_token || null; } catch { return null; }
+}
 // The profile name as the games take it (up to ROOM_NAME_MAX UTF-16 units, as rooms.js and the Firebase rules count):
 // a longer one is cut at a word break if it can be, and never inside an emoji.
 function gameName(name) {
