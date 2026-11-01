@@ -62,10 +62,22 @@ const sheet = $("sheet");
 function openSheet(title, fill) {
   const form = el("form", { method: "dialog" });
   const close = () => sheet.close();
-  form.append(el("h2", {}, title), ...fill(close).flat().filter(Boolean),
-    el("button", { type: "button", class: "secondary", onclick: close }, "Cancel"));
+  form.append(el("h2", {}, title), ...fill(close).flat().filter(Boolean));
   sheet.replaceChildren(form);
-  sheet.showModal();
+  if (!sheet.open) sheet.showModal();
+}
+// Tapping outside the sheet (its backdrop) closes it.
+sheet.addEventListener("click", (e) => { if (e.target === sheet) sheet.close(); });
+// A row of options in a sheet: icon over a short label.
+const action = (icon, label, onclick, attrs = {}) => el("button", { type: "button", class: "secondary", onclick, ...attrs },
+  el("span", { class: "ic", "aria-hidden": "true" }, icon), label);
+const actions = (...buttons) => el("div", { class: "actions" }, ...buttons);
+// Picks someone from a list, in the same sheet.
+function choose(title, ids, label, onPick) {
+  openSheet(title, (close) => [ids.length
+    ? el("div", { class: "list" }, ...ids.map((x) => el("button", { type: "button", class: "item", onclick: (e) => act(e.target, async () => { close(); await onPick(x); }) },
+      el("span", { class: "who" }, label(x)))))
+    : empty("Nobody to pick.")]);
 }
 
 // ---------- start ----------
@@ -330,7 +342,8 @@ async function sessionView(id) {
 }
 
 async function watchView(code) {
-  setBack(me?.manager ? here("dash") : here(), me?.manager ? "Pickleball home" : "About Pickleball");
+  if (me?.manager) setBack(here("dash"), "Pickleball home");
+  else $("back").hidden = true; // the public live view: nowhere to go back to
   await live(code, { helper: false, runner: false });
 }
 
@@ -414,48 +427,39 @@ async function live(code, role) {
         }) }, "End match")];
     });
   }
-  // Someone in line: skip, break, pair, put up next, leave.
+  // Someone in line: skip, break, pair, leave.
   function playerSheet(pid, s) {
     const p = person(pid);
     const partner = s.pairs.find((x) => x.includes(pid))?.find((x) => x !== pid);
     const away = s.away.includes(pid);
-    const others = s.order.filter((x) => x !== pid && x !== partner);
+    const others = s.order.filter((x) => x !== pid);
     openSheet(face(p), (close) => {
-      const run = (fn, action) => (e) => act(e.target, async () => { close(); await save(fn, action, { player: pid }); });
-      const mate = el("select", { "aria-label": "Play with" }, ...others.map((x) => el("option", { value: x }, face(person(x)))));
-      return [
-        !away && el("button", { type: "button", class: "secondary", onclick: run((st) => rot.skip(st, v.algorithm, pid), "skipped") }, "⏭ Skip next match"),
-        el("button", { type: "button", class: "secondary", onclick: run((st) => rot.setAway(st, v.algorithm, pid, !away), away ? "back" : "on a break") },
-          away ? "▶️ Back in line" : "☕ Break"),
-        partner ? el("button", { type: "button", class: "secondary", onclick: run((st) => rot.unpair(st, v.algorithm, pid), "unpaired") },
-          `🔗 Unpair from ${person(partner)?.name}`)
-          : others.length > 0 && el("div", { class: "form" }, mate, el("button", { type: "button", class: "secondary",
-            onclick: (e) => act(e.target, async () => { const x = mate.value; close(); await save((st) => rot.pair(st, v.algorithm, pid, x), "paired", { player: pid, with: x }); }) }, "🔗 Pair")),
-        role.runner && el("button", { type: "button", class: "secondary", onclick: (e) => {
+      const run = (fn, what) => (e) => act(e.target, async () => { close(); await save(fn, what, { player: pid }); });
+      return [actions(
+        !away && action("⏭", "Skip", run((st) => rot.skip(st, v.algorithm, pid), "skipped")),
+        action(away ? "▶️" : "☕", away ? "Back" : "Break", run((st) => rot.setAway(st, v.algorithm, pid, !away), away ? "back" : "on a break")),
+        partner ? action("🔗", "Unpair", run((st) => rot.unpair(st, v.algorithm, pid), "unpaired"))
+          : others.length > 0 && action("🔗", "Pair", () => choose(`${p.name} plays with`, others, (x) => face(person(x)),
+            (x) => save((st) => rot.pair(st, v.algorithm, pid, x), "paired", { player: pid, with: x }))),
+        role.runner && action("👋", "Leave", (e) => {
           if (!confirm(`${p.name} leaves the session?`)) return;
           act(e.target, async () => { close(); busy = true; try { await pb.setHere(v.id, pid, false); await load(); } finally { busy = false; } });
-        } }, "👋 Leaves"),
-      ];
+        }))];
     });
   }
-  // Someone up next: swap them for someone, or take them out.
+  // Someone up next: swap, skip, break, or leave their spot empty.
   function nextSheet(pid, s) {
     const inNext = [...s.next.a, ...s.next.b];
     const choices = [...s.order.filter((x) => !inNext.includes(x) && !s.away.includes(x)), ...inNext.filter((x) => x !== pid)];
-    openSheet(face(person(pid)), (close) => {
-      const pick = el("select", { "aria-label": "Who plays instead" }, ...choices.map((x) => el("option", { value: x }, face(person(x)))));
-      return [choices.length > 0 && el("div", { class: "form" }, pick, el("button", { type: "button", onclick: (e) => act(e.target, async () => {
-        const x = pick.value; close(); await save((st) => rot.swap(st, v.algorithm, pid, x), "swapped", { out: pid, in: x });
-      }) }, "⇄ Swap")),
-      el("button", { type: "button", class: "secondary", onclick: (e) => act(e.target, async () => {
-        close(); await save((st) => rot.skip(st, v.algorithm, pid), "skipped", { player: pid });
-      }) }, "⏭ Skip next match"),
-      el("button", { type: "button", class: "secondary", onclick: (e) => act(e.target, async () => {
-        close(); await save((st) => rot.setAway(st, v.algorithm, pid, true), "on a break", { player: pid });
-      }) }, "☕ Break"),
-      el("button", { type: "button", class: "secondary", onclick: (e) => act(e.target, async () => {
-        close(); await save((st) => rot.removeFromNext(st, v.algorithm, pid), "took out", { player: pid });
-      }) }, "Leave this spot empty")];
+    const p = person(pid);
+    openSheet(face(p), (close) => {
+      const run = (fn, what) => (e) => act(e.target, async () => { close(); await save(fn, what, { player: pid }); });
+      return [actions(
+        choices.length > 0 && action("⇄", "Swap", () => choose(`Instead of ${p.name}`, choices, (x) => face(person(x)),
+          (x) => save((st) => rot.swap(st, v.algorithm, pid, x), "swapped", { out: pid, in: x }))),
+        action("⏭", "Skip", run((st) => rot.skip(st, v.algorithm, pid), "skipped")),
+        action("☕", "Break", run((st) => rot.setAway(st, v.algorithm, pid, true), "on a break")),
+        action("✕", "Remove", run((st) => rot.removeFromNext(st, v.algorithm, pid), "took out")))];
     });
   }
   // An empty spot up next: whoever's waiting.
@@ -515,11 +519,86 @@ async function live(code, role) {
   }
 
   // A court: two halves, players (or slots) on each.
-  function court(left, right, { next = false, freeText = null } = {}) {
-    return el("div", { class: `court${next ? " next" : ""}` },
-      el("div", { class: "half a" }, ...left), el("div", { class: "net", "aria-hidden": "true" }), el("div", { class: "half b" }, ...right),
-      freeText && el("div", { class: "free" }, el("span", {}, freeText)));
+  function court(left, right, { next = false, freeText = null, court: number = null } = {}) {
+    const drop = (side) => (next && canEdit() ? { "data-drop": "side", "data-side": side } : {});
+    // The next match drags as a whole (held anywhere but on a player) onto a free court, to start it there.
+    const whole = next && canEdit() && state().next?.a.length && state().next?.b.length ? { "data-drag": "match" } : {};
+    const free = number && canEdit() ? { "data-drop": "court", "data-court": number } : {};
+    return el("div", { class: `court${next ? " next" : ""}`, ...whole, ...free },
+      el("div", { class: "half a", ...drop("a") }, ...left), el("div", { class: "net", "aria-hidden": "true" }), el("div", { class: "half b", ...drop("b") }, ...right),
+      freeText && el("div", { class: "free" }, el("span", {}, freeText)),
+      whole["data-drag"] && el("span", { class: "court-grip", "aria-hidden": "true" }, "⠿"));
   }
+
+  // Hold and drag (managers and helpers): hold someone for a moment, then drag them onto a spot in the next match
+  // (or onto someone there: they swap), onto someone in line (they go before them), to the end of the line or to a
+  // break. A short tap still opens their options; moving straight away still scrolls.
+  let drag = null, pending = null, swallowClick = false;
+  const dropAt = (x, y) => document.elementFromPoint(x, y)?.closest("[data-drop]") || null;
+  function endPending() { if (pending) clearTimeout(pending.timer); pending = null; }
+  view.addEventListener("pointerdown", (e) => {
+    const src = e.target.closest("[data-drag]");
+    if (!src || !canEdit() || e.button > 0 || busy) return;
+    endPending();
+    pending = { src, x: e.clientX, y: e.clientY, timer: setTimeout(() => {
+      const { src: from, x, y } = pending;
+      pending = null;
+      const box = from.getBoundingClientRect();
+      const ghost = from.cloneNode(true);
+      ghost.classList.add("ghost");
+      Object.assign(ghost.style, { width: `${box.width}px`, left: `${box.left}px`, top: `${box.top}px` });
+      document.body.append(ghost);
+      from.classList.add("lifted");
+      document.body.classList.add(from.dataset.drag === "match" ? "dragging-match" : "dragging");
+      drag = { pid: from.dataset.drag, from, ghost, dx: x - box.left, dy: y - box.top, over: null };
+      busy = true;
+      navigator.vibrate?.(15);
+    }, 300) };
+  });
+  addEventListener("pointermove", (e) => {
+    if (pending && Math.hypot(e.clientX - pending.x, e.clientY - pending.y) > 8) endPending();
+    if (!drag) return;
+    drag.ghost.style.left = `${e.clientX - drag.dx}px`;
+    drag.ghost.style.top = `${e.clientY - drag.dy}px`;
+    const over = dropAt(e.clientX, e.clientY);
+    if (over !== drag.over) { drag.over?.classList.remove("over"); over?.classList.add("over"); drag.over = over; }
+  });
+  // Once dragging, the page doesn't scroll under the finger.
+  document.addEventListener("touchmove", (e) => { if (drag) e.preventDefault(); }, { passive: false });
+  document.addEventListener("contextmenu", (e) => { if (drag || pending) e.preventDefault(); });
+  async function finishDrag(e) {
+    endPending();
+    if (!drag) return;
+    const { pid, from, ghost, over } = drag;
+    drag = null;
+    ghost.remove();
+    from.classList.remove("lifted");
+    over?.classList.remove("over");
+    document.body.classList.remove("dragging", "dragging-match");
+    swallowClick = true;
+    setTimeout(() => { swallowClick = false; }, 400);
+    busy = false;
+    const target = e.type === "pointercancel" ? null : over;
+    if (!target) return;
+    const kind = target.dataset.drop, other = target.dataset.pid, side = target.dataset.side;
+    if (pid === "match") { if (kind === "court") await startOn(Number(target.dataset.court), null); return; }
+    if (kind === "court") return;
+    const s = state();
+    const inNext = (x) => !!s.next && [...s.next.a, ...s.next.b].includes(x);
+    let change = null;
+    if (kind === "chip" && other !== pid) change = (st) => rot.swap(st, v.algorithm, pid, other);
+    else if (kind === "side") change = (st) => rot.addToNext(st, v.algorithm, side, pid);
+    else if (kind === "row" && other !== pid) {
+      if (s.away.includes(other)) change = (st) => rot.setAway(st, v.algorithm, pid, true);
+      else if (inNext(pid)) change = (st) => rot.swap(st, v.algorithm, pid, other);
+      else change = (st) => rot.moveInLine(st, v.algorithm, pid, other);
+    } else if (kind === "end") change = (st) => rot.moveInLine(inNext(pid) ? rot.removeFromNext(st, v.algorithm, pid) : st, v.algorithm, pid, null);
+    else if (kind === "break") change = (st) => rot.setAway(st, v.algorithm, pid, true);
+    if (change) await act(null, () => save(change, "moved", { player: pid, to: kind }));
+  }
+  addEventListener("pointerup", finishDrag);
+  addEventListener("pointercancel", finishDrag);
+  view.addEventListener("click", (e) => { if (swallowClick) { e.stopPropagation(); e.preventDefault(); swallowClick = false; } }, true);
 
   function results() {
     const done = v.matches.filter((m) => m.ended_at);
@@ -569,7 +648,7 @@ async function live(code, role) {
       sections.push(card(
         el("div", { class: "court-head" }, el("h2", {}, "Court", el("span", { class: "court-no" }, String(c))),
           m && el("span", { class: "timer" }, el("span", { class: "live-dot", "aria-hidden": "true" }), ago(m.started_at))),
-        m ? court(m.side_a.map((x) => chip(x)), m.side_b.map((x) => chip(x))) : court([], [], { freeText: "Free" }),
+        m ? court(m.side_a.map((x) => chip(x)), m.side_b.map((x) => chip(x))) : court([], [], { freeText: "Free", court: c }),
         canEdit() && (m ? el("button", { type: "button", class: "secondary", onclick: () => endMatchSheet(m) }, "End match")
           : s.next?.a.length && s.next?.b.length && el("button", { type: "button", onclick: (e) => startOn(c, e.target) }, "Start next match here"))));
     }
@@ -578,16 +657,18 @@ async function live(code, role) {
     // everyone else waiting in order, then whoever's on a break (☕) at the bottom. ⋯ opens a person's options.
     const sideOf = (side) => {
       const ids = s.next?.[side] || [];
-      const chips = ids.map((x) => (canEdit() ? chip(x, { type: "button", "aria-label": `Options for ${person(x)?.name}`, onclick: () => nextSheet(x, s) }, "button", el("span", { class: "x", "aria-hidden": "true" }, "⋯"))
+      const chips = ids.map((x) => (canEdit() ? chip(x, { type: "button", "aria-label": `Options for ${person(x)?.name}`, onclick: () => nextSheet(x, s),
+        "data-drag": x, "data-drop": "chip", "data-pid": x }, "button", el("span", { class: "x", "aria-hidden": "true" }, "⋯"))
         : chip(x)));
-      const slots = canEdit() ? Array.from({ length: 2 - ids.length }, () => el("button", { type: "button", class: "slot", "aria-label": "Add a player here", onclick: () => slotSheet(side, s) }, "+")) : [];
+      const slots = canEdit() ? Array.from({ length: 2 - ids.length }, () => el("button", { type: "button", class: "slot", "aria-label": "Add a player here", onclick: () => slotSheet(side, s), "data-drop": "side", "data-side": side }, "+")) : [];
       return [...chips, ...slots];
     };
     const partner = (x) => s.pairs.find((p) => p.includes(x))?.find((y) => y !== x);
     const inNext = s.next ? [...s.next.a, ...s.next.b] : [];
     const waitingList = s.order.filter((x) => !inNext.includes(x) && !s.away.includes(x));
     const onBreak = s.order.filter((x) => s.away.includes(x));
-    const row = (x, mark) => el("div", { class: `item${s.away.includes(x) ? " away" : ""}` },
+    const row = (x, mark) => el("div", { class: `item${s.away.includes(x) ? " away" : ""}`, ...(canEdit() ? { "data-drag": x, "data-drop": "row", "data-pid": x } : {}) },
+      canEdit() && el("span", { class: "grip", "aria-hidden": "true" }, "⠿"),
       el("span", { class: "line-no", "aria-label": s.away.includes(x) ? "On a break" : `Number ${mark}` }, String(mark)),
       el("span", { class: "who" }, face(person(x))),
       partner(x) && el("span", { class: "tag", title: `Plays with ${person(partner(x))?.name}` }, `🔗 ${person(partner(x))?.icon || "👤"}`),
@@ -600,7 +681,10 @@ async function live(code, role) {
         role.runner && el("button", { type: "button", class: "icon-btn", "aria-label": "Add players", onclick: (e) => act(e.target, addPlayersSheet) }, "+")),
       (s.next || canEdit()) && court(sideOf("a"), sideOf("b"), { next: true }),
       waitingList.length || onBreak.length ? el("div", { class: "list" }, ...waitingList.map((x, i) => row(x, i + 1)), ...onBreak.map((x) => row(x, "☕")))
-        : !s.next && empty("Nobody waiting.")));
+        : !s.next && empty("Nobody waiting."),
+      canEdit() && el("div", { class: "dropzones" },
+        el("div", { class: "dropzone", "data-drop": "end" }, "⤵ End of line"),
+        el("div", { class: "dropzone", "data-drop": "break" }, "☕ Break"))));
 
     sections.push(matchList(v.matches.filter((m) => m.ended_at).slice(-5).reverse(), "Last matches"));
 
