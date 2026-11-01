@@ -529,16 +529,24 @@ async function live(code, role) {
         }) }, "End match")];
     });
   }
-  // A guest (made for this session): keep them as a regular player (in the session's club, if it has one), or link an
-  // account to them.
-  const guestActions = (p, close, clubId = null) => actions(
-    action("⭐", clubId ? "Add to club" : "Keep", (e) => act(e.target, async () => {
-      close();
-      if (clubId) await pb.addClubPlayer(clubId, p.id); else await pb.keepPlayer(p.id);
-      note(`${p.name} is a regular player now.`);
-      await load();
-    })),
-    action("🔗", "Link", (e) => act(e.target, () => linkSheet(p))));
+  // Managers, from the Players list: link an account to a player (or see and undo it), and keep a guest (made for
+  // this session) as a regular player, in the session's club if it has one.
+  function manageSheet(p) {
+    const link = linked[p.id];
+    openSheet(face(p), (close) => [
+      link ? el("div", { class: "item" }, el("span", { class: "who" }, `🔗 ${link.avatar || "👤"} @${link.username}`),
+        el("button", { type: "button", class: "secondary", onclick: (e) => {
+          if (confirm(`Unlink ${p.name} from @${link.username}?`)) act(e.target, async () => { await pb.unlinkPlayer(p.id); close(); await loadLinks(); draw(); });
+        } }, "Unlink")) : null,
+      actions(
+        !link && action("🔗", "Link account", (e) => act(e.target, () => linkSheet(p))),
+        p.guest && action("⭐", role.clubId ? "Add to club" : "Keep", (e) => act(e.target, async () => {
+          close();
+          if (role.clubId) await pb.addClubPlayer(role.clubId, p.id); else await pb.keepPlayer(p.id);
+          note(`${p.name} is a regular player now.`);
+          await load();
+        })))]);
+  }
 
   // Someone in line: skip, break, pair, leave.
   function playerSheet(pid, s) {
@@ -557,8 +565,7 @@ async function live(code, role) {
         role.runner && action("👋", "Leave", (e) => {
           if (!confirm(`${p.name} leaves the session?`)) return;
           act(e.target, async () => { close(); busy = true; try { await pb.setHere(v.id, pid, false); await load(); } finally { busy = false; } });
-        })),
-      p.guest && me.manager && guestActions(p, close, role.clubId)];
+        }))];
     });
   }
   // Someone up next: swap, skip, break, or leave their spot empty.
@@ -709,6 +716,37 @@ async function live(code, role) {
   addEventListener("pointercancel", finishDrag);
   view.addEventListener("click", (e) => { if (swallowClick) { e.stopPropagation(); e.preventDefault(); swallowClick = false; } }, true);
 
+  // Everyone in the session with their numbers so far (most wins first); managers manage each (⋯: link, keep).
+  function tallies() {
+    const tally = Object.fromEntries(v.players.map((p) => [p.id, { played: 0, won: 0 }]));
+    for (const m of v.matches.filter((x) => x.ended_at)) {
+      for (const [side, ids] of [["a", m.side_a], ["b", m.side_b]]) {
+        for (const x of ids) {
+          const t = (tally[x] ||= { played: 0, won: 0 });
+          t.played++;
+          if (m.score_a != null && m.score_a !== m.score_b && (side === "a") === (m.score_a > m.score_b)) t.won++;
+        }
+      }
+    }
+    return tally;
+  }
+  function playersCard(title, onlyPlayed = false) {
+    const tally = tallies();
+    const rows = Object.entries(tally).filter(([x, t]) => person(x) && (!onlyPlayed || t.played))
+      .sort(([a, x], [b, y]) => y.won - x.won || y.played - x.played || person(a).name.localeCompare(person(b).name));
+    if (!rows.length) return null;
+    return card(head(title),
+      el("table", { class: "board" },
+        el("thead", {}, el("tr", {}, el("th", {}, "Player"), el("th", {}, "Played"), el("th", {}, "Won"), me.manager && el("th", {}, el("span", { class: "sr-only" }, "Manage")))),
+        el("tbody", {}, ...rows.map(([x, t]) => {
+          const p = person(x);
+          return el("tr", { class: p.here === false ? "left" : null },
+            el("td", {}, face(p), p.guest && el("span", { class: "tag" }, "Guest"), linked[x] && el("span", { class: "tag", title: `Linked to @${linked[x].username}` }, "🔗")),
+            el("td", {}, String(t.played)), el("td", {}, String(t.won)),
+            me.manager && el("td", {}, el("button", { type: "button", class: "icon-btn", "aria-label": `Manage ${p.name}`, onclick: () => manageSheet(p) }, "⋯")));
+        }))));
+  }
+
   function results() {
     const done = v.matches.filter((m) => m.ended_at);
     const tally = {};
@@ -726,14 +764,7 @@ async function live(code, role) {
     stats([[done.length, done.length === 1 ? "match" : "matches"], [rows.length, "players"], [minutesPlayed, "min played"]]);
     return [
       card(head(sessionTitle(v.name, v.club)), el("p", { class: "muted" }, `${v.name && v.club ? `${v.club} · ` : ""}${day(v.started_at)} · ${rot.ALGORITHMS.find((a) => a.id === v.algorithm)?.title || ""} rotation · ${v.courts} court${v.courts > 1 ? "s" : ""}`)),
-      rows.length > 0 && card(head("🏆 Results"),
-        el("table", { class: "board" },
-          el("thead", {}, el("tr", {}, el("th", {}, "Player"), el("th", {}, "Played"), el("th", {}, "Won"))),
-          el("tbody", {}, ...rows.map(([x, t]) => el("tr", {}, el("td", {}, face(person(x)),
-            person(x)?.guest && (me.manager
-              ? el("button", { type: "button", class: "tag guest-btn", "aria-label": `${person(x).name} is a guest: keep or link`, onclick: () => openSheet(face(person(x)), (close) => [guestActions(person(x), close)]) }, "Guest ⋯")
-              : el("span", { class: "tag" }, "Guest"))),
-          el("td", {}, String(t.played)), el("td", {}, String(t.won))))))),
+      playersCard("🏆 Results", true),
       matchList(done.slice().reverse(), "Matches")];
   }
   function matchList(list, title) {
@@ -815,9 +846,11 @@ async function live(code, role) {
           if (confirm("End the session? Matches on court end too.")) act(e.target, async () => { await pb.endSession(v.id); await load(); });
         } }, "End session")));
     }
+    sections.push(playersCard("Players"));
     show(...sections);
   }
 
+  if (me.manager) await loadLinks().catch(() => {});
   if (!(await load())) return;
   if (!v.ended_at) setInterval(poll, 4000);
 }
