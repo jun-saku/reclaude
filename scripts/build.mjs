@@ -132,6 +132,13 @@ const CSP = {
   "base-uri": ["'none'"],
   "form-action": ["'self'"],
 };
+// The nearest folder from `dir` up to (not including) the site root that has its own manifest.webmanifest, or null.
+function ownManifest(dir) {
+  for (let d = dir; relative(OUT, d) && !relative(OUT, d).startsWith(".."); d = dirname(d)) {
+    if (existsSync(join(d, "manifest.webmanifest"))) return d;
+  }
+  return null;
+}
 function addCsp(dir) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, e.name);
@@ -142,16 +149,21 @@ function addCsp(dir) {
     // can install the site as an app: the manifest, icons and the service worker (site/manifest.webmanifest,
     // site/icons/, site/sw.js). It also shows your avatar in the profile icon, if the page has one (shared/me.js).
     // Paths are relative, like everything.
+    // An app with its own manifest.webmanifest (and icons/) next to it, like apps/pickleball/, installs as its own
+    // app instead (its own name, icon and start), still with the site's service worker.
     const up = relative(dirname(full), OUT);
     if (up || e.name !== "404.html") {
       const r = up ? up.split(sep).join("/") + "/" : "./";
-      html = html.replace(/<meta charset="utf-8">/i, (m) => `${m}
-  <link rel="manifest" href="${r}manifest.webmanifest">
-  <link rel="icon" href="${r}icons/favicon-32.png" type="image/png">
-  <link rel="apple-touch-icon" href="${r}icons/apple-touch-icon.png">
+      const own = ownManifest(dirname(full));
+      const m = own ? (relative(dirname(full), own).split(sep).join("/") || ".") + "/" : r;
+      const appTitle = own ? JSON.parse(readFileSync(join(own, "manifest.webmanifest"), "utf8")).short_name : "reclaude";
+      html = html.replace(/<meta charset="utf-8">/i, (m0) => `${m0}
+  <link rel="manifest" href="${m}manifest.webmanifest">
+  <link rel="icon" href="${m}icons/favicon-32.png" type="image/png">
+  <link rel="apple-touch-icon" href="${m}icons/apple-touch-icon.png">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="reclaude">
+  <meta name="apple-mobile-web-app-title" content="${appTitle}">
   <script type="module">import { showMe } from "${r}shared/me.js?v=${version["me.js"]}"; showMe();
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("${r}sw.js").catch(() => {});</script>`);
     }
