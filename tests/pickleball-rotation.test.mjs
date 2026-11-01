@@ -68,10 +68,19 @@ s = r.repick(s, "queue");
 ok(all(s.next) === "ABCD" && !s.next.manual, "pick again: back to the algorithm");
 
 s = r.refresh(r.tidy(r.empty(), P.slice(0, 6)), "queue");
-s = r.setSize(s, "queue", "a", 1);
-ok(s.next.a.length === 1 && s.next.b.length === 2, "one side single: 1 v 2");
+s = r.removeFromNext(s, "queue", "D");
+ok(same(s.next, { a: ["A"], b: ["B", "C"], manual: true }), "take someone out: 1 v 2");
 out = r.startNext(s, "queue");
-ok(same(out.state.size, { a: 2, b: 2 }), "and the match after is doubles again");
+ok(same(out.match, { a: ["A"], b: ["B", "C"] }) && out.state.order[0] === "D", "it starts as 1 v 2; D stays first in line");
+s = r.removeFromNext(r.removeFromNext(s, "queue", "B"), "queue", "C");
+ok(r.startNext(s, "queue").match === null, "a side with nobody can't start");
+s = r.addToNext(s, "queue", "b", "E");
+ok(same(s.next, { a: ["A"], b: ["E"], manual: true }), "put someone on an empty side");
+s = r.addToNext(s, "queue", "b", "F");
+s = r.addToNext(s, "queue", "b", "D");
+ok(same(s.next.b, ["E", "F"]), "two a side at most");
+s = r.addToNext(s, "queue", "a", "E");
+ok(same(s.next, { a: ["A", "E"], b: ["F"], manual: true }), "moving someone to the other side");
 
 s = r.refresh(r.tidy(r.empty(), ["A", "B", "C"]), "queue");
 ok(s.next.a.length === 2 && s.next.b.length === 1, "three here: 2 v 1");

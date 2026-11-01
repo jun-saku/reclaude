@@ -3,7 +3,7 @@
   "name": "Pickleball",
   "short_name": "Pickleball",
   "description": "Court rotation for your pickleball group: who's playing and who's next.",
-  "start_url": "./?app",
+  "start_url": "./?dash&app",
   "scope": "./",
   "display": "standalone",
   "background_color": "#f7f6f3",

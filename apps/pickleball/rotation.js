@@ -3,13 +3,13 @@
 //   state: { order: [ids waiting, first in line first; away players keep their place],
 //            away: [ids on a break], pairs: [[id, id]: play together], skipped: [ids left out of the next pick],
 //            games: { id: matches started }, streak: { id: wins in a row (winners stay) }, stay: [ids] | null (winners
-//            who stay on, as a side), size: { a, b } (players per side for the next match: 2 or 1),
-//            next: { a: [ids], b: [ids], manual } | null (the next match; manual: someone changed it by hand) }
+//            who stay on, as a side),
+//            next: { a: [ids], b: [ids], manual } | null (the next match, 1 or 2 a side; manual: changed by hand) }
 //   tidy(state, here, onCourt)          fits the state to who's here (ids) and who's on a court (ids) now
 //   refresh(state, algorithm)           picks the next match (unless it was changed by hand)
 //   startNext(state, algorithm)         { state, match: { a, b } }: the next match goes on a court
 //   finish(state, algorithm, match, winner)   a match ended ({ a, b }; winner "a", "b" or null): back in line
-//   skip / setAway / pair / unpair / swap / setSize / repick: the overrides
+//   skip / setAway / pair / unpair / swap / addToNext / removeFromNext / repick: the overrides
 export const ALGORITHMS = [
   { id: "fair", title: "Fair", hint: "Whoever has played least goes next." },
   { id: "queue", title: "Queue", hint: "Off the court, back of the line." },
@@ -21,7 +21,7 @@ const uniq = (ids) => [...new Set(ids)];
 const without = (ids, gone) => ids.filter((id) => !gone.includes(id));
 
 export function empty() {
-  return { order: [], away: [], pairs: [], skipped: [], games: {}, streak: {}, stay: null, size: { a: 2, b: 2 }, next: null };
+  return { order: [], away: [], pairs: [], skipped: [], games: {}, streak: {}, stay: null, next: null };
 }
 
 function clean(state) {
@@ -29,7 +29,7 @@ function clean(state) {
   return {
     order: uniq(s.order || []), away: uniq(s.away || []), pairs: (s.pairs || []).filter((p) => Array.isArray(p) && p.length === 2),
     skipped: uniq(s.skipped || []), games: { ...(s.games || {}) }, streak: { ...(s.streak || {}) },
-    stay: s.stay ? [...s.stay] : null, size: { a: s.size?.a === 1 ? 1 : 2, b: s.size?.b === 1 ? 1 : 2 },
+    stay: s.stay ? [...s.stay] : null,
     next: s.next ? { a: [...s.next.a], b: [...s.next.b], manual: !!s.next.manual } : null,
   };
 }
@@ -77,7 +77,7 @@ function sides(s, chosen, size) {
 }
 
 function pick(s, algorithm) {
-  let size = { ...s.size };
+  let size = { a: 2, b: 2 };
   const stay = algorithm === "winners_stay" && s.stay?.length ? s.stay.filter((id) => !s.away.includes(id)) : [];
   if (stay.length) size.a = stay.length;
   const pool = ranked(s, algorithm).filter((id) => !stay.includes(id));
@@ -113,14 +113,13 @@ export function refresh(state, algorithm) {
 
 export function startNext(state, algorithm) {
   const s = refresh(state, algorithm);
-  if (!s.next) return { state: s, match: null };
+  if (!s.next?.a.length || !s.next?.b.length) return { state: s, match: null };
   const match = { a: s.next.a, b: s.next.b };
   const playing = [...match.a, ...match.b];
   s.order = without(s.order, playing);
   for (const id of playing) s.games[id] = (s.games[id] || 0) + 1;
   s.skipped = [];
   s.stay = null;
-  s.size = { a: 2, b: 2 };
   s.next = null;
   return { state: refresh(s, algorithm), match };
 }
@@ -187,12 +186,21 @@ export function swap(state, algorithm, out, inn) {
   s.next = { a: put(a), b: put(b), manual: true };
   return s;
 }
-// Players on a side of the next match: 2 (doubles) or 1.
-export function setSize(state, algorithm, side, n) {
-  const s = clean(state);
-  s.size = { ...s.size, [side]: n === 1 ? 1 : 2 };
-  s.next = null;
-  return refresh(s, algorithm);
+// Takes someone out of the next match (a side may be left empty, to fill by hand).
+export function removeFromNext(state, algorithm, id) {
+  const s = refresh(state, algorithm);
+  if (!s.next) return s;
+  s.next = { a: without(s.next.a, [id]), b: without(s.next.b, [id]), manual: true };
+  return s;
+}
+// Puts someone waiting (or from the other side) on a side of the next match, if it has room (2 a side at most).
+export function addToNext(state, algorithm, side, id) {
+  const s = refresh(state, algorithm);
+  const next = s.next ? { a: without(s.next.a, [id]), b: without(s.next.b, [id]) } : { a: [], b: [] };
+  if (next[side].length >= 2 || s.away.includes(id) || !s.order.includes(id)) return s;
+  next[side] = [...next[side], id];
+  s.next = { ...next, manual: true };
+  return s;
 }
 // Forget changes by hand: the algorithm picks again.
 export function repick(state, algorithm) {

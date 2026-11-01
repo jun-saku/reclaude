@@ -6,6 +6,7 @@
 //   await pb.clubs()                    [{ id, name, players: [ids], managers: [ids] }]       (managers)
 //   await pb.managers()                 [{ id, username, display_name, avatar }]: who can manage (managers)
 //   await pb.sessions()                 open sessions: [{ id, club_id, courts, algorithm, watch_code, started_by, started_at }]
+//   await pb.pastSessions()             the last 20 ended ones, newest first (the same, and ended_at)
 //   await pb.makePlayer(name, icon) / editPlayer(id, name, icon)          the new player's id / nothing
 //   await pb.makeClub(name) / renameClub(club, name) / addClubPlayer(club, player) / removeClubPlayer(club, player)
 //   await pb.addClubManager(club, user) / removeClubManager(club, user)
@@ -56,6 +57,10 @@ const live = {
   sessions() {
     return rows(app.db.from("sessions").select("id, club_id, courts, algorithm, watch_code, started_by, started_at")
       .is("ended_at", null).order("started_at", { ascending: false }));
+  },
+  pastSessions() {
+    return rows(app.db.from("sessions").select("id, club_id, courts, algorithm, watch_code, started_by, started_at, ended_at")
+      .not("ended_at", "is", null).order("ended_at", { ascending: false }).limit(20));
   },
   makePlayer: (name, icon) => rpc("make_player", { name, icon }),
   editPlayer: (player, name, icon) => rpc("edit_player", { player, name, icon }),
@@ -129,6 +134,11 @@ const fake = {
     if (!(await isManager())) return [];
     return db().sessions.filter((s) => !s.ended_at).map(({ id, club_id, courts, algorithm, watch_code, started_by, started_at }) =>
       ({ id, club_id, courts, algorithm, watch_code, started_by, started_at })).reverse();
+  },
+  async pastSessions() {
+    if (!(await isManager())) return [];
+    return db().sessions.filter((s) => s.ended_at).map(({ id, club_id, courts, algorithm, watch_code, started_by, started_at, ended_at }) =>
+      ({ id, club_id, courts, algorithm, watch_code, started_by, started_at, ended_at })).reverse().slice(0, 20);
   },
   async makePlayer(name, icon) {
     const me = await needManager();
@@ -293,6 +303,7 @@ export const players = () => backend().players();
 export const clubs = () => backend().clubs();
 export const managers = () => backend().managers();
 export const sessions = () => backend().sessions();
+export const pastSessions = () => backend().pastSessions();
 export const makePlayer = (name, emoji) => backend().makePlayer(playerName(name), icon(emoji));
 export const editPlayer = (id, name, emoji) => backend().editPlayer(id, playerName(name), icon(emoji));
 export const makeClub = (name) => backend().makeClub(clubName(name));

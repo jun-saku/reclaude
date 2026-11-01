@@ -1,10 +1,10 @@
 // Pickleball (see shared/pickleball.js for the data, ./rotation.js for who plays next). One page, by its address:
-//   ./                 managers: open sessions, clubs and players (everyone else: what this is, and who can use it)
-//   ./?club=<id>       a club: its players and managers
-//   ./?new[=<club>]    start a session (from a club)
-//   ./?s=<id>          run a session: its managers and helpers (courts, next match, the line and its overrides)
+//   ./                 the website's home: what this is, how it works, how to install it
+//   ./?dash            the app's home (where the installed app opens): start a session, live and past sessions, clubs
+//   ./?players         every player;  ./?club=<id>: a club's players and managers;  ./?new[=<club>]: start a session
+//   ./?s=<id>          run a session: its managers and helpers (courts, up next, the line and its overrides)
 //   ./?s=<id>&h=<code> become a helper with the session's helper code (the QR its manager shows)
-//   ./?w=<code>        the live view: anyone with the link, read only
+//   ./?w=<code>        the live view: anyone with the link, read only (an ended session: its results)
 import * as pb from "../../shared/pickleball.js";
 import { CoreError } from "../../shared/core.js";
 import * as rot from "./rotation.js";
@@ -14,7 +14,8 @@ const params = new URLSearchParams(location.search);
 const keep = params.get("backend") === "fake" ? "&backend=fake" : ""; // (the UI tests' stand-in stays on)
 const here = (query = "") => `./?${query}${keep}`.replace("?&", "?").replace(/\?$/, "");
 const view = $("view");
-// Opened as the installed Pickleball app (its manifest starts at ./?app): its home has no ‹ out to reclaude's.
+const show = (...kids) => view.replaceChildren(...kids.flat().filter(Boolean));
+// Opened as the installed Pickleball app (its manifest starts at ./?dash&app): no ‹ out of it from its home.
 const installed = (() => {
   try { if (params.has("app")) sessionStorage.setItem("pickleball-app", "1"); return sessionStorage.getItem("pickleball-app") === "1"; }
   catch { return params.has("app"); }
@@ -34,6 +35,8 @@ function el(tag, attrs = {}, ...kids) {
 }
 const message = (err) => (err instanceof CoreError ? err.message : "Something went wrong. Try again.");
 function showError(err) { $("error").textContent = err ? message(err) : ""; if (err) console.warn(err); }
+let noteTimer;
+function note(text) { $("note").textContent = text; clearTimeout(noteTimer); noteTimer = setTimeout(() => { $("note").textContent = ""; }, 3000); }
 // Runs an action from a button: disables it meanwhile, shows any error.
 async function act(button, fn) {
   if (button) button.disabled = true;
@@ -41,16 +44,20 @@ async function act(button, fn) {
   try { await fn(); } catch (err) { showError(err); }
   if (button) button.disabled = false;
 }
-const ago = (iso) => {
-  const min = Math.max(0, Math.floor((Date.now() - new Date(iso)) / 60000));
-  return min < 1 ? "under a minute" : min < 60 ? `${min} min` : `${Math.floor(min / 60)} h ${min % 60} min`;
-};
+const minutes = (from, to = Date.now()) => Math.max(0, Math.floor((new Date(to) - new Date(from)) / 60000));
+const ago = (iso) => { const m = minutes(iso); return m < 1 ? "just now" : m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`; };
+const day = (iso) => new Date(iso).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
 const card = (...kids) => el("section", { class: "card" }, ...kids);
 const head = (title, ...right) => el("div", { class: "head" }, el("h2", {}, title), ...right);
 const empty = (text) => el("p", { class: "empty" }, text);
+const face = (p) => `${p?.icon || "👤"} ${p?.name || "?"}`;
 function setBack(href, label) { $("back").href = href; $("back").setAttribute("aria-label", label); $("back").hidden = false; }
+function stats(items) {
+  $("stats").hidden = !items;
+  if (items) $("stats").replaceChildren(...items.map(([n, label]) => el("span", { class: "stat" }, el("b", {}, String(n)), label)));
+}
 
-// The sheet: a dialog for a choice, built by fill(form, close). Closes on Cancel or a done action.
+// The sheet: a dialog for a choice, built by fill(close). Closes on Cancel or a done action.
 const sheet = $("sheet");
 function openSheet(title, fill) {
   const form = el("form", { method: "dialog" });
@@ -66,65 +73,105 @@ let me;
 (async () => {
   try {
     me = await pb.me();
-    if (installed) $("back").hidden = true;
     if (params.has("w")) await watchView(params.get("w"));
     else if (params.has("s") && params.has("h")) await joinAsHelper(params.get("s"), params.get("h"));
     else if (params.has("s")) await sessionView(params.get("s"));
-    else if (!me.manager) notManager();
-    else if (params.has("club")) await clubView(params.get("club"));
-    else if (params.has("new")) await newSession(params.get("new"));
-    else await homeView();
+    else if (["dash", "club", "new", "players"].some((k) => params.has(k))) {
+      setBack(installed ? "" : here(), "About Pickleball");
+      if (installed && params.has("dash")) $("back").hidden = true;
+      if (!me.manager) notManager();
+      else if (params.has("club")) await clubView(params.get("club"));
+      else if (params.has("new")) await newSession(params.get("new"));
+      else if (params.has("players")) await playersView();
+      else await dashboard();
+    } else landing();
   } catch (err) {
-    view.replaceChildren(card(empty("Can't load this right now.")));
+    show(card(empty("Can't load this right now.")));
     showError(err);
   }
 })();
 
-function notManager() {
-  view.replaceChildren(card(
-    el("h2", {}, "Court rotation"),
-    el("p", {}, "Who's on court and who's next, for your pickleball group."),
-    el("p", { class: "muted" }, me.account
-      ? "Only pickleball managers start sessions. Ask an admin for the manager role."
-      : "Only pickleball managers start sessions, with an account. Players just open the link they're given."),
-    !me.account && el("a", { class: "button", href: "../profile/" }, "Sign in")));
+// ---------- the website's home ----------
+let installPrompt = null;
+addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); installPrompt = e; $("install-now")?.removeAttribute("hidden"); });
+
+function landing() {
+  const open = me.manager ? el("a", { class: "button", href: here("dash") }, "Open Pickleball")
+    : me.account ? el("p", {}, "You're signed in. Ask an admin for the manager role to run sessions.")
+      : el("a", { class: "button", href: "../profile/" }, "Sign in to run sessions");
+  const feature = (em, title, text) => el("div", { class: "feature" }, el("span", { class: "em", "aria-hidden": "true" }, em), el("b", {}, title), el("span", {}, text));
+  show(
+    el("section", { class: "card hero" },
+      el("img", { src: "./icons/icon-192.png", alt: "" }),
+      el("h2", {}, "Court rotation, sorted"),
+      el("p", {}, "Who's on court, who's next and who's waiting, for your pickleball group. No more arguing over the paddle stack."),
+      open),
+    card(el("h2", {}, "How it works"),
+      el("ol", { class: "steps" },
+        el("li", {}, el("span", {}, el("b", {}, "Make a club. "), "Add the people you play with: a name and an emoji, no accounts needed.")),
+        el("li", {}, el("span", {}, el("b", {}, "Start a session. "), "Pick the courts and the rotation, tick who's here and add any guests.")),
+        el("li", {}, el("span", {}, el("b", {}, "Play. "), "When a court frees up, tap to put the next match on it. Everyone else waits in line.")),
+        el("li", {}, el("span", {}, el("b", {}, "Share. "), "Send the live link so everyone sees who's next, and show the helper QR to whoever helps run the courts.")))),
+    card(el("h2", {}, "Features"),
+      el("div", { class: "features" },
+        feature("⚖️", "Fair rotation", "Whoever's played least goes next, or a simple queue, or winners stay."),
+        feature("🔁", "Your call", "Skip someone, give them a break, pair partners or swap anyone in."),
+        feature("📺", "Live view", "Anyone with the link sees the courts and the line, updated by itself."),
+        feature("🙋", "Helpers", "A QR lets someone else run the courts while you play."),
+        feature("⏱️", "Times and scores", "Match times are kept; scores if you want them."),
+        feature("🏆", "Results", "Each session ends with who played and who won."))),
+    card(el("h2", {}, "Install it"),
+      el("p", {}, "Pickleball works as its own app on your phone:"),
+      el("ul", { class: "steps" },
+        el("li", {}, el("span", {}, el("b", {}, "iPhone: "), "Open this page in Safari, tap Share, then Add to Home Screen.")),
+        el("li", {}, el("span", {}, el("b", {}, "Android: "), "Open the browser menu and tap Install app."))),
+      el("button", { type: "button", id: "install-now", hidden: !installPrompt, onclick: async () => {
+        if (!installPrompt) return;
+        installPrompt.prompt();
+        installPrompt = null;
+        $("install-now").hidden = true;
+      } }, "Install Pickleball")),
+    el("p", { class: "hint" }, "Players don't need anything: the manager shares a live link."));
 }
 
-// ---------- managers: home ----------
-async function homeView() {
-  const [sessions, clubs, players] = await Promise.all([pb.sessions(), pb.clubs(), pb.players()]);
-  const clubName = (id) => clubs.find((c) => c.id === id)?.name || "Session";
+function notManager() {
+  show(card(el("h2", {}, "Managers only"),
+    el("p", {}, me.account ? "Only pickleball managers run sessions. Ask an admin for the manager role."
+      : "Only pickleball managers run sessions, signed in to their account. Players just open the live link they're given."),
+    !me.account && el("a", { class: "button", href: "../profile/" }, "Sign in"),
+    el("a", { class: "button secondary", href: here() }, "About Pickleball")));
+}
+
+// ---------- the app's home (managers) ----------
+const runs = (s, clubs) => s.started_by === me.id || !!clubs.find((c) => c.id === s.club_id)?.managers.includes(me.id);
+
+async function dashboard() {
+  const [sessions, past, clubs, players] = await Promise.all([pb.sessions(), pb.pastSessions(), pb.clubs(), pb.players()]);
+  const clubName = (id) => clubs.find((c) => c.id === id)?.name || "Pickup session";
   const mine = sessions.filter((s) => runs(s, clubs));
-
-  const playerName = el("input", { placeholder: "Name", maxlength: 24, "aria-label": "New player's name" });
-  const playerIcon = el("input", { class: "emoji", placeholder: "👤", maxlength: 8, "aria-label": "New player's icon (an emoji)" });
   const clubInput = el("input", { placeholder: "Club name", maxlength: 40, "aria-label": "New club's name" });
+  stats([[mine.length, mine.length === 1 ? "live session" : "live sessions"], [clubs.length, clubs.length === 1 ? "club" : "clubs"], [players.length, players.length === 1 ? "player" : "players"]]);
 
-  view.replaceChildren(
-    card(head("Sessions"),
-      mine.length ? el("div", { class: "list" }, ...mine.map((s) => el("a", { class: "item", href: here(`s=${s.id}`) },
-        el("span", { class: "who" }, clubName(s.club_id)), el("span", { class: "meta" }, `${s.courts} court${s.courts > 1 ? "s" : ""} · ${ago(s.started_at)}`))))
-        : empty("No session running."),
-      el("a", { class: "button", href: here("new") }, "Start a session")),
+  show(
+    el("a", { class: "button big-start", href: here("new") }, "🏓 Start a session"),
+    mine.length > 0 && card(head("Live now"),
+      el("div", { class: "list" }, ...mine.map((s) => el("a", { class: "item", href: here(`s=${s.id}`) },
+        el("span", { class: "who" }, el("span", { class: "live-dot", "aria-hidden": "true" }), clubName(s.club_id)),
+        el("span", { class: "meta" }, `${s.courts} court${s.courts > 1 ? "s" : ""} · ${ago(s.started_at)}`))))),
     card(head("Clubs"),
       clubs.length ? el("div", { class: "list" }, ...clubs.map((c) => el("a", { class: "item", href: here(`club=${c.id}`) },
         el("span", { class: "who" }, c.name), el("span", { class: "meta" }, `${c.players.length} player${c.players.length === 1 ? "" : "s"}`))))
-        : empty("No clubs yet. A club is a list of players you play with."),
+        : empty("No clubs yet. A club is the list of people you play with."),
       el("div", { class: "form" }, clubInput, el("button", { type: "button", class: "secondary", onclick: (e) => act(e.target, async () => {
         const id = await pb.makeClub(clubInput.value);
         location.assign(here(`club=${id}`));
       }) }, "Add"))),
-    card(head(`Players (${players.length})`),
-      players.length ? el("div", { class: "list" }, ...players.map((p) => playerRow(p, () => homeView())))
-        : empty("No players yet."),
-      el("div", { class: "form" }, playerIcon, playerName, el("button", { type: "button", class: "secondary", onclick: (e) => act(e.target, async () => {
-        await pb.makePlayer(playerName.value, playerIcon.value);
-        await homeView();
-      }) }, "Add"))));
+    card(head("Past sessions"),
+      past.length ? el("div", { class: "list" }, ...past.slice(0, 10).map((s) => el("a", { class: "item", href: here(`w=${s.watch_code}`) },
+        el("span", { class: "who" }, clubName(s.club_id)), el("span", { class: "meta" }, day(s.started_at)))))
+        : empty("Finished sessions and their results show up here.")),
+    el("a", { class: "button secondary", href: here("players") }, `All players (${players.length})`));
 }
-
-const runs = (s, clubs) => s.started_by === me.id || !!clubs.find((c) => c.id === s.club_id)?.managers.includes(me.id);
-const face = (p) => `${p?.icon || "👤"} ${p?.name || "?"}`;
 
 // A player in a list, with Edit (and whatever else `extra` adds).
 function playerRow(p, done, ...extra) {
@@ -136,35 +183,51 @@ function playerRow(p, done, ...extra) {
   }) }, "✏️");
   return el("div", { class: "item" }, el("span", { class: "who" }, face(p)), ...extra, edit);
 }
+const newPlayerForm = (label, onAdd) => {
+  const name = el("input", { placeholder: "Name", maxlength: 24, "aria-label": `${label}'s name` });
+  const icon = el("input", { class: "emoji", placeholder: "👤", maxlength: 8, "aria-label": `${label}'s icon (an emoji)` });
+  return el("div", { class: "form" }, icon, name, el("button", { type: "button", class: "secondary", onclick: (e) => act(e.target, async () => {
+    const id = await pb.makePlayer(name.value, icon.value);
+    await onAdd(id, { id, name: name.value.trim(), icon: icon.value.trim() || "👤" });
+    name.value = ""; icon.value = "";
+  }) }, "Add"));
+};
 
-// ---------- managers: a club ----------
+async function playersView() {
+  setBack(here("dash"), "Pickleball home");
+  const players = await pb.players();
+  show(card(head(`Players (${players.length})`),
+    players.length ? el("div", { class: "list" }, ...players.map((p) => playerRow(p, playersView))) : empty("No players yet."),
+    newPlayerForm("New player", () => playersView()),
+    el("p", { class: "hint" }, "Players don't need an account: a name and an emoji is enough.")));
+}
+
+// ---------- a club ----------
 async function clubView(id) {
-  setBack(here(), "Pickleball");
+  setBack(here("dash"), "Pickleball home");
   const [clubs, players, managers] = await Promise.all([pb.clubs(), pb.players(), pb.managers()]);
   const club = clubs.find((c) => c.id === id);
-  if (!club) { view.replaceChildren(card(empty("There's no such club."))); return; }
+  if (!club) { show(card(empty("There's no such club."))); return; }
   const mine = club.managers.includes(me.id);
   const reload = () => clubView(id);
   const members = players.filter((p) => club.players.includes(p.id));
   const others = players.filter((p) => !club.players.includes(p.id));
   const manager = (uid) => managers.find((m) => m.id === uid);
   const managerName = (m) => (m ? `${m.avatar || "👤"} ${m.display_name || m.username} (@${m.username})` : "Someone");
-
   const pickPlayer = el("select", { "aria-label": "Player to add" }, ...others.map((p) => el("option", { value: p.id }, face(p))));
-  const newName = el("input", { placeholder: "Name", maxlength: 24, "aria-label": "New player's name" });
-  const newIcon = el("input", { class: "emoji", placeholder: "👤", maxlength: 8, "aria-label": "New player's icon (an emoji)" });
   const pickManager = el("select", { "aria-label": "Manager to add" },
     ...managers.filter((m) => !club.managers.includes(m.id)).map((m) => el("option", { value: m.id }, managerName(m))));
+  stats([[members.length, members.length === 1 ? "player" : "players"], [club.managers.length, club.managers.length === 1 ? "manager" : "managers"]]);
 
-  view.replaceChildren(
+  show(
     card(head(club.name, mine && el("button", { type: "button", class: "secondary", onclick: () => openSheet("Rename the club", (close) => {
       const name = el("input", { value: club.name, maxlength: 40, "aria-label": "Club name" });
       return [el("div", { class: "form" }, name),
         el("button", { type: "button", onclick: (e) => act(e.target, async () => { await pb.renameClub(id, name.value); close(); await reload(); }) }, "Save")];
     }) }, "Rename")),
-      mine ? el("a", { class: "button", href: here(`new=${id}`) }, "Start a session")
-        : empty("Only this club's managers can change it or start its sessions.")),
-    card(head(`Players (${members.length})`),
+    mine ? el("a", { class: "button big-start", href: here(`new=${id}`) }, "🏓 Start a session")
+      : empty("Only this club's managers can change it or start its sessions.")),
+    card(head("Players"),
       members.length ? el("div", { class: "list" }, ...members.map((p) => playerRow(p, reload,
         mine && el("button", { type: "button", class: "icon-btn", "aria-label": `Remove ${p.name} from the club`, onclick: (e) => act(e.target, async () => {
           await pb.removeClubPlayer(id, p.id); await reload();
@@ -172,10 +235,7 @@ async function clubView(id) {
       mine && others.length > 0 && el("div", { class: "form" }, pickPlayer, el("button", { type: "button", class: "secondary", onclick: (e) => act(e.target, async () => {
         await pb.addClubPlayer(id, pickPlayer.value); await reload();
       }) }, "Add")),
-      mine && el("div", { class: "form" }, newIcon, newName, el("button", { type: "button", class: "secondary", onclick: (e) => act(e.target, async () => {
-        const pid = await pb.makePlayer(newName.value, newIcon.value);
-        await pb.addClubPlayer(id, pid); await reload();
-      }) }, "New"))),
+      mine && newPlayerForm("New player", async (pid) => { await pb.addClubPlayer(id, pid); await reload(); })),
     card(head("Managers"),
       el("div", { class: "list" }, ...club.managers.map((uid) => el("div", { class: "item" },
         el("span", { class: "who" }, managerName(manager(uid))),
@@ -187,9 +247,9 @@ async function clubView(id) {
       el("p", { class: "hint" }, "Managers are accounts with the pickleball manager role.")));
 }
 
-// ---------- managers: start a session ----------
+// ---------- start a session ----------
 async function newSession(clubId) {
-  setBack(clubId ? here(`club=${clubId}`) : here(), clubId ? "Club" : "Pickleball");
+  setBack(clubId ? here(`club=${clubId}`) : here("dash"), clubId ? "Club" : "Pickleball home");
   const [clubs, players] = await Promise.all([pb.clubs(), pb.players()]);
   const mine = clubs.filter((c) => c.managers.includes(me.id));
   let club = mine.find((c) => c.id === clubId) || null;
@@ -200,8 +260,7 @@ async function newSession(clubId) {
   const clubSelect = el("select", { "aria-label": "Club", onchange: () => {
     club = mine.find((c) => c.id === clubSelect.value) || null;
     chosen.clear();
-    for (const p of club?.players || []) chosen.add(p);
-    for (const g of guests) chosen.add(g);
+    for (const p of [...(club?.players || []), ...guests]) chosen.add(p);
     drawPlayers();
   } }, el("option", { value: "" }, "No club"), ...mine.map((c) => el("option", { value: c.id, selected: c.id === club?.id }, c.name)));
   const courtSelect = el("select", { "aria-label": "Courts", onchange: () => { courts = Number(courtSelect.value); } },
@@ -218,36 +277,28 @@ async function newSession(clubId) {
   const list = el("div", { class: "list" });
   const count = el("h2");
   const drawPlayers = () => {
-    const inClub = club ? players.filter((p) => club.players.includes(p.id) || guests.includes(p.id)) : players.filter((p) => chosen.has(p.id) || guests.includes(p.id));
-    const rest = players.filter((p) => !inClub.includes(p));
+    const shown = players.filter((p) => (club ? club.players.includes(p.id) : chosen.has(p.id)) || guests.includes(p.id));
+    const rest = players.filter((p) => !shown.includes(p));
     const row = (p) => el("label", { class: "check" }, el("input", { type: "checkbox", checked: chosen.has(p.id),
       onchange: (e) => { if (e.target.checked) chosen.add(p.id); else chosen.delete(p.id); count.textContent = `Who's playing (${chosen.size})`; } }),
     el("span", { class: "who" }, face(p)));
-    list.replaceChildren(...(inClub.length ? inClub.map(row) : [empty(club ? "This club has no players yet." : "Tick who's playing, or add guests.")]),
+    list.replaceChildren(...(shown.length ? shown.map(row) : [empty(club ? "This club has no players yet." : "Tick who's playing, or add guests.")]),
       ...(rest.length ? [el("details", {}, el("summary", { class: "check" }, `Other players (${rest.length})`), el("div", { class: "list" }, ...rest.map(row)))] : []));
     count.textContent = `Who's playing (${chosen.size})`;
   };
   drawPlayers();
-  const guestName = el("input", { placeholder: "Guest's name", maxlength: 24, "aria-label": "Guest's name" });
-  const guestIcon = el("input", { class: "emoji", placeholder: "👤", maxlength: 8, "aria-label": "Guest's icon (an emoji)" });
 
-  view.replaceChildren(
+  show(
     card(head("Start a session"),
       el("label", { class: "field" }, "Club", clubSelect),
       el("label", { class: "field" }, "Courts", courtSelect),
       algoSeg, algoHint),
-    card(count, list,
-      el("div", { class: "form" }, guestIcon, guestName, el("button", { type: "button", class: "secondary", onclick: (e) => act(e.target, async () => {
-        const id = await pb.makePlayer(guestName.value, guestIcon.value);
-        players.push({ id, name: guestName.value.trim(), icon: guestIcon.value.trim() || "👤" });
-        guests.push(id); chosen.add(id);
-        guestName.value = ""; guestIcon.value = "";
-        drawPlayers();
-      }) }, "Add guest"))),
-    el("button", { type: "button", onclick: (e) => act(e.target, async () => {
+    card(count, list, el("p", { class: "muted" }, "A guest plays today without joining the club:"),
+      newPlayerForm("Guest", async (id, p) => { players.push(p); guests.push(id); chosen.add(id); drawPlayers(); })),
+    el("button", { type: "button", class: "big-start", onclick: (e) => act(e.target, async () => {
       const id = await pb.startSession({ club: club?.id || null, courts, algorithm, players: [...chosen] });
       location.assign(here(`s=${id}`));
-    }) }, "Start session"));
+    }) }, "🏓 Start session"));
 }
 
 // ---------- a session: run it (managers, helpers) or watch it ----------
@@ -258,14 +309,14 @@ const store = {
 };
 
 async function joinAsHelper(id, code) {
-  view.replaceChildren(card(el("p", { class: "hint" }, "Joining as a helper…")));
+  show(card(el("p", { class: "hint" }, "Joining as a helper…")));
   const watchCode = await pb.becomeHelper(id, code);
   store.set(helperKey(id), watchCode);
   location.replace(here(`s=${id}`));
 }
 
 async function sessionView(id) {
-  setBack(here(), "Pickleball");
+  setBack(me.manager ? here("dash") : here(), me.manager ? "Pickleball home" : "About Pickleball");
   let watchCode = null, runner = false;
   if (me.manager) {
     const [sessions, clubs] = await Promise.all([pb.sessions(), pb.clubs()]);
@@ -274,41 +325,42 @@ async function sessionView(id) {
   }
   watchCode ||= store.get(helperKey(id));
   if (!watchCode) {
-    view.replaceChildren(card(el("h2", {}, "Helping out?"), el("p", {}, "Scan the helper QR on the manager's phone to run the courts and the line.")));
+    show(card(el("h2", {}, "Helping out?"), el("p", {}, "Scan the helper QR on the manager's phone to run the courts and the line.")));
     return;
   }
-  await live(watchCode, { id, runner, helper: true });
+  await live(watchCode, { runner, helper: true });
 }
 
 async function watchView(code) {
-  if (me?.manager) setBack(here(), "Pickleball");
+  setBack(me?.manager ? here("dash") : here(), me?.manager ? "Pickleball home" : "About Pickleball");
   await live(code, { helper: false, runner: false });
 }
 
-// Shows the session for its watch code, refreshing every few seconds; helpers and runners also get the controls.
+// The session for its watch code, refreshed every few seconds; helpers and runners also get the controls.
 async function live(code, role) {
   let v = null;
   let busy = false;
   async function load() {
     const next = await pb.watch(code);
-    if (!next) { view.replaceChildren(card(empty("This link doesn't work. Ask for a new one."))); return false; }
+    if (!next) { show(card(empty("This link doesn't work. Ask for a new one."))); return false; }
     v = next;
     draw();
     return true;
   }
   async function poll() {
     if (busy || sheet.open || document.hidden) return;
-    try { const before = v?.version; const now = await pb.watch(code); if (now && (now.version !== before || !v)) { v = now; draw(); } else if (now) draw(); } catch {}
+    try { const now = await pb.watch(code); if (now) { v = now; draw(); } } catch {}
   }
 
-  // The queue state as the page sees it now: who's here and on a court, then the next match picked.
+  // The line as the page sees it now: who's here and on a court, then up next.
   const herePlayers = () => v.players.filter((p) => p.here).map((p) => p.id);
   const open = () => v.matches.filter((m) => !m.ended_at);
   const onCourt = () => open().flatMap((m) => [...m.side_a, ...m.side_b]);
   const state = () => rot.refresh(rot.tidy(v.state, herePlayers(), onCourt()), v.algorithm);
   const person = (pid) => v.players.find((p) => p.id === pid);
-  const names = (ids) => ids.map((pid) => face(person(pid))).join(" & ");
   const canEdit = () => role.helper && !v.ended_at;
+  const chip = (pid, attrs = {}, tag = "span", ...extra) => el(tag, { class: "pchip", ...attrs },
+    el("span", { "aria-hidden": "true" }, person(pid)?.icon || "👤"), el("span", { class: "name" }, person(pid)?.name || "?"), ...extra);
 
   // Saves a change to the line on the latest version (`change` gets the state and returns the new one).
   async function save(change, action, detail = null) {
@@ -326,7 +378,7 @@ async function live(code, role) {
         await load();
         const before = state();
         const { state: after, match } = rot.startNext(before, v.algorithm);
-        if (!match) return;
+        if (!match) throw new CoreError("Each side needs at least one player.");
         await pb.saveState(v.id, v.version, after, "started match", { court });
         try { await pb.startMatch(v.id, court, match.a, match.b); } catch (err) {
           await load();
@@ -337,19 +389,23 @@ async function live(code, role) {
       } finally { busy = false; }
     });
   }
+  const sideLines = (ids) => ids.map((x) => el("span", { class: "who" }, face(person(x))));
   function endMatchSheet(m) {
     openSheet(`End court ${m.court}`, (close) => {
       let winner = null;
-      const a = el("input", { type: "number", inputmode: "numeric", min: 0, max: 99, "aria-label": "Score, side 1" });
-      const b = el("input", { type: "number", inputmode: "numeric", min: 0, max: 99, "aria-label": "Score, side 2" });
+      const a = el("input", { type: "number", inputmode: "numeric", min: 0, max: 99, placeholder: "–", "aria-label": "Score, left side" });
+      const b = el("input", { type: "number", inputmode: "numeric", min: 0, max: 99, placeholder: "–", "aria-label": "Score, right side" });
       const seg = el("div", { class: "seg", role: "group", "aria-label": "Who won?" });
-      const drawSeg = () => seg.replaceChildren(...[["a", names(m.side_a)], ["b", names(m.side_b)], [null, "Skip"]].map(([k, text]) =>
-        el("button", { type: "button", "aria-pressed": String(winner === k), onclick: () => { winner = k; drawSeg(); } }, text)));
+      const drawSeg = () => seg.replaceChildren(...[["a", m.side_a], ["b", m.side_b]].map(([k, ids]) =>
+        el("button", { type: "button", "aria-pressed": String(winner === k), onclick: () => { winner = winner === k ? null : k; drawSeg(); } },
+          el("span", { class: "list" }, ...sideLines(ids)))));
       drawSeg();
       const sync = () => { const x = a.value, y = b.value; if (x !== "" && y !== "" && x !== y) { winner = Number(x) > Number(y) ? "a" : "b"; drawSeg(); } };
       a.addEventListener("input", sync); b.addEventListener("input", sync);
-      return [el("p", { class: "muted" }, "Who won? (optional)"), seg,
-        el("div", { class: "scores" }, el("label", {}, "Side 1", a), el("label", {}, "Side 2", b)),
+      return [el("p", { class: "muted" }, "Who won? Both optional: tap the winners, or enter the score."), seg,
+        el("div", { class: "scores" },
+          el("label", {}, el("span", {}, "Left"), a),
+          el("label", {}, el("span", {}, "Right"), b)),
         el("button", { type: "button", onclick: (e) => act(e.target, async () => {
           busy = true;
           try {
@@ -360,6 +416,7 @@ async function live(code, role) {
         }) }, "End match")];
     });
   }
+  // Someone in line: skip, break, pair, put up next, leave.
   function playerSheet(pid, s) {
     const p = person(pid);
     const partner = s.pairs.find((x) => x.includes(pid))?.find((x) => x !== pid);
@@ -383,18 +440,32 @@ async function live(code, role) {
       ];
     });
   }
-  function swapSheet(pid, s) {
+  // Someone up next: swap them for someone, or take them out.
+  function nextSheet(pid, s) {
     const inNext = [...s.next.a, ...s.next.b];
     const choices = [...s.order.filter((x) => !inNext.includes(x) && !s.away.includes(x)), ...inNext.filter((x) => x !== pid)];
-    openSheet(`Instead of ${person(pid)?.name}`, (close) => {
+    openSheet(face(person(pid)), (close) => {
       const pick = el("select", { "aria-label": "Who plays instead" }, ...choices.map((x) => el("option", { value: x }, face(person(x)))));
-      return [choices.length ? el("div", { class: "form" }, pick, el("button", { type: "button", onclick: (e) => act(e.target, async () => {
+      return [choices.length > 0 && el("div", { class: "form" }, pick, el("button", { type: "button", onclick: (e) => act(e.target, async () => {
         const x = pick.value; close(); await save((st) => rot.swap(st, v.algorithm, pid, x), "swapped", { out: pid, in: x });
-      }) }, "Swap")) : empty("Nobody else is waiting.")];
+      }) }, "Swap")),
+      el("button", { type: "button", class: "secondary", onclick: (e) => act(e.target, async () => {
+        close(); await save((st) => rot.removeFromNext(st, v.algorithm, pid), "took out", { player: pid });
+      }) }, "Take out of this match")];
     });
   }
+  // An empty spot up next: whoever's waiting.
+  function slotSheet(side, s) {
+    const inNext = s.next ? [...s.next.a, ...s.next.b] : [];
+    const choices = s.order.filter((x) => !s.away.includes(x) && !inNext.includes(x));
+    openSheet("Who plays here?", (close) => [choices.length
+      ? el("div", { class: "list" }, ...choices.map((x) => el("button", { type: "button", class: "item", onclick: (e) => act(e.target, async () => {
+        close(); await save((st) => rot.addToNext(st, v.algorithm, side, x), "put in", { player: x, side });
+      }) }, el("span", { class: "who" }, face(person(x))), el("span", { class: "meta" }, `${s.games[x] || 0} played`))))
+      : empty("Nobody else is waiting.")]);
+  }
   function sessionSheet() {
-    openSheet("Session", (close) => {
+    openSheet("Settings", (close) => {
       const courts = el("select", { "aria-label": "Courts" }, ...Array.from({ length: 12 }, (_, i) => el("option", { value: i + 1, selected: i + 1 === v.courts }, String(i + 1))));
       let algorithm = v.algorithm;
       const seg = el("div", { class: "seg", role: "group", "aria-label": "Rotation" });
@@ -411,16 +482,11 @@ async function live(code, role) {
     const all = await pb.players();
     const ids = new Set(v.players.filter((p) => p.here).map((p) => p.id));
     const rest = all.filter((p) => !ids.has(p.id));
-    openSheet("Add players", (close) => {
-      const name = el("input", { placeholder: "Guest's name", maxlength: 24, "aria-label": "Guest's name" });
-      const icon = el("input", { class: "emoji", placeholder: "👤", maxlength: 8, "aria-label": "Guest's icon (an emoji)" });
-      const add = (pid) => act(null, async () => { close(); busy = true; try { await pb.setHere(v.id, pid, true); await load(); } finally { busy = false; } });
-      return [rest.length > 0 && el("div", { class: "list" }, ...rest.map((p) => el("button", { type: "button", class: "item", onclick: () => add(p.id) },
-        el("span", { class: "who" }, face(p)), el("span", { class: "meta" }, "Add")))),
-      el("div", { class: "form" }, icon, name, el("button", { type: "button", class: "secondary", onclick: (e) => act(e.target, async () => {
-        const pid = await pb.makePlayer(name.value, icon.value); await add(pid);
-      }) }, "Add guest"))];
-    });
+    const add = (pid) => act(null, async () => { busy = true; try { await pb.setHere(v.id, pid, true); await load(); } finally { busy = false; } });
+    openSheet("Add players", (close) => [rest.length > 0 && el("div", { class: "list" }, ...rest.map((p) => el("button", { type: "button", class: "item", onclick: () => { close(); add(p.id); } },
+      el("span", { class: "who" }, face(p)), el("span", { class: "meta" }, "Add")))),
+    el("p", { class: "muted" }, "Or a guest:"),
+    newPlayerForm("Guest", async (pid) => { close(); await add(pid); })]);
   }
   async function helperSheet() {
     const code = await pb.helperCode(v.id);
@@ -441,86 +507,117 @@ async function live(code, role) {
   async function share(url, title) {
     if (navigator.share) { try { await navigator.share({ title, url }); return; } catch (err) { if (err?.name === "AbortError") return; } }
     await navigator.clipboard.writeText(url);
-    showError(new CoreError("Link copied."));
+    note("Link copied.");
+  }
+
+  // A court: two halves, players (or slots) on each.
+  function court(left, right, { next = false, freeText = null } = {}) {
+    return el("div", { class: `court${next ? " next" : ""}` },
+      el("div", { class: "half a" }, ...left), el("div", { class: "net", "aria-hidden": "true" }), el("div", { class: "half b" }, ...right),
+      freeText && el("div", { class: "free" }, el("span", {}, freeText)));
+  }
+
+  function results() {
+    const done = v.matches.filter((m) => m.ended_at);
+    const tally = {};
+    for (const m of done) {
+      for (const [side, ids] of [["a", m.side_a], ["b", m.side_b]]) {
+        for (const x of ids) {
+          const t = (tally[x] ||= { played: 0, won: 0 });
+          t.played++;
+          if (m.score_a != null && m.score_a !== m.score_b && (side === "a") === (m.score_a > m.score_b)) t.won++;
+        }
+      }
+    }
+    const rows = Object.entries(tally).sort(([, x], [, y]) => y.won - x.won || y.played - x.played);
+    const minutesPlayed = done.reduce((n, m) => n + minutes(m.started_at, m.ended_at), 0);
+    stats([[done.length, done.length === 1 ? "match" : "matches"], [rows.length, "players"], [minutesPlayed, "min played"]]);
+    return [
+      card(head(v.club || "Pickup session"), el("p", { class: "muted" }, `${day(v.started_at)} · ${rot.ALGORITHMS.find((a) => a.id === v.algorithm)?.title || ""} rotation · ${v.courts} court${v.courts > 1 ? "s" : ""}`)),
+      rows.length > 0 && card(head("🏆 Results"),
+        el("table", { class: "board" },
+          el("thead", {}, el("tr", {}, el("th", {}, "Player"), el("th", {}, "Played"), el("th", {}, "Won"))),
+          el("tbody", {}, ...rows.map(([x, t]) => el("tr", {}, el("td", {}, face(person(x))), el("td", {}, String(t.played)), el("td", {}, String(t.won)))))),
+        el("p", { class: "hint" }, "Wins count matches with a score.")),
+      matchList(done.slice().reverse(), "Matches")];
+  }
+  function matchList(list, title) {
+    if (!list.length) return null;
+    return card(head(title), el("div", { class: "results" }, ...list.flatMap((m, i) => {
+      const scored = m.score_a != null;
+      const winA = scored && m.score_a > m.score_b, winB = scored && m.score_b > m.score_a;
+      return [i > 0 && el("div", { class: "divider" }),
+        el("div", { class: `sideList${winA ? " won" : ""}` }, ...m.side_a.map((x) => el("span", {}, face(person(x))))),
+        el("div", { class: "score" }, scored ? `${m.score_a}–${m.score_b}` : "vs"),
+        el("div", { class: `sideList right${winB ? " won" : ""}` }, ...m.side_b.map((x) => el("span", {}, face(person(x)))))].filter(Boolean);
+    })));
   }
 
   function draw() {
+    if (v.ended_at) { show(...results()); return; }
     const s = state();
-    const status = $("status");
-    status.hidden = false;
-    status.textContent = (v.club && !role.runner ? `${v.club}: ` : "") + (v.ended_at ? "This session has ended"
-      : `${onCourt().length} playing · ${s.order.filter((x) => !s.away.includes(x)).length} waiting`);
+    const waiting = s.order.filter((x) => !s.away.includes(x)).length;
+    stats([[onCourt().length, "playing"], [waiting, "waiting"], [v.courts, v.courts === 1 ? "court" : "courts"]]);
     const sections = [];
 
     // Courts
     for (let c = 1; c <= v.courts; c++) {
       const m = open().find((x) => x.court === c);
-      sections.push(el("section", { class: "card court" },
-        head(`Court ${c}`, el("span", { class: "meta muted" }, m ? ago(m.started_at) : "")),
-        m ? el("div", { class: "vs" }, el("div", { class: "side" }, ...m.side_a.map((x) => el("span", {}, face(person(x))))),
-          el("span", { class: "muted" }, "vs"), el("div", { class: "side" }, ...m.side_b.map((x) => el("span", {}, face(person(x))))))
-          : el("p", { class: "free" }, v.ended_at ? "—" : "Free"),
+      sections.push(card(
+        el("div", { class: "court-head" }, el("h2", {}, "Court", el("span", { class: "court-no" }, String(c))),
+          m && el("span", { class: "timer" }, el("span", { class: "live-dot", "aria-hidden": "true" }), ago(m.started_at))),
+        m ? court(m.side_a.map((x) => chip(x)), m.side_b.map((x) => chip(x))) : court([], [], { freeText: "Free" }),
         canEdit() && (m ? el("button", { type: "button", class: "secondary", onclick: () => endMatchSheet(m) }, "End match")
-          : s.next && el("button", { type: "button", onclick: (e) => startOn(c, e.target) }, "Start next match here"))));
+          : s.next?.a.length && s.next?.b.length && el("button", { type: "button", onclick: (e) => startOn(c, e.target) }, "Start next match here"))));
     }
 
-    // Next match
-    if (!v.ended_at) {
-      const nextSide = (ids, side) => el("div", { class: "side" }, ...ids.map((x) => canEdit()
-        ? el("button", { type: "button", "aria-label": `Swap ${person(x)?.name}`, onclick: () => swapSheet(x, s) }, face(person(x)))
-        : el("span", {}, face(person(x)))),
-      canEdit() && el("button", { type: "button", class: "secondary", "aria-label": ids.length === 2 ? `Side ${side === "a" ? 1 : 2}: one player` : `Side ${side === "a" ? 1 : 2}: two players`,
-        onclick: (e) => act(e.target, () => save((st) => rot.setSize(st, v.algorithm, side, ids.length === 2 ? 1 : 2), "changed sides")) },
-      ids.length === 2 ? "Make single" : "Make double"));
-      sections.push(card(head("Next match", s.next?.manual ? el("span", { class: "tag" }, "Changed") : null),
-        s.next ? el("div", { class: "vs" }, nextSide(s.next.a, "a"), el("span", { class: "muted" }, "vs"), nextSide(s.next.b, "b"))
-          : empty("Waiting for at least two players."),
-        canEdit() && s.next && el("p", { class: "hint" }, "Tap a name to swap someone in."),
-        canEdit() && s.next?.manual && el("button", { type: "button", class: "secondary", onclick: (e) => act(e.target, () => save((st) => rot.repick(st, v.algorithm), "picked again")) }, "Pick again")));
-    }
+    // Up next: tap someone to swap or take them out; tap an empty spot to put someone in (1 or 2 a side).
+    const sideOf = (side) => {
+      const ids = s.next?.[side] || [];
+      const chips = ids.map((x) => (canEdit() ? chip(x, { type: "button", "aria-label": `${person(x)?.name}: swap or take out`, onclick: () => nextSheet(x, s) }, "button", el("span", { class: "x", "aria-hidden": "true" }, "⇄"))
+        : chip(x)));
+      const slots = canEdit() ? Array.from({ length: 2 - ids.length }, () => el("button", { type: "button", class: "slot", onclick: () => slotSheet(side, s) }, "+ Add")) : [];
+      return [...chips, ...slots];
+    };
+    sections.push(el("section", { class: "card upnext" },
+      el("div", { class: "head" }, el("h2", {}, "Up next"), s.next?.manual && el("span", { class: "tag" }, "Changed by hand")),
+      s.next || canEdit() ? court(sideOf("a"), sideOf("b"), { next: true }) : empty("Waiting for at least two players."),
+      canEdit() && el("p", { class: "hint" }, "Tap a player to swap them, or an empty spot to add someone."),
+      canEdit() && s.next?.manual && el("button", { type: "button", class: "secondary", onclick: (e) => act(e.target, () => save((st) => rot.repick(st, v.algorithm), "picked again")) }, "Pick again")));
 
     // The line
-    const line = s.order;
     const partner = (x) => s.pairs.find((p) => p.includes(x))?.find((y) => y !== x);
+    const inNext = s.next ? [...s.next.a, ...s.next.b] : [];
     const row = (x, i) => {
       const tags = [s.away.includes(x) && "Break", s.skipped.includes(x) && "Skips next", partner(x) && `With ${person(partner(x))?.name}`,
-        s.next && [...s.next.a, ...s.next.b].includes(x) && "Next"].filter(Boolean);
+        inNext.includes(x) && "Up next"].filter(Boolean);
       const inner = [el("span", { class: "line-no" }, String(i + 1)), el("span", { class: "who" }, face(person(x))),
         ...tags.map((t) => el("span", { class: "tag" }, t)), el("span", { class: "meta" }, `${s.games[x] || 0} played`)];
       return canEdit() ? el("button", { type: "button", class: `item${s.away.includes(x) ? " away" : ""}`, onclick: () => playerSheet(x, s) }, ...inner)
         : el("div", { class: `item${s.away.includes(x) ? " away" : ""}` }, ...inner);
     };
-    if (!v.ended_at) {
-      sections.push(card(head(`In line (${line.length})`, role.runner && el("button", { type: "button", class: "secondary", onclick: (e) => act(e.target, addPlayersSheet) }, "Add")),
-        line.length ? el("div", { class: "list" }, ...line.map(row)) : empty("Nobody waiting."),
-        canEdit() && line.length > 0 && el("p", { class: "hint" }, "Tap someone to skip them, give them a break or pair them.")));
-    }
+    sections.push(card(head("In line", role.runner && el("button", { type: "button", class: "secondary", onclick: (e) => act(e.target, addPlayersSheet) }, "Add")),
+      s.order.length ? el("div", { class: "list" }, ...s.order.map(row)) : empty("Nobody waiting."),
+      canEdit() && s.order.length > 0 && el("p", { class: "hint" }, "Tap someone to skip them, give them a break or pair them.")));
 
-    // Recent results
-    const done = v.matches.filter((m) => m.ended_at).slice(-5).reverse();
-    if (done.length) {
-      sections.push(card(head("Last matches"), el("div", { class: "list" }, ...done.map((m) => el("div", { class: "item wrap" },
-        el("span", { class: "who" }, `${names(m.side_a)} vs ${names(m.side_b)}`),
-        el("span", { class: "meta" }, m.score_a != null ? `${m.score_a}–${m.score_b}` : `Court ${m.court}`))))));
-    }
+    sections.push(matchList(v.matches.filter((m) => m.ended_at).slice(-5).reverse(), "Last matches"));
 
     // Runners: the session's links and settings
-    if (role.runner && !v.ended_at) {
+    if (role.runner) {
       const watchLink = new URL(here(`w=${code}`), location.href).href;
-      sections.push(card(head(v.club || "Session"),
-        el("p", { class: "muted" }, `${rot.ALGORITHMS.find((a) => a.id === v.algorithm)?.title || v.algorithm} · ${v.courts} court${v.courts > 1 ? "s" : ""} · started ${ago(v.started_at)} ago`),
+      sections.push(card(head(v.club || "Pickup session"),
+        el("p", { class: "muted" }, `${rot.ALGORITHMS.find((a) => a.id === v.algorithm)?.title || v.algorithm} rotation · started ${ago(v.started_at)}${minutes(v.started_at) >= 1 ? " ago" : ""}`),
+        el("button", { type: "button", onclick: (e) => act(e.target, () => share(watchLink, "Who's playing")) }, "📺 Share live view"),
         el("div", { class: "row" },
-          el("button", { type: "button", onclick: (e) => act(e.target, () => share(watchLink, "Who's playing")) }, "Share live view"),
-          el("button", { type: "button", class: "secondary", onclick: (e) => act(e.target, helperSheet) }, "Helper QR")),
-        el("div", { class: "row" },
-          el("button", { type: "button", class: "secondary", onclick: sessionSheet }, "Settings"),
-          el("button", { type: "button", class: "secondary", onclick: (e) => {
-            if (confirm("End the session? Matches on court end too.")) act(e.target, async () => { await pb.endSession(v.id); await load(); });
-          } }, "End session"))));
-    } else if (!role.helper && !v.ended_at) {
-      sections.push(el("p", { class: "hint" }, "Updates by itself."));
+          el("button", { type: "button", class: "secondary", onclick: (e) => act(e.target, helperSheet) }, "🙋 Helper QR"),
+          el("button", { type: "button", class: "secondary", onclick: sessionSheet }, "⚙️ Settings")),
+        el("button", { type: "button", class: "secondary", onclick: (e) => {
+          if (confirm("End the session? Matches on court end too.")) act(e.target, async () => { await pb.endSession(v.id); await load(); });
+        } }, "End session")));
+    } else if (!role.helper) {
+      sections.push(el("p", { class: "hint" }, `${v.club ? `${v.club} · ` : ""}updates by itself.`));
     }
-    view.replaceChildren(...sections);
+    show(...sections);
   }
 
   if (!(await load())) return;
