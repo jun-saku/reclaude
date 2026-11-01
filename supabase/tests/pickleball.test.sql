@@ -2,7 +2,7 @@
 -- Run: supabase test db (CI's `supabase` job).
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(60);
+select plan(63);
 
 -- S: the superuser. M and N: pickleball managers. P: a plain account. H: an anonymous sign-in (a helper at the courts).
 insert into auth.users (id, aud, role, is_anonymous) values
@@ -96,6 +96,17 @@ do $$ begin perform pickleball.add_club_manager(current_setting('t.club')::uuid,
 set local request.jwt.claims = '{"sub": "00000000-0000-0000-0000-00000000000c", "role": "authenticated"}';
 select is((select count(*) from pickleball.players) + (select count(*) from pickleball.clubs), 0::bigint,
   'P reads no players or clubs');
+select is((select count(*) from pickleball.managers()), 0::bigint, 'or managers');
+set local request.jwt.claims = '{"sub": "00000000-0000-0000-0000-00000000000b", "role": "authenticated"}';
+select is((select array_agg(username order by username) from pickleball.managers()), array['meg', 'ned', 'sam'],
+  'managers see who can manage: the managers and the superuser');
+set local request.jwt.claims = '{"sub": "00000000-0000-0000-0000-000000000005", "role": "authenticated"}';
+do $$ begin perform core.set_active('00000000-0000-0000-0000-00000000000b', false); end $$;
+set local request.jwt.claims = '{"sub": "00000000-0000-0000-0000-00000000000a", "role": "authenticated"}';
+select is((select array_agg(username order by username) from pickleball.managers()), array['meg', 'sam'],
+  'but not deactivated accounts');
+set local request.jwt.claims = '{"sub": "00000000-0000-0000-0000-000000000005", "role": "authenticated"}';
+do $$ begin perform core.set_active('00000000-0000-0000-0000-00000000000b', true); end $$;
 
 -- ---------- a session ----------
 set local request.jwt.claims = '{"sub": "00000000-0000-0000-0000-00000000000a", "role": "authenticated"}';

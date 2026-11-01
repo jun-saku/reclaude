@@ -14,7 +14,10 @@ The user usually works from their phone, so keep replies short and end with the 
   back home. Non-games (the calculator) aren't listed. Projects don't link to each other.
 - `https://reclaude.junsaku.dev/apps/<name>/`: one social app (from `apps/<name>/`), on Supabase, e.g. the Profile
   page `/apps/profile/`, the Plaza `/apps/plaza/` (a space: walk around and wave, accounts only; its rules in
-  `apps/plaza/space.js`, run by the game server), and the admin panel `/apps/admin/` (invites for admins; accounts and the log for superusers;
+  `apps/plaza/space.js`, run by the game server), Pickleball `/apps/pickleball/` (court rotation: managers run sessions
+  from clubs of players, helpers with a session's QR run the courts, anyone with its live link watches; its own
+  manifest and icons, so it also installs as its own app; data in `shared/pickleball.js`, who plays next in
+  `apps/pickleball/rotation.js`; `./` is its about page, `./?dash` the app home where the installed app opens), and the admin panel `/apps/admin/` (invites for admins; accounts and the log for superusers;
   linked from the Profile page for admins only, not from the home page). The database checks every admin action; the
   page can also be put behind Cloudflare Access.
 - Every page's title row: back `‹` (game → games page, games page and apps → home), the title, and the profile icon
@@ -63,7 +66,9 @@ The user usually works from their phone, so keep replies short and end with the 
   locally `cd worker && npm ci && npm run dev`, which the e2e tests start themselves.
 - `site/_headers`: Cloudflare response headers for every path (no framing by other sites, nosniff, referrer and
   permissions policies).
-- `apps/`: the social apps (see "Supabase"): `apps/<name>/index.html` is one app, listed on the home page. They use
+- `apps/`: the social apps (see "Supabase"): `apps/<name>/index.html` is one app, listed on the home page. An app with
+  its own `manifest.webmanifest` (and `icons/`, drawn by `node scripts/icons.cjs`) next to it installs as its own app:
+  the build links its pages to that instead of the site's. They use
   `shared/base.css` and the design standard like games, link back home (`‹`, `../../`), and import
   `../../shared/<file>`, which the build stamps the same way.
 - `shared/core.js`: the apps' client: the person's profile, local first: kept on this device (`shared/me.js`, which
@@ -75,8 +80,8 @@ The user usually works from their phone, so keep replies short and end with the 
 - `scripts/new-project.mjs`: creates a project from the template.
 - `scripts/rules.mjs`: generates `firebase/database.rules.json` (room rules repeat per seat). Edit the rules there, never
   the JSON, then run `node scripts/rules.mjs`; `npm run rules` fails if the two don't match.
-- `tests/`: dev-only tests, never published. `tests/worker-auth.test.mjs` checks the game server's sign-in check, `tests/feed.test.mjs` its feeds, `tests/kit.test.mjs` its Play again and `tests/space.test.mjs` its spaces (all part
-  of the `build` check). `tests/smoke.cjs` (run after the build: `node tests/smoke.cjs`) opens every
+- `tests/`: dev-only tests, never published. `tests/worker-auth.test.mjs` checks the game server's sign-in check, `tests/feed.test.mjs` its feeds, `tests/kit.test.mjs` its Play again and `tests/space.test.mjs` its spaces, and
+  `tests/pickleball-rotation.test.mjs` the Pickleball rotation (all part of the `build` check). `tests/smoke.cjs` (run after the build: `node tests/smoke.cjs`) opens every
   page at 390px and fails on JavaScript errors, blocked scripts, sideways scroll, a game missing from the games page or
   its ‹ back link or profile icon, a missing link from the home page to the games, or a same-device game that won't start; it's part of the required `build` check, needs no
   per-game code, and lists non-games (no card, no link) in `NOT_GAMES`. `node tests/ui-audit.cjs` (after the build; CI's `ui` job) checks every screen against the design standard
