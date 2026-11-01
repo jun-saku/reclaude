@@ -87,6 +87,13 @@ ok(s.next.a.length === 2 && s.next.b.length === 1, "three here: 2 v 1");
 s = r.refresh(r.tidy(r.empty(), ["A"]), "queue");
 ok(s.next === null, "one here: no match");
 
+s = r.refresh(r.tidy(r.empty(), P.slice(0, 6)), "queue");
+s = r.moveInLine(s, "queue", "F", "A");
+ok(same(s.order, ["F", "A", "B", "C", "D", "E"]) && all(s.next) === "ABCF", "drag F to the front: F plays next");
+s = r.setAway(s, "queue", "B", true);
+s = r.moveInLine(s, "queue", "B", null);
+ok(s.order.at(-1) === "B" && !s.away.includes("B"), "dragging someone back from a break: back in line where dropped");
+
 // ---------- people come and go ----------
 s = r.refresh(r.tidy(r.empty(), P.slice(0, 6)), "queue");
 s = r.tidy(s, ["A", "C", "D", "E", "F"]);

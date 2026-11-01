@@ -116,10 +116,27 @@
     .feature span { font-size: 0.85rem; color: var(--muted); }
     .big-start { min-height: 56px; font-size: 1.1rem; }
 
-    dialog { width: min(440px, calc(100% - 32px)); border: 1px solid var(--line); border-radius: 16px; padding: 16px;
+    dialog { width: min(440px, calc(100% - 32px)); border: 1px solid var(--line); border-radius: 16px; padding: 0;
       background: var(--panel); color: var(--text); }
     dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
-    dialog form { display: flex; flex-direction: column; gap: 12px; }
+    dialog form { display: flex; flex-direction: column; gap: 12px; padding: 16px; }
+    .actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(64px, 1fr)); gap: 8px; }
+    .actions button { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 4px; font-size: 0.85rem; white-space: normal; }
+    .actions .ic { font-size: 1.4rem; line-height: 1.1; }
+
+    /* Hold and drag */
+    [data-drag] { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+    .grip { flex: none; color: var(--muted); font-size: 1.1rem; margin-right: -4px; }
+    .ghost { position: fixed; z-index: 50; margin: 0; pointer-events: none; transform: scale(1.06) rotate(-2deg); opacity: 0.95;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35); background: var(--panel); border-radius: 12px; padding-left: 8px; padding-right: 8px; }
+    .pchip.ghost { background: var(--chip); border-radius: 999px; }
+    .lifted { opacity: 0.3; }
+    .over { outline: 3px solid var(--ball); outline-offset: 2px; border-radius: 12px; }
+    .pchip.over, .slot.over { border-radius: 999px; }
+    .half.over { outline-offset: -5px; }
+    .dropzones { display: none; gap: 8px; }
+    body.dragging .dropzones { display: grid; grid-template-columns: 1fr 1fr; }
+    .dropzone { min-height: 48px; display: grid; place-items: center; border: 2px dashed var(--line); border-radius: 12px; color: var(--muted); font-weight: 650; }
     .qr { display: flex; justify-content: center; }
     .qr svg { width: 220px; height: 220px; border-radius: 10px; border: 1px solid var(--line); }
     .scores { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }

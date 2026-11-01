@@ -143,6 +143,15 @@
   <script type="module">
     import * as core from "../../shared/core.js";
     const $ = (id) => document.getElementById(id);
+    // ‹ goes back where you came from on this site (an app such as Pickleball), or home.
+    try {
+      const from = document.referrer ? new URL(document.referrer) : null;
+      if (from && from.origin === location.origin && from.pathname !== location.pathname) {
+        const back = document.querySelector(".home-link");
+        back.href = from.href;
+        back.setAttribute("aria-label", "Back");
+      }
+    } catch {}
     const AVATARS = [["🦊", "Fox"], ["🐼", "Panda"], ["🐸", "Frog"], ["🐯", "Tiger"], ["🐙", "Octopus"], ["🦄", "Unicorn"],
       ["🐧", "Penguin"], ["🐢", "Turtle"], ["🦉", "Owl"], ["🐝", "Bee"], ["🌵", "Cactus"], ["🍄", "Mushroom"],
       ["🐶", "Dog"], ["🐱", "Cat"], ["🐰", "Rabbit"], ["🐻", "Bear"], ["🐨", "Koala"], ["🦁", "Lion"],

@@ -9,7 +9,7 @@
 //   refresh(state, algorithm)           picks the next match (unless it was changed by hand)
 //   startNext(state, algorithm)         { state, match: { a, b } }: the next match goes on a court
 //   finish(state, algorithm, match, winner)   a match ended ({ a, b }; winner "a", "b" or null): back in line
-//   skip / setAway / pair / unpair / swap / addToNext / removeFromNext / repick: the overrides
+//   skip / setAway / pair / unpair / swap / addToNext / removeFromNext / moveInLine / repick: the overrides
 export const ALGORITHMS = [
   { id: "fair", title: "Fair", hint: "Whoever has played least goes next." },
   { id: "queue", title: "Queue", hint: "Off the court, back of the line." },
@@ -201,6 +201,17 @@ export function addToNext(state, algorithm, side, id) {
   next[side] = [...next[side], id];
   s.next = { ...next, manual: true };
   return s;
+}
+// Moves someone in the line to just before `before` (null: the end), back from a break if they were on one.
+export function moveInLine(state, algorithm, id, before = null) {
+  const s = clean(state);
+  if (!s.order.includes(id) || id === before) return s;
+  const rest = without(s.order, [id]);
+  const at = before && rest.includes(before) ? rest.indexOf(before) : rest.length;
+  s.order = [...rest.slice(0, at), id, ...rest.slice(at)];
+  s.away = without(s.away, [id]);
+  if (s.next && !s.next.manual) s.next = null;
+  return refresh(s, algorithm);
 }
 // Forget changes by hand: the algorithm picks again.
 export function repick(state, algorithm) {
