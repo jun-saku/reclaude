@@ -181,7 +181,8 @@ only its own `projects/<name>/` folder; engine changes to `shared/` or the rules
   and fix mistakes with a new migration.
 - A new schema must also be added to the dashboard's exposed schemas (Settings → Data API) and to `[api] schemas` in
   `supabase/config.toml` before pages can reach it.
-- Pages reach Supabase only through `shared/core.js` (and later each app's own module next to it), and only signed-in
+- Pages reach Supabase only through `shared/core.js` (and each app's own module next to it, `shared/<app>.js`, built on
+  `core.app(name)`: its schema, errors and a `?backend=fake` store; never a client of its own), and only signed-in
   users can read anything. Opening a page must not sign anyone up: only an action that needs it (like backing up a
   saved profile) calls `core.signIn()`; elsewhere use `core.signedIn()`.
 - Functions in `core` are callable by nobody unless a migration grants them: each migration that adds functions ends

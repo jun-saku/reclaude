@@ -14,12 +14,17 @@
 //   core.useProfile(profile)                         makes it this device's profile (and the games' name)
 // Accounts (supabase/migrations/…_core_accounts.sql): a username and a personal key, to use your profile on other
 // devices. Making one needs an invite code from a superuser; the key is made here and shown once:
-//   await core.account()                             this device's account { username, active, roles }, or null
+//   await core.account()                             this device's account { username, active, roles, appRoles }, or null
+//   core.hasAppRole(account, app, role)              whether it holds that project role (a superuser holds them all)
 //   await core.makeAccount({ username, invite })     { username, key }: this device's sign-in becomes an account
 //   await core.signInAccount({ username, key })      the account's profile, or null: this device signs in to it
 //   await core.changeKey()                           { key }: a new key; your other devices are signed out
 //   await core.signOut()                             this device signs out (its profile stays here)
 //   core.cleanUsername(text), core.cleanKey(text), core.formatKey(key)  as the database takes them / shows them
+// An app's own module (shared/<app>.js, its schema in supabase/migrations/) builds on these, so it never makes its own
+// client: core.app(name) gives { db: its schema on this device's sign-in (null with ?backend=fake), run(query): the
+// rows or rpc result (throws a CoreError: the database's own message for its RCxxx refusals), fake: true with
+// ?backend=fake, read() / write(data): its own store in this browser for then }.
 // It connects to the live project; on this machine (localhost, 127.0.0.1) to a local Supabase (`supabase start`,
 // which the security policy allows too); with ?backend=fake to nothing: this browser's storage only, for the UI tests.
 import { createClient } from "../shared/supabase-js.js";
@@ -114,12 +119,13 @@ const profiles = () => sb().schema("core").from("profiles");
 async function supabaseAccount() {
   const me = await supabaseSignedIn();
   if (!me) return null;
-  const [account, roles] = await Promise.all([
+  const [account, roles, appRoles] = await Promise.all([
     sb().schema("core").from("accounts").select("username, active").eq("id", me.id).maybeSingle(),
     sb().schema("core").from("roles").select("role, scope").eq("user_id", me.id),
+    sb().schema("core").from("app_roles").select("app, role").eq("user_id", me.id),
   ]);
   if (account.error) throw explain(account.error);
-  return account.data && { ...account.data, roles: roles.data || [] };
+  return account.data && { ...account.data, roles: roles.data || [], appRoles: appRoles.data || [] };
 }
 
 async function supabaseMakeAccount(username, invite) {
@@ -185,7 +191,7 @@ const fakeAccount = (db = fakeRead()) => Object.entries(db.accounts || {}).find(
 const fakeAccounts = {
   account() {
     const found = fakeAccount();
-    return found && { username: found[0], active: found[1].active !== false, roles: found[1].roles || [] };
+    return found && { username: found[0], active: found[1].active !== false, roles: found[1].roles || [], appRoles: found[1].appRoles || [] };
   },
   async makeAccount(username, invite) {
     const { id } = await fakeSignIn();
@@ -307,7 +313,7 @@ export async function backUpProfile() {
 
 // ---------- accounts ----------
 
-// This device's account ({ username, active, roles: [{ role, scope }] }), or null (none, or Supabase unreachable).
+// This device's account ({ username, active, roles: [{ role, scope }], appRoles: [{ app, role }] }), or null (none, or Supabase unreachable).
 // Signs no one up.
 export async function account() {
   let acc;
@@ -370,6 +376,9 @@ const ADMIN_ROLES = ["admin", "superuser"];
 export const LOG_PAGE = 25;
 export const isAdmin = (acc) => !!acc?.active && !!acc.roles?.some((r) => ADMIN_ROLES.includes(r.role));
 export const isSuperuser = (acc) => !!acc?.active && !!acc.roles?.some((r) => r.role === "superuser");
+// As core.has_app_role checks it in the database (this only decides what a page shows).
+export const hasAppRole = (acc, app, role) =>
+  isSuperuser(acc) || (!!acc?.active && !!acc.appRoles?.some((r) => r.app === app && r.role === role));
 
 // The database's own messages for refusals are written to be shown; anything else gets explain()'s.
 function adminError(error) {
@@ -504,7 +513,7 @@ const fakeAdmin = {
   },
   // A made-up project, so the panel's project roles can be tried here.
   apps() {
-    return [{ name: "pickleball", title: "Pickleball", roles: [{ role: "organiser", title: "Organiser" }, { role: "scorekeeper", title: "Scorekeeper" }] }];
+    return [{ name: "pickleball", title: "Pickleball", roles: [{ role: "manager", title: "Manager" }] }];
   },
   change(id, fn, who = "super") {
     const [, me] = this[who]();
@@ -608,3 +617,26 @@ export const admin = {
   },
   log: async ({ before } = {}) => backend().log(before),
 };
+
+// ---------- an app's own module ----------
+// See the top of this file. The database's refusals with an RCxxx code carry a message written to be shown.
+function appError(error) {
+  if (/^RC/.test(error?.code || "") && error.message) return new CoreError(error.message);
+  if (error?.code === "42501") return new CoreError("You can't do that here.");
+  return explain(error);
+}
+export function app(name) {
+  const key = `${name}-fake`;
+  return {
+    fake,
+    db: fake ? null : sb().schema(name),
+    async run(query) {
+      let result;
+      try { result = await query; } catch (err) { throw appError(err); }
+      if (result.error) throw appError(result.error);
+      return result.data;
+    },
+    read() { try { return JSON.parse(localStorage.getItem(key)) || {}; } catch { return {}; } },
+    write(data) { try { localStorage.setItem(key, JSON.stringify(data)); } catch {} },
+  };
+}
