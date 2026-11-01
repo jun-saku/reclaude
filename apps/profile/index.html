@@ -119,6 +119,7 @@
       </div>
       <div class="view" id="v-in" hidden>
         <p>Signed in as <strong id="in-user"></strong>.</p>
+        <p id="in-roles"></p>
         <a class="button" id="to-admin" href="../admin/" hidden>Admin panel</a>
         <button class="secondary" id="sign-out">Sign out</button>
         <details class="settings">
@@ -263,7 +264,24 @@
       $("in-user").textContent = account.username;
       document.querySelector(".settings").open = false;
       $("to-admin").hidden = !core.isAdmin(account);
+      showRoles();
       view("in");
+    }
+    // Your roles, by their projects' titles (from the database; its names if it can't be reached).
+    async function showRoles() {
+      const sup = core.isSuperuser(account);
+      const admin = account?.roles?.some((r) => r.role === "admin");
+      const appRoles = account?.appRoles || [];
+      let apps = [];
+      if (appRoles.length && !sup) { try { apps = await core.admin.apps(); } catch {} }
+      const title = (r) => {
+        const app = apps.find((a) => a.name === r.app);
+        const role = app?.roles.find((x) => x.role === r.role);
+        return `${app?.title || r.app} ${(role?.title || r.role).toLowerCase()}`;
+      };
+      const list = sup ? ["Superuser (every role in every project)"]
+        : [...(admin ? ["Admin"] : []), ...appRoles.map(title)];
+      $("in-roles").textContent = list.length ? `Your roles: ${list.join(", ")}.` : "You have no roles.";
     }
     async function loadAccount() {
       account = await core.account();
