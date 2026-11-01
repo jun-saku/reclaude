@@ -2,15 +2,17 @@
 // core.app("pickleball"). Everything that changes something is a database function, which checks who may do it; these
 // only fetch and send, and throw a CoreError with a message to show. With ?backend=fake: this browser only.
 //   await pb.me()                       { id, account, manager }: this device's sign-in (no sign-up), and whether it manages
-//   await pb.players()                  [{ id, name, icon, made_by }]                         (managers)
+//   await pb.players()                  [{ id, name, icon, made_by, guest }] (guest: made for one session) (managers)
 //   await pb.clubs()                    [{ id, name, players: [ids], managers: [ids] }]       (managers)
 //   await pb.managers()                 [{ id, username, display_name, avatar }]: who can manage (managers)
 //   await pb.sessions()                 open sessions: [{ id, club_id, courts, algorithm, watch_code, started_by, started_at }]
 //   await pb.pastSessions()             the last 20 ended ones, newest first (the same, and ended_at)
-//   await pb.makePlayer(name, icon) / editPlayer(id, name, icon)          the new player's id / nothing
+//   await pb.makePlayer(name, icon, guest) / editPlayer(id, name, icon) / keepPlayer(id)   the new player's id / – / –
+//                                       (keepPlayer: a guest becomes a regular player)
 //   await pb.makeClub(name) / renameClub(club, name) / addClubPlayer(club, player) / removeClubPlayer(club, player)
 //   await pb.addClubManager(club, user) / removeClubManager(club, user)
-//   await pb.startSession({ club, courts, algorithm, players })          the new session's id
+//   await pb.startSession({ club, courts, algorithm, players, name })    the new session's id (name: optional)
+//   await pb.renameSession(session, name)   its runners ("": no name)
 //   await pb.setSession(session, courts, algorithm) / setHere(session, player, here) / endSession(session)
 //   await pb.helperCode(session)        a new helper code (the old one stops working)
 //   await pb.becomeHelper(session, code)   signs this device in (anonymously, if it isn't) and returns the watch code
@@ -50,7 +52,7 @@ const icon = (text) => cleanText(text, 16) || "👤";
 
 // ---------- live (Supabase) ----------
 const live = {
-  async players() { return rows(app.db.from("players").select("id, name, icon, made_by").order("name")); },
+  async players() { return rows(app.db.from("players").select("id, name, icon, made_by, guest").order("name")); },
   async clubs() {
     const [clubs, players, managers] = await Promise.all([
       rows(app.db.from("clubs").select("id, name").order("name")),
@@ -62,14 +64,16 @@ const live = {
   },
   managers: () => rpc("managers"),
   sessions() {
-    return rows(app.db.from("sessions").select("id, club_id, courts, algorithm, watch_code, started_by, started_at")
+    return rows(app.db.from("sessions").select("id, name, club_id, courts, algorithm, watch_code, started_by, started_at")
       .is("ended_at", null).order("started_at", { ascending: false }));
   },
   pastSessions() {
-    return rows(app.db.from("sessions").select("id, club_id, courts, algorithm, watch_code, started_by, started_at, ended_at")
+    return rows(app.db.from("sessions").select("id, name, club_id, courts, algorithm, watch_code, started_by, started_at, ended_at")
       .not("ended_at", "is", null).order("ended_at", { ascending: false }).limit(20));
   },
-  makePlayer: (name, icon) => rpc("make_player", { name, icon }),
+  makePlayer: (name, icon, guest) => rpc("make_player", { name, icon, guest }),
+  keepPlayer: (player) => rpc("keep_player", { player }),
+  renameSession: (session, name) => rpc("rename_session", { session, name }),
   editPlayer: (player, name, icon) => rpc("edit_player", { player, name, icon }),
   makeClub: (name) => rpc("make_club", { name }),
   renameClub: (club, name) => rpc("rename_club", { club, name }),
@@ -77,7 +81,7 @@ const live = {
   removeClubPlayer: (club, player) => rpc("remove_club_player", { club, player }),
   addClubManager: (club, target) => rpc("add_club_manager", { club, target }),
   removeClubManager: (club, target) => rpc("remove_club_manager", { club, target }),
-  startSession: (club, courts, algorithm, players) => rpc("start_session", { club, courts, algorithm, players }),
+  startSession: (club, courts, algorithm, players, name) => rpc("start_session", { club, courts, algorithm, players, name }),
   setSession: (session, courts, algorithm) => rpc("set_session", { session, courts, algorithm }),
   setHere: (session, player, here) => rpc("set_here", { session, player, here }),
   helperCode: (session) => rpc("helper_code", { session }),
@@ -146,21 +150,38 @@ const fake = {
   },
   async sessions() {
     if (!(await isManager())) return [];
-    return db().sessions.filter((s) => !s.ended_at).map(({ id, club_id, courts, algorithm, watch_code, started_by, started_at }) =>
-      ({ id, club_id, courts, algorithm, watch_code, started_by, started_at })).reverse();
+    return db().sessions.filter((s) => !s.ended_at).map(({ id, name, club_id, courts, algorithm, watch_code, started_by, started_at }) =>
+      ({ id, name, club_id, courts, algorithm, watch_code, started_by, started_at })).reverse();
   },
   async pastSessions() {
     if (!(await isManager())) return [];
-    return db().sessions.filter((s) => s.ended_at).map(({ id, club_id, courts, algorithm, watch_code, started_by, started_at, ended_at }) =>
-      ({ id, club_id, courts, algorithm, watch_code, started_by, started_at, ended_at })).reverse().slice(0, 20);
+    return db().sessions.filter((s) => s.ended_at).map(({ id, name, club_id, courts, algorithm, watch_code, started_by, started_at, ended_at }) =>
+      ({ id, name, club_id, courts, algorithm, watch_code, started_by, started_at, ended_at })).reverse().slice(0, 20);
   },
-  async makePlayer(name, icon) {
+  async makePlayer(name, icon, guest) {
     const me = await needManager();
     const d = db();
     const id = newId();
-    d.players.push({ id, name, icon, made_by: me });
+    d.players.push({ id, name, icon, made_by: me, guest: !!guest });
     app.write(d);
     return id;
+  },
+  async keepPlayer(player) {
+    const me = await needManager();
+    const d = db();
+    const p = d.players.find((x) => x.id === player);
+    if (!p || !(p.made_by === me || d.clubs.some((c) => c.players.includes(player) && c.managers.includes(me)))) {
+      no("Only whoever added this player, or a manager of their club, can do that.");
+    }
+    p.guest = false;
+    app.write(d);
+  },
+  async renameSession(session, name) {
+    const d = db();
+    const s = await needRunner(d, session);
+    s.name = name || null;
+    bump(s);
+    app.write(d);
   },
   async editPlayer(player, name, icon) {
     const me = await needManager();
@@ -185,6 +206,8 @@ const fake = {
     const d = db();
     const c = await needClub(d, club);
     if (!c.players.includes(player)) c.players.push(player);
+    const p = d.players.find((x) => x.id === player);
+    if (p) p.guest = false;
     app.write(d);
   },
   async removeClubPlayer(club, player) {
@@ -207,12 +230,12 @@ const fake = {
     c.managers = c.managers.filter((m) => m !== target);
     app.write(d);
   },
-  async startSession(club, courts, algorithm, players) {
+  async startSession(club, courts, algorithm, players, name) {
     const me = await needManager();
     const d = db();
     if (club) await needClub(d, club);
     const id = newId();
-    d.sessions.push({ id, club_id: club, courts, algorithm, state: {}, version: 0, watch_code: newCode(), helper: null, helpers: [],
+    d.sessions.push({ id, name: name || null, club_id: club, courts, algorithm, state: {}, version: 0, watch_code: newCode(), helper: null, helpers: [],
       started_by: me, started_at: now(), ended_at: null, here: [...new Set(players)].map((p) => ({ id: p, here: true })) });
     app.write(d);
     return id;
@@ -263,9 +286,9 @@ const fake = {
     const s = d.sessions.find((x) => x.watch_code === core.cleanKey(code));
     if (!s) return null;
     const ended = d.matches.filter((m) => m.session_id === s.id && m.ended_at).slice(-20).map((m) => m.id);
-    return { id: s.id, club: d.clubs.find((c) => c.id === s.club_id)?.name || null, courts: s.courts, algorithm: s.algorithm,
+    return { id: s.id, name: s.name || null, club: d.clubs.find((c) => c.id === s.club_id)?.name || null, courts: s.courts, algorithm: s.algorithm,
       state: s.state, version: s.version, started_at: s.started_at, ended_at: s.ended_at,
-      players: s.here.map((h) => ({ ...d.players.find((p) => p.id === h.id), here: h.here })).map(({ id, name, icon, here }) => ({ id, name, icon, here })),
+      players: s.here.map((h) => ({ ...d.players.find((p) => p.id === h.id), here: h.here })).map(({ id, name, icon, here, guest }) => ({ id, name, icon, here, guest: !!guest })),
       matches: d.matches.filter((m) => m.session_id === s.id && (!m.ended_at || ended.includes(m.id))) };
   },
   async saveState(session, version, state) {
@@ -358,7 +381,7 @@ const fake = {
         minutes: Math.round(played.reduce((n, m) => n + (new Date(m.ended_at) - new Date(m.started_at)) / 60000, 0)) };
     });
     const sessions = d.sessions.filter((s) => s.here.some((h) => mine.includes(h.id))).reverse().slice(0, 30).map((s) => ({
-      id: s.id, club: d.clubs.find((c) => c.id === s.club_id)?.name || null, started_at: s.started_at, ended_at: s.ended_at, watch_code: s.watch_code,
+      id: s.id, name: s.name || null, club: d.clubs.find((c) => c.id === s.club_id)?.name || null, started_at: s.started_at, ended_at: s.ended_at, watch_code: s.watch_code,
       matches: done.filter((m) => m.session_id === s.id && [...m.side_a, ...m.side_b].some((x) => mine.includes(x))).length }));
     return { players, sessions };
   },
@@ -377,7 +400,15 @@ export const clubs = () => backend().clubs();
 export const managers = () => backend().managers();
 export const sessions = () => backend().sessions();
 export const pastSessions = () => backend().pastSessions();
-export const makePlayer = (name, emoji) => backend().makePlayer(playerName(name), icon(emoji));
+export const makePlayer = (name, emoji, guest = false) => backend().makePlayer(playerName(name), icon(emoji), !!guest);
+export const keepPlayer = (player) => backend().keepPlayer(player);
+const sessionName = (name) => {
+  const s = String(name ?? "").replace(/\s+/g, " ").trim();
+  if (!s) return null;
+  if ([...s].length > 40 || /[<>&\p{Cc}]/u.test(s)) throw new CoreError("A session name is up to 40 characters, without < > &.");
+  return s;
+};
+export const renameSession = (session, name) => backend().renameSession(session, sessionName(name));
 export const editPlayer = (id, name, emoji) => backend().editPlayer(id, playerName(name), icon(emoji));
 export const makeClub = (name) => backend().makeClub(clubName(name));
 export const renameClub = (club, name) => backend().renameClub(club, clubName(name));
@@ -385,9 +416,9 @@ export const addClubPlayer = (club, player) => backend().addClubPlayer(club, pla
 export const removeClubPlayer = (club, player) => backend().removeClubPlayer(club, player);
 export const addClubManager = (club, user) => backend().addClubManager(club, user);
 export const removeClubManager = (club, user) => backend().removeClubManager(club, user);
-export function startSession({ club = null, courts, algorithm, players = [] }) {
+export function startSession({ club = null, courts, algorithm, players = [], name = null }) {
   if (!(courts >= 1 && courts <= 20)) throw new CoreError("Pick 1 to 20 courts.");
-  return backend().startSession(club, courts, algorithm, players);
+  return backend().startSession(club, courts, algorithm, players, sessionName(name));
 }
 export const setSession = (session, courts, algorithm) => backend().setSession(session, courts, algorithm);
 export const setHere = (session, player, here) => backend().setHere(session, player, here);

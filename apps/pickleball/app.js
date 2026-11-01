@@ -53,6 +53,10 @@ const card = (...kids) => el("section", { class: "card" }, ...kids);
 const head = (title, ...right) => el("div", { class: "head" }, el("h2", {}, title), right.some(Boolean) && el("div", { class: "tools" }, ...right));
 const empty = (text) => el("p", { class: "empty" }, text);
 const face = (p) => `${p?.icon || "👤"} ${p?.name || "?"}`;
+// A session's title: its name, else its club's, else "Pickup session".
+const sessionTitle = (name, club) => name || club || "Pickup session";
+// Guests (made for one session) stay out of the player lists and pickers until kept.
+const regular = (players) => players.filter((p) => !p.guest);
 function setBack(href, label) { $("back").href = href; $("back").setAttribute("aria-label", label); $("back").hidden = false; }
 function stats(items) {
   $("stats").hidden = !items;
@@ -199,7 +203,7 @@ async function myView() {
       : el("section", { class: "card hero" }, el("img", { src: "./icons/icon-192.png", alt: "" }), el("h2", {}, "Your games"),
         el("p", {}, me.manager ? "Link your account to your player to see your own matches." : "Ask a manager for your link QR to see your matches here.")),
     games.sessions.length > 0 && card(head("Sessions"), el("div", { class: "list" }, ...games.sessions.map((x) => el("a", { class: "item", href: here(`w=${x.watch_code}`) },
-      el("span", { class: "who" }, !x.ended_at && el("span", { class: "live-dot", "aria-hidden": "true" }), x.club || "Pickup session"),
+      el("span", { class: "who" }, !x.ended_at && el("span", { class: "live-dot", "aria-hidden": "true" }), sessionTitle(x.name, x.club)),
       el("span", { class: "meta" }, `${x.matches} match${x.matches === 1 ? "" : "es"} · ${day(x.started_at)}`))))),
     card(head("Have a code?"), el("div", { class: "form" }, codeInput, el("button", { type: "button", class: "secondary", onclick: (e) => act(e.target, async () => {
       const p = await pb.linkPlayer(codeInput.value);
@@ -212,8 +216,9 @@ async function myView() {
 const runs = (s, clubs) => s.started_by === me.id || !!clubs.find((c) => c.id === s.club_id)?.managers.includes(me.id);
 
 async function dashboard() {
-  const [sessions, past, clubs, players] = await Promise.all([pb.sessions(), pb.pastSessions(), pb.clubs(), pb.players()]);
-  const clubName = (id) => clubs.find((c) => c.id === id)?.name || "Pickup session";
+  const [sessions, past, clubs, allPlayers] = await Promise.all([pb.sessions(), pb.pastSessions(), pb.clubs(), pb.players()]);
+  const players = regular(allPlayers);
+  const clubName = (id) => clubs.find((c) => c.id === id)?.name || null;
   const mine = sessions.filter((s) => runs(s, clubs));
   const clubInput = el("input", { placeholder: "Club name", maxlength: 40, "aria-label": "New club's name" });
   stats([[mine.length, mine.length === 1 ? "live session" : "live sessions"], [clubs.length, clubs.length === 1 ? "club" : "clubs"], [players.length, players.length === 1 ? "player" : "players"]]);
@@ -222,7 +227,7 @@ async function dashboard() {
     el("a", { class: "button big-start", href: here("new") }, "🏓 Start a session"),
     mine.length > 0 && card(head("Live now"),
       el("div", { class: "list" }, ...mine.map((s) => el("a", { class: "item", href: here(`s=${s.id}`) },
-        el("span", { class: "who" }, el("span", { class: "live-dot", "aria-hidden": "true" }), clubName(s.club_id)),
+        el("span", { class: "who" }, el("span", { class: "live-dot", "aria-hidden": "true" }), sessionTitle(s.name, clubName(s.club_id))),
         el("span", { class: "meta" }, `${s.courts} court${s.courts > 1 ? "s" : ""} · ${ago(s.started_at)}`))))),
     card(head("Clubs"),
       clubs.length ? el("div", { class: "list" }, ...clubs.map((c) => el("a", { class: "item", href: here(`club=${c.id}`) },
@@ -234,7 +239,7 @@ async function dashboard() {
       }) }, "Add"))),
     card(head("Past sessions"),
       past.length ? el("div", { class: "list" }, ...past.slice(0, 10).map((s) => el("a", { class: "item", href: here(`w=${s.watch_code}`) },
-        el("span", { class: "who" }, clubName(s.club_id)), el("span", { class: "meta" }, day(s.started_at)))))
+        el("span", { class: "who" }, sessionTitle(s.name, clubName(s.club_id))), el("span", { class: "meta" }, day(s.started_at)))))
         : empty("Finished sessions and their results show up here.")),
     el("div", { class: "row" },
       el("a", { class: "button secondary", href: here("players") }, `👥 All players (${players.length})`),
@@ -288,19 +293,20 @@ async function linkSheet(p) {
     el("p", { class: "bigcode" }, code),
     el("button", { type: "button", class: "secondary", onclick: (e) => act(e.target, () => shareLink(url, `You on Pickleball: ${p.name}`)) }, "Share link")]);
 }
-const newPlayerForm = (label, onAdd) => {
+const newPlayerForm = (label, onAdd, guest = false) => {
   const name = el("input", { placeholder: "Name", maxlength: 24, "aria-label": `${label}'s name` });
   const icon = el("input", { class: "emoji", placeholder: "👤", maxlength: 8, "aria-label": `${label}'s icon (an emoji)` });
   return el("div", { class: "form" }, icon, name, el("button", { type: "button", class: "secondary", onclick: (e) => act(e.target, async () => {
-    const id = await pb.makePlayer(name.value, icon.value);
-    await onAdd(id, { id, name: name.value.trim(), icon: icon.value.trim() || "👤" });
+    const id = await pb.makePlayer(name.value, icon.value, guest);
+    await onAdd(id, { id, name: name.value.trim(), icon: icon.value.trim() || "👤", guest });
     name.value = ""; icon.value = "";
   }) }, "Add"));
 };
 
 async function playersView() {
   setBack(here("dash"), "Pickleball home");
-  const [players] = await Promise.all([pb.players(), loadLinks()]);
+  const [all] = await Promise.all([pb.players(), loadLinks()]);
+  const players = regular(all);
   show(card(head(`Players (${players.length})`),
     players.length ? el("div", { class: "list" }, ...players.map((p) => playerRow(p, playersView))) : empty("No players yet."),
     newPlayerForm("New player", () => playersView())));
@@ -315,7 +321,7 @@ async function clubView(id) {
   const mine = club.managers.includes(me.id);
   const reload = () => clubView(id);
   const members = players.filter((p) => club.players.includes(p.id));
-  const others = players.filter((p) => !club.players.includes(p.id));
+  const others = regular(players).filter((p) => !club.players.includes(p.id));
   const manager = (uid) => managers.find((m) => m.id === uid);
   const managerName = (m) => (m ? `${m.avatar || "👤"} ${m.display_name || m.username} (@${m.username})` : "Someone");
   const pickPlayer = el("select", { "aria-label": "Player to add" }, ...others.map((p) => el("option", { value: p.id }, face(p))));
@@ -353,10 +359,12 @@ async function clubView(id) {
 // ---------- start a session ----------
 async function newSession(clubId) {
   setBack(clubId ? here(`club=${clubId}`) : here("dash"), clubId ? "Club" : "Pickleball home");
-  const [clubs, players] = await Promise.all([pb.clubs(), pb.players()]);
+  const [clubs, all] = await Promise.all([pb.clubs(), pb.players()]);
+  const players = regular(all);
   const mine = clubs.filter((c) => c.managers.includes(me.id));
   let club = mine.find((c) => c.id === clubId) || null;
   let courts = 2, algorithm = "fair";
+  const nameInput = el("input", { placeholder: "Optional", maxlength: 40, "aria-label": "Session name" });
   const chosen = new Set(club ? club.players : []);
   const guests = [];
 
@@ -393,13 +401,14 @@ async function newSession(clubId) {
 
   show(
     card(head("Start a session"),
+      el("label", { class: "field" }, "Name", nameInput),
       el("label", { class: "field" }, "Club", clubSelect),
       el("label", { class: "field" }, "Courts", courtSelect),
       algoSeg, algoHint),
-    card(count, list, el("p", { class: "muted" }, "A guest plays today without joining the club:"),
-      newPlayerForm("Guest", async (id, p) => { players.push(p); guests.push(id); chosen.add(id); drawPlayers(); })),
+    card(count, list, el("p", { class: "muted" }, "Guests"),
+      newPlayerForm("Guest", async (id, p) => { players.push(p); guests.push(id); chosen.add(id); drawPlayers(); }, true)),
     el("button", { type: "button", class: "big-start", onclick: (e) => act(e.target, async () => {
-      const id = await pb.startSession({ club: club?.id || null, courts, algorithm, players: [...chosen] });
+      const id = await pb.startSession({ club: club?.id || null, courts, algorithm, players: [...chosen], name: nameInput.value });
       location.assign(here(`s=${id}`));
     }) }, "🏓 Start session"));
 }
@@ -420,18 +429,18 @@ async function joinAsHelper(id, code) {
 
 async function sessionView(id) {
   setBack(me.manager ? here("dash") : here(), me.manager ? "Pickleball home" : "About Pickleball");
-  let watchCode = null, runner = false;
+  let watchCode = null, runner = false, clubId = null;
   if (me.manager) {
     const [sessions, clubs] = await Promise.all([pb.sessions(), pb.clubs()]);
     const s = sessions.find((x) => x.id === id);
-    if (s && runs(s, clubs)) { watchCode = s.watch_code; runner = true; }
+    if (s && runs(s, clubs)) { watchCode = s.watch_code; runner = true; clubId = s.club_id; }
   }
   watchCode ||= store.get(helperKey(id));
   if (!watchCode) {
     show(card(el("h2", {}, "Helping out?"), el("p", {}, "Scan the helper QR on the manager's phone to run the courts and the line.")));
     return;
   }
-  await live(watchCode, { runner, helper: true });
+  await live(watchCode, { runner, helper: true, clubId });
 }
 
 async function watchView(code) {
@@ -520,6 +529,17 @@ async function live(code, role) {
         }) }, "End match")];
     });
   }
+  // A guest (made for this session): keep them as a regular player (in the session's club, if it has one), or link an
+  // account to them.
+  const guestActions = (p, close, clubId = null) => actions(
+    action("⭐", clubId ? "Add to club" : "Keep", (e) => act(e.target, async () => {
+      close();
+      if (clubId) await pb.addClubPlayer(clubId, p.id); else await pb.keepPlayer(p.id);
+      note(`${p.name} is a regular player now.`);
+      await load();
+    })),
+    action("🔗", "Link", (e) => act(e.target, () => linkSheet(p))));
+
   // Someone in line: skip, break, pair, leave.
   function playerSheet(pid, s) {
     const p = person(pid);
@@ -537,7 +557,8 @@ async function live(code, role) {
         role.runner && action("👋", "Leave", (e) => {
           if (!confirm(`${p.name} leaves the session?`)) return;
           act(e.target, async () => { close(); busy = true; try { await pb.setHere(v.id, pid, false); await load(); } finally { busy = false; } });
-        }))];
+        })),
+      p.guest && me.manager && guestActions(p, close, role.clubId)];
     });
   }
   // Someone up next: swap, skip, break, or leave their spot empty.
@@ -573,21 +594,24 @@ async function live(code, role) {
       const drawSeg = () => seg.replaceChildren(...rot.ALGORITHMS.map((a) => el("button", { type: "button", "aria-pressed": String(a.id === algorithm),
         onclick: () => { algorithm = a.id; drawSeg(); } }, a.title)));
       drawSeg();
-      return [el("label", { class: "field" }, "Courts", courts), seg,
+      const name = el("input", { value: v.name || "", placeholder: v.club || "Optional", maxlength: 40, "aria-label": "Session name" });
+      return [el("label", { class: "field" }, "Name", name), el("label", { class: "field" }, "Courts", courts), seg,
         el("button", { type: "button", onclick: (e) => act(e.target, async () => {
-          await pb.setSession(v.id, Number(courts.value), algorithm); close(); await load();
+          if (name.value.trim() !== (v.name || "")) await pb.renameSession(v.id, name.value);
+          if (Number(courts.value) !== v.courts || algorithm !== v.algorithm) await pb.setSession(v.id, Number(courts.value), algorithm);
+          close(); await load();
         }) }, "Save")];
     });
   }
   async function addPlayersSheet() {
     const all = await pb.players();
     const ids = new Set(v.players.filter((p) => p.here).map((p) => p.id));
-    const rest = all.filter((p) => !ids.has(p.id));
+    const rest = regular(all).filter((p) => !ids.has(p.id));
     const add = (pid) => act(null, async () => { busy = true; try { await pb.setHere(v.id, pid, true); await load(); } finally { busy = false; } });
     openSheet("Add players", (close) => [rest.length > 0 && el("div", { class: "list" }, ...rest.map((p) => el("button", { type: "button", class: "item", onclick: () => { close(); add(p.id); } },
       el("span", { class: "who" }, face(p)), el("span", { class: "meta" }, "Add")))),
     el("p", { class: "muted" }, "Or a guest:"),
-    newPlayerForm("Guest", async (pid) => { close(); await add(pid); })]);
+    newPlayerForm("Guest", async (pid) => { close(); await add(pid); }, true)]);
   }
   async function helperSheet() {
     const code = await pb.helperCode(v.id);
@@ -701,11 +725,15 @@ async function live(code, role) {
     const minutesPlayed = done.reduce((n, m) => n + minutes(m.started_at, m.ended_at), 0);
     stats([[done.length, done.length === 1 ? "match" : "matches"], [rows.length, "players"], [minutesPlayed, "min played"]]);
     return [
-      card(head(v.club || "Pickup session"), el("p", { class: "muted" }, `${day(v.started_at)} · ${rot.ALGORITHMS.find((a) => a.id === v.algorithm)?.title || ""} rotation · ${v.courts} court${v.courts > 1 ? "s" : ""}`)),
+      card(head(sessionTitle(v.name, v.club)), el("p", { class: "muted" }, `${v.name && v.club ? `${v.club} · ` : ""}${day(v.started_at)} · ${rot.ALGORITHMS.find((a) => a.id === v.algorithm)?.title || ""} rotation · ${v.courts} court${v.courts > 1 ? "s" : ""}`)),
       rows.length > 0 && card(head("🏆 Results"),
         el("table", { class: "board" },
           el("thead", {}, el("tr", {}, el("th", {}, "Player"), el("th", {}, "Played"), el("th", {}, "Won"))),
-          el("tbody", {}, ...rows.map(([x, t]) => el("tr", {}, el("td", {}, face(person(x))), el("td", {}, String(t.played)), el("td", {}, String(t.won))))))),
+          el("tbody", {}, ...rows.map(([x, t]) => el("tr", {}, el("td", {}, face(person(x)),
+            person(x)?.guest && (me.manager
+              ? el("button", { type: "button", class: "tag guest-btn", "aria-label": `${person(x).name} is a guest: keep or link`, onclick: () => openSheet(face(person(x)), (close) => [guestActions(person(x), close)]) }, "Guest ⋯")
+              : el("span", { class: "tag" }, "Guest"))),
+          el("td", {}, String(t.played)), el("td", {}, String(t.won))))))),
       matchList(done.slice().reverse(), "Matches")];
   }
   function matchList(list, title) {
@@ -725,7 +753,7 @@ async function live(code, role) {
     const s = state();
     const waiting = s.order.filter((x) => !s.away.includes(x)).length;
     stats([[onCourt().length, "playing"], [waiting, "waiting"], [v.courts, v.courts === 1 ? "court" : "courts"]]);
-    const sections = [];
+    const sections = [el("h2", { class: "session-title" }, sessionTitle(v.name, v.club))];
 
     // Courts
     for (let c = 1; c <= v.courts; c++) {
@@ -758,6 +786,7 @@ async function live(code, role) {
       el("span", { class: "who" }, face(person(x))),
       partner(x) && el("span", { class: "tag", title: `Plays with ${person(partner(x))?.name}` }, `🔗 ${person(partner(x))?.icon || "👤"}`),
       s.skipped.includes(x) && el("span", { class: "tag", title: "Skips the next match" }, "⏭"),
+      person(x)?.guest && el("span", { class: "tag", title: "Guest: this session only" }, "Guest"),
       el("span", { class: "meta", title: "Matches played" }, `🏓 ${s.games[x] || 0}`),
       canEdit() && el("button", { type: "button", class: "icon-btn", "aria-label": `Options for ${person(x)?.name}`, onclick: () => playerSheet(x, s) }, "⋯"));
     sections.push(el("section", { class: "card upnext" },
@@ -776,7 +805,7 @@ async function live(code, role) {
     // Runners: the session's links and settings
     if (role.runner) {
       const watchLink = new URL(here(`w=${code}`), location.href).href;
-      sections.push(card(head(v.club || "Pickup session"),
+      sections.push(card(head("Session"),
         el("p", { class: "muted" }, `${rot.ALGORITHMS.find((a) => a.id === v.algorithm)?.title || v.algorithm} rotation · started ${ago(v.started_at)}${minutes(v.started_at) >= 1 ? " ago" : ""}`),
         el("button", { type: "button", onclick: (e) => act(e.target, () => share(watchLink, "Who's playing")) }, "📺 Share live view"),
         el("div", { class: "row" },
