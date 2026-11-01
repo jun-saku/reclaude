@@ -446,7 +446,12 @@ async function sessionView(id) {
 async function watchView(code) {
   if (me?.manager) setBack(here("dash"), "Pickleball home");
   else $("back").hidden = true; // the public live view: nowhere to go back to
-  await live(code, { helper: false, runner: false });
+  // Managers opening a past session: its club, so a guest can be added to it from the Players list.
+  let clubId = null;
+  if (me?.manager) {
+    try { clubId = [...(await pb.sessions()), ...(await pb.pastSessions())].find((x) => x.watch_code === code)?.club_id || null; } catch {}
+  }
+  await live(code, { helper: false, runner: false, clubId });
 }
 
 // The session for its watch code, refreshed every few seconds; helpers and runners also get the controls.
@@ -761,10 +766,10 @@ async function live(code, role) {
     }
     const rows = Object.entries(tally).sort(([, x], [, y]) => y.won - x.won || y.played - x.played);
     const minutesPlayed = done.reduce((n, m) => n + minutes(m.started_at, m.ended_at), 0);
-    stats([[done.length, done.length === 1 ? "match" : "matches"], [rows.length, "players"], [minutesPlayed, "min played"]]);
+    stats([[done.length, done.length === 1 ? "match" : "matches"], [v.players.length, v.players.length === 1 ? "player" : "players"], [minutesPlayed, "min played"]]);
     return [
       card(head(sessionTitle(v.name, v.club)), el("p", { class: "muted" }, `${v.name && v.club ? `${v.club} · ` : ""}${day(v.started_at)} · ${rot.ALGORITHMS.find((a) => a.id === v.algorithm)?.title || ""} rotation · ${v.courts} court${v.courts > 1 ? "s" : ""}`)),
-      playersCard("🏆 Results", true),
+      playersCard("🏆 Players"),
       matchList(done.slice().reverse(), "Matches")];
   }
   function matchList(list, title) {
