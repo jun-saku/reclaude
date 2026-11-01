@@ -19,6 +19,13 @@
 //                                       side_b, started_at, ended_at, score_a, score_b }] } or null (no sign-in needed)
 //   await pb.saveState(session, version, state, action, detail)   the new version (refused if it isn't `version`)
 //   await pb.startMatch(session, court, a, b) / endMatch(match, scoreA, scoreB)
+// Linking an account to players (…_pickleball_links.sql):
+//   await pb.linkCode(player)           managers: a one-time code (formatted) for that player, valid 7 days
+//   await pb.linkPlayer(code)           an account links itself: the player { id, name, icon }
+//   await pb.unlinkPlayer(player)       the linked account, or the player's managers
+//   await pb.links()                    managers: [{ player_id, username, display_name, avatar }]
+//   await pb.myGames()                  { players: [{ id, name, icon, sessions, matches, wins, minutes }],
+//                                         sessions: [{ id, club, started_at, ended_at, watch_code, matches }] }
 import * as core from "../shared/core.js";
 
 const app = core.app("pickleball");
@@ -80,6 +87,11 @@ const live = {
   saveState: (session, version, state, action, detail) => rpc("save_state", { session, version, state, action, detail }),
   startMatch: (session, court, side_a, side_b) => rpc("start_match", { session, court, side_a, side_b }),
   endMatch: (match_id, score_a, score_b) => rpc("end_match", { match_id, score_a, score_b }),
+  linkCode: (player) => rpc("link_code", { player }),
+  linkPlayer: (code) => rpc("link_player", { code }),
+  unlinkPlayer: (player) => rpc("unlink_player", { player }),
+  links: () => rpc("links"),
+  myGames: () => rpc("my_games"),
 };
 
 // ---------- ?backend=fake: this browser only (the same checks, roughly) ----------
@@ -89,6 +101,8 @@ const newCode = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), (b)
 function db() {
   const d = app.read();
   for (const k of ["players", "clubs", "sessions", "matches", "log"]) d[k] ||= [];
+  d.links ||= {}; // player id: user id
+  d.linkCodes ||= {}; // code: { player, expires }
   return d;
 }
 async function who() { return (await core.signedIn())?.id || null; }
@@ -289,6 +303,65 @@ const fake = {
     bump(s);
     app.write(d);
   },
+  async linkCode(player) {
+    const me = await needManager();
+    const d = db();
+    const p = d.players.find((x) => x.id === player);
+    if (!p || !(p.made_by === me || d.clubs.some((c) => c.players.includes(player) && c.managers.includes(me)))) {
+      no("Only whoever added this player, or a manager of their club, can do that.");
+    }
+    if (d.links[player]) no("This player is already linked to an account.");
+    for (const [k, v] of Object.entries(d.linkCodes)) if (v.player === player) delete d.linkCodes[k];
+    const code = newCode();
+    d.linkCodes[code] = { player, expires: Date.now() + 7 * 864e5 };
+    app.write(d);
+    return code;
+  },
+  async linkPlayer(code) {
+    const acc = await core.account();
+    if (!acc?.active) no("Sign in to your account first.");
+    const d = db();
+    const c = d.linkCodes[code];
+    if (!c || c.expires < Date.now()) no("That code doesn't work. Ask for a new one.");
+    delete d.linkCodes[code];
+    d.links[c.player] = await who();
+    app.write(d);
+    const { id, name, icon } = d.players.find((x) => x.id === c.player);
+    return { id, name, icon };
+  },
+  async unlinkPlayer(player) {
+    const d = db();
+    const me = await who();
+    if (d.links[player] !== me && !(await isManager())) no("Only the linked account, or a manager of this player, can unlink it.");
+    delete d.links[player];
+    app.write(d);
+  },
+  async links() {
+    if (!(await isManager())) return [];
+    let accounts = {};
+    try { accounts = JSON.parse(localStorage.getItem("core-fake"))?.accounts || {}; } catch {}
+    return Object.entries(db().links).map(([player_id, uid]) => {
+      const [username, a] = Object.entries(accounts).find(([, x]) => x.id === uid) || ["?", {}];
+      return { player_id, username, display_name: a.profile?.display_name || null, avatar: a.profile?.avatar || null };
+    });
+  },
+  async myGames() {
+    const d = db();
+    const me = await who();
+    const mine = Object.entries(d.links).filter(([, uid]) => uid === me).map(([pid]) => pid);
+    const done = d.matches.filter((m) => m.ended_at);
+    const players = d.players.filter((p) => mine.includes(p.id)).map((p) => {
+      const played = done.filter((m) => [...m.side_a, ...m.side_b].includes(p.id));
+      return { id: p.id, name: p.name, icon: p.icon,
+        sessions: d.sessions.filter((s) => s.here.some((h) => h.id === p.id)).length, matches: played.length,
+        wins: played.filter((m) => m.score_a != null && m.score_a !== m.score_b && (m.score_a > m.score_b) === m.side_a.includes(p.id)).length,
+        minutes: Math.round(played.reduce((n, m) => n + (new Date(m.ended_at) - new Date(m.started_at)) / 60000, 0)) };
+    });
+    const sessions = d.sessions.filter((s) => s.here.some((h) => mine.includes(h.id))).reverse().slice(0, 30).map((s) => ({
+      id: s.id, club: d.clubs.find((c) => c.id === s.club_id)?.name || null, started_at: s.started_at, ended_at: s.ended_at, watch_code: s.watch_code,
+      matches: done.filter((m) => m.session_id === s.id && [...m.side_a, ...m.side_b].some((x) => mine.includes(x))).length }));
+    return { players, sessions };
+  },
 };
 
 const backend = () => (app.fake ? fake : live);
@@ -336,4 +409,16 @@ export function endMatch(match, scoreA = null, scoreB = null) {
   const [a, b] = [n(scoreA), n(scoreB)];
   if ([a, b].some((x) => x != null && !(Number.isInteger(x) && x >= 0 && x <= 99))) throw new CoreError("A score is a number from 0 to 99.");
   return backend().endMatch(match, a, b);
+}
+export const linkCode = async (player) => core.formatKey(await backend().linkCode(player));
+export async function linkPlayer(code) {
+  const key = core.cleanKey(code);
+  if (key.length !== 16) throw new CoreError("That code doesn't work. Ask for a new one.");
+  return backend().linkPlayer(key);
+}
+export const unlinkPlayer = (player) => backend().unlinkPlayer(player);
+export const links = () => backend().links();
+export async function myGames() {
+  if (!(await core.signedIn())) return { players: [], sessions: [] };
+  return backend().myGames();
 }
