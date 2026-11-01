@@ -519,11 +519,15 @@ async function live(code, role) {
   }
 
   // A court: two halves, players (or slots) on each.
-  function court(left, right, { next = false, freeText = null } = {}) {
+  function court(left, right, { next = false, freeText = null, court: number = null } = {}) {
     const drop = (side) => (next && canEdit() ? { "data-drop": "side", "data-side": side } : {});
-    return el("div", { class: `court${next ? " next" : ""}` },
+    // The next match drags as a whole (held anywhere but on a player) onto a free court, to start it there.
+    const whole = next && canEdit() && state().next?.a.length && state().next?.b.length ? { "data-drag": "match" } : {};
+    const free = number && canEdit() ? { "data-drop": "court", "data-court": number } : {};
+    return el("div", { class: `court${next ? " next" : ""}`, ...whole, ...free },
       el("div", { class: "half a", ...drop("a") }, ...left), el("div", { class: "net", "aria-hidden": "true" }), el("div", { class: "half b", ...drop("b") }, ...right),
-      freeText && el("div", { class: "free" }, el("span", {}, freeText)));
+      freeText && el("div", { class: "free" }, el("span", {}, freeText)),
+      whole["data-drag"] && el("span", { class: "court-grip", "aria-hidden": "true" }, "⠿"));
   }
 
   // Hold and drag (managers and helpers): hold someone for a moment, then drag them onto a spot in the next match
@@ -545,7 +549,7 @@ async function live(code, role) {
       Object.assign(ghost.style, { width: `${box.width}px`, left: `${box.left}px`, top: `${box.top}px` });
       document.body.append(ghost);
       from.classList.add("lifted");
-      document.body.classList.add("dragging");
+      document.body.classList.add(from.dataset.drag === "match" ? "dragging-match" : "dragging");
       drag = { pid: from.dataset.drag, from, ghost, dx: x - box.left, dy: y - box.top, over: null };
       busy = true;
       navigator.vibrate?.(15);
@@ -570,13 +574,15 @@ async function live(code, role) {
     ghost.remove();
     from.classList.remove("lifted");
     over?.classList.remove("over");
-    document.body.classList.remove("dragging");
+    document.body.classList.remove("dragging", "dragging-match");
     swallowClick = true;
     setTimeout(() => { swallowClick = false; }, 400);
     busy = false;
     const target = e.type === "pointercancel" ? null : over;
     if (!target) return;
     const kind = target.dataset.drop, other = target.dataset.pid, side = target.dataset.side;
+    if (pid === "match") { if (kind === "court") await startOn(Number(target.dataset.court), null); return; }
+    if (kind === "court") return;
     const s = state();
     const inNext = (x) => !!s.next && [...s.next.a, ...s.next.b].includes(x);
     let change = null;
@@ -642,7 +648,7 @@ async function live(code, role) {
       sections.push(card(
         el("div", { class: "court-head" }, el("h2", {}, "Court", el("span", { class: "court-no" }, String(c))),
           m && el("span", { class: "timer" }, el("span", { class: "live-dot", "aria-hidden": "true" }), ago(m.started_at))),
-        m ? court(m.side_a.map((x) => chip(x)), m.side_b.map((x) => chip(x))) : court([], [], { freeText: "Free" }),
+        m ? court(m.side_a.map((x) => chip(x)), m.side_b.map((x) => chip(x))) : court([], [], { freeText: "Free", court: c }),
         canEdit() && (m ? el("button", { type: "button", class: "secondary", onclick: () => endMatchSheet(m) }, "End match")
           : s.next?.a.length && s.next?.b.length && el("button", { type: "button", onclick: (e) => startOn(c, e.target) }, "Start next match here"))));
     }

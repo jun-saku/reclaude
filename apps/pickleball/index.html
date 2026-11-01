@@ -64,6 +64,9 @@
       text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4); }
     .court .free span { padding: 4px 14px; border-radius: 999px; background: rgba(0, 0, 0, 0.45); }
     .court.next { background: var(--court-in); border-style: dashed; }
+    .court-grip { position: absolute; top: 2px; left: 50%; transform: translateX(-50%); z-index: 3; padding: 0 6px; border-radius: 6px;
+      background: rgba(0, 0, 0, 0.35); color: #fff; font-size: 0.9rem; line-height: 1.3; pointer-events: none; }
+    .court.ghost { padding: 0; }
     .pchip { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; background: var(--chip); color: var(--chip-text);
       font-weight: 650; font-size: 0.95rem; min-width: 0; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25); }
     .pchip .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
