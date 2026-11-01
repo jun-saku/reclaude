@@ -67,7 +67,8 @@
     .pchip { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; background: var(--chip); color: var(--chip-text);
       font-weight: 650; font-size: 0.95rem; min-width: 0; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25); }
     .pchip .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .pchip .x { margin-left: auto; color: #5e5e63; font-size: 1.1rem; font-weight: 800; }
+    .pchip .x { margin-left: auto; color: #5e5e63; font-size: 0.8rem; font-weight: 800; letter-spacing: -1px; }
+    @media (max-width: 360px) { .pchip { padding: 6px 8px; gap: 4px; font-size: 0.9rem; } .court .half { padding-left: 6px; padding-right: 6px; } .court .half.a { padding-right: 14px; } .court .half.b { padding-left: 14px; } }
     button.pchip { width: 100%; text-align: left; min-height: 44px; }
     button.slot { min-height: 44px; border-radius: 999px; background: transparent; border: 2px dashed var(--lines); color: #fff; font-weight: 800; font-size: 1.3rem; padding: 0; }
     .court-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
