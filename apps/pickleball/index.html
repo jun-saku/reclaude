@@ -118,6 +118,12 @@
     .feature b { font-size: 0.95rem; }
     .feature span { font-size: 0.85rem; color: var(--muted); }
     .big-start { min-height: 56px; font-size: 1.1rem; }
+    .session-title { text-align: center; font-size: 1.2rem; overflow-wrap: anywhere; }
+    .field input { flex: 1; max-width: 62%; }
+    table.board .tag { margin-left: 6px; }
+    table.board td:last-child:has(.icon-btn) { width: 44px; padding: 4px 0 4px 6px; }
+    table.board tr.left td:first-child { opacity: 0.6; }
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
     .me-player { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 12px; background: var(--next); }
     .me-head { display: flex; align-items: center; gap: 10px; }
     .me-head .who { flex: 1; min-width: 0; font-size: 1.1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
