@@ -67,9 +67,9 @@
     .pchip { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; background: var(--chip); color: var(--chip-text);
       font-weight: 650; font-size: 0.95rem; min-width: 0; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25); }
     .pchip .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .pchip .x { margin-left: auto; color: #5e5e63; font-size: 0.9rem; }
+    .pchip .x { margin-left: auto; color: #5e5e63; font-size: 1.1rem; font-weight: 800; }
     button.pchip { width: 100%; text-align: left; min-height: 44px; }
-    button.slot { min-height: 44px; border-radius: 999px; background: transparent; border: 2px dashed var(--lines); color: #fff; font-weight: 650; }
+    button.slot { min-height: 44px; border-radius: 999px; background: transparent; border: 2px dashed var(--lines); color: #fff; font-weight: 800; font-size: 1.3rem; padding: 0; }
     .court-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
     .court-head h2 { display: flex; align-items: center; gap: 8px; }
     .court-no { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--ball); color: var(--ball-text);
@@ -83,7 +83,9 @@
     /* The line: numbered balls */
     .line-no { flex: none; display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%;
       background: var(--ball); color: var(--ball-text); font-weight: 800; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
-    .item.away .who, .item.away .line-no { opacity: 0.55; }
+    .item.away .who { opacity: 0.6; }
+    .item.away .line-no { background: var(--soft); font-size: 1rem; }
+    .head > div, .head .tools { display: flex; gap: 6px; }
     .results { display: grid; grid-template-columns: 1fr auto 1fr; gap: 6px 8px; align-items: center; }
     .results .sideList { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
     .results .score { font-weight: 800; font-variant-numeric: tabular-nums; text-align: center; color: var(--muted); }

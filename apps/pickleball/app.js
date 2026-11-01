@@ -48,7 +48,7 @@ const minutes = (from, to = Date.now()) => Math.max(0, Math.floor((new Date(to) 
 const ago = (iso) => { const m = minutes(iso); return m < 1 ? "just now" : m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`; };
 const day = (iso) => new Date(iso).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
 const card = (...kids) => el("section", { class: "card" }, ...kids);
-const head = (title, ...right) => el("div", { class: "head" }, el("h2", {}, title), ...right);
+const head = (title, ...right) => el("div", { class: "head" }, el("h2", {}, title), right.some(Boolean) && el("div", { class: "tools" }, ...right));
 const empty = (text) => el("p", { class: "empty" }, text);
 const face = (p) => `${p?.icon || "👤"} ${p?.name || "?"}`;
 function setBack(href, label) { $("back").href = href; $("back").setAttribute("aria-label", label); $("back").hidden = false; }
@@ -131,7 +131,7 @@ function landing() {
         installPrompt = null;
         $("install-now").hidden = true;
       } }, "Install Pickleball")),
-    el("p", { class: "hint" }, "Players don't need anything: the manager shares a live link."));
+  );
 }
 
 function notManager() {
@@ -198,8 +198,7 @@ async function playersView() {
   const players = await pb.players();
   show(card(head(`Players (${players.length})`),
     players.length ? el("div", { class: "list" }, ...players.map((p) => playerRow(p, playersView))) : empty("No players yet."),
-    newPlayerForm("New player", () => playersView()),
-    el("p", { class: "hint" }, "Players don't need an account: a name and an emoji is enough.")));
+    newPlayerForm("New player", () => playersView())));
 }
 
 // ---------- a club ----------
@@ -243,8 +242,7 @@ async function clubView(id) {
           onclick: (e) => { if (uid !== me.id || confirm("Stop managing this club?")) act(e.target, async () => { await pb.removeClubManager(id, uid); await reload(); }); } }, "🗑")))),
       mine && pickManager.options.length > 0 && el("div", { class: "form" }, pickManager, el("button", { type: "button", class: "secondary", onclick: (e) => act(e.target, async () => {
         await pb.addClubManager(id, pickManager.value); await reload();
-      }) }, "Add")),
-      el("p", { class: "hint" }, "Managers are accounts with the pickleball manager role.")));
+      }) }, "Add"))));
 }
 
 // ---------- start a session ----------
@@ -402,7 +400,7 @@ async function live(code, role) {
       drawSeg();
       const sync = () => { const x = a.value, y = b.value; if (x !== "" && y !== "" && x !== y) { winner = Number(x) > Number(y) ? "a" : "b"; drawSeg(); } };
       a.addEventListener("input", sync); b.addEventListener("input", sync);
-      return [el("p", { class: "muted" }, "Who won? Both optional: tap the winners, or enter the score."), seg,
+      return [el("p", { class: "muted" }, "Who won?"), seg,
         el("div", { class: "scores" },
           el("label", {}, el("span", {}, "Left"), a),
           el("label", {}, el("span", {}, "Right"), b)),
@@ -426,17 +424,17 @@ async function live(code, role) {
       const run = (fn, action) => (e) => act(e.target, async () => { close(); await save(fn, action, { player: pid }); });
       const mate = el("select", { "aria-label": "Play with" }, ...others.map((x) => el("option", { value: x }, face(person(x)))));
       return [
-        !away && el("button", { type: "button", class: "secondary", onclick: run((st) => rot.skip(st, v.algorithm, pid), "skipped") }, "Skip the next match"),
+        !away && el("button", { type: "button", class: "secondary", onclick: run((st) => rot.skip(st, v.algorithm, pid), "skipped") }, "⏭ Skip next match"),
         el("button", { type: "button", class: "secondary", onclick: run((st) => rot.setAway(st, v.algorithm, pid, !away), away ? "back" : "on a break") },
-          away ? "Back from a break" : "Take a break"),
+          away ? "▶️ Back in line" : "☕ Break"),
         partner ? el("button", { type: "button", class: "secondary", onclick: run((st) => rot.unpair(st, v.algorithm, pid), "unpaired") },
-          `Stop pairing with ${person(partner)?.name}`)
+          `🔗 Unpair from ${person(partner)?.name}`)
           : others.length > 0 && el("div", { class: "form" }, mate, el("button", { type: "button", class: "secondary",
-            onclick: (e) => act(e.target, async () => { const x = mate.value; close(); await save((st) => rot.pair(st, v.algorithm, pid, x), "paired", { player: pid, with: x }); }) }, "Pair")),
+            onclick: (e) => act(e.target, async () => { const x = mate.value; close(); await save((st) => rot.pair(st, v.algorithm, pid, x), "paired", { player: pid, with: x }); }) }, "🔗 Pair")),
         role.runner && el("button", { type: "button", class: "secondary", onclick: (e) => {
           if (!confirm(`${p.name} leaves the session?`)) return;
           act(e.target, async () => { close(); busy = true; try { await pb.setHere(v.id, pid, false); await load(); } finally { busy = false; } });
-        } }, "Leaves the session"),
+        } }, "👋 Leaves"),
       ];
     });
   }
@@ -448,10 +446,16 @@ async function live(code, role) {
       const pick = el("select", { "aria-label": "Who plays instead" }, ...choices.map((x) => el("option", { value: x }, face(person(x)))));
       return [choices.length > 0 && el("div", { class: "form" }, pick, el("button", { type: "button", onclick: (e) => act(e.target, async () => {
         const x = pick.value; close(); await save((st) => rot.swap(st, v.algorithm, pid, x), "swapped", { out: pid, in: x });
-      }) }, "Swap")),
+      }) }, "⇄ Swap")),
+      el("button", { type: "button", class: "secondary", onclick: (e) => act(e.target, async () => {
+        close(); await save((st) => rot.skip(st, v.algorithm, pid), "skipped", { player: pid });
+      }) }, "⏭ Skip next match"),
+      el("button", { type: "button", class: "secondary", onclick: (e) => act(e.target, async () => {
+        close(); await save((st) => rot.setAway(st, v.algorithm, pid, true), "on a break", { player: pid });
+      }) }, "☕ Break"),
       el("button", { type: "button", class: "secondary", onclick: (e) => act(e.target, async () => {
         close(); await save((st) => rot.removeFromNext(st, v.algorithm, pid), "took out", { player: pid });
-      }) }, "Take out of this match")];
+      }) }, "Leave this spot empty")];
     });
   }
   // An empty spot up next: whoever's waiting.
@@ -501,7 +505,7 @@ async function live(code, role) {
       box.innerHTML = `<svg viewBox="0 0 ${n + 2 * q} ${n + 2 * q}" role="img" aria-label="QR code: scan to help run this session"><rect width="100%" height="100%" fill="#fff"/><path d="${d}" fill="#111"/></svg>`;
     } catch {}
     openSheet("Helper QR", () => [
-      el("p", {}, "Whoever scans this can run the courts and the line for this session. A new QR stops the old one."), box,
+      el("p", { class: "muted" }, "Scan to help run the courts."), box,
       el("button", { type: "button", class: "secondary", onclick: (e) => act(e.target, () => share(link, "Help run the courts")) }, "Share link")]);
   }
   async function share(url, title) {
@@ -537,8 +541,7 @@ async function live(code, role) {
       rows.length > 0 && card(head("🏆 Results"),
         el("table", { class: "board" },
           el("thead", {}, el("tr", {}, el("th", {}, "Player"), el("th", {}, "Played"), el("th", {}, "Won"))),
-          el("tbody", {}, ...rows.map(([x, t]) => el("tr", {}, el("td", {}, face(person(x))), el("td", {}, String(t.played)), el("td", {}, String(t.won)))))),
-        el("p", { class: "hint" }, "Wins count matches with a score.")),
+          el("tbody", {}, ...rows.map(([x, t]) => el("tr", {}, el("td", {}, face(person(x))), el("td", {}, String(t.played)), el("td", {}, String(t.won))))))),
       matchList(done.slice().reverse(), "Matches")];
   }
   function matchList(list, title) {
@@ -571,34 +574,33 @@ async function live(code, role) {
           : s.next?.a.length && s.next?.b.length && el("button", { type: "button", onclick: (e) => startOn(c, e.target) }, "Start next match here"))));
     }
 
-    // Up next: tap someone to swap or take them out; tap an empty spot to put someone in (1 or 2 a side).
+    // The queue: the next match (on a dashed court: tap a player for options, an empty spot to add someone), then
+    // everyone else waiting in order, then whoever's on a break (☕) at the bottom. ⋯ opens a person's options.
     const sideOf = (side) => {
       const ids = s.next?.[side] || [];
-      const chips = ids.map((x) => (canEdit() ? chip(x, { type: "button", "aria-label": `${person(x)?.name}: swap or take out`, onclick: () => nextSheet(x, s) }, "button", el("span", { class: "x", "aria-hidden": "true" }, "⇄"))
+      const chips = ids.map((x) => (canEdit() ? chip(x, { type: "button", "aria-label": `Options for ${person(x)?.name}`, onclick: () => nextSheet(x, s) }, "button", el("span", { class: "x", "aria-hidden": "true" }, "⋯"))
         : chip(x)));
-      const slots = canEdit() ? Array.from({ length: 2 - ids.length }, () => el("button", { type: "button", class: "slot", onclick: () => slotSheet(side, s) }, "+ Add")) : [];
+      const slots = canEdit() ? Array.from({ length: 2 - ids.length }, () => el("button", { type: "button", class: "slot", "aria-label": "Add a player here", onclick: () => slotSheet(side, s) }, "+")) : [];
       return [...chips, ...slots];
     };
-    sections.push(el("section", { class: "card upnext" },
-      el("div", { class: "head" }, el("h2", {}, "Up next"), s.next?.manual && el("span", { class: "tag" }, "Changed by hand")),
-      s.next || canEdit() ? court(sideOf("a"), sideOf("b"), { next: true }) : empty("Waiting for at least two players."),
-      canEdit() && el("p", { class: "hint" }, "Tap a player to swap them, or an empty spot to add someone."),
-      canEdit() && s.next?.manual && el("button", { type: "button", class: "secondary", onclick: (e) => act(e.target, () => save((st) => rot.repick(st, v.algorithm), "picked again")) }, "Pick again")));
-
-    // The line
     const partner = (x) => s.pairs.find((p) => p.includes(x))?.find((y) => y !== x);
     const inNext = s.next ? [...s.next.a, ...s.next.b] : [];
-    const row = (x, i) => {
-      const tags = [s.away.includes(x) && "Break", s.skipped.includes(x) && "Skips next", partner(x) && `With ${person(partner(x))?.name}`,
-        inNext.includes(x) && "Up next"].filter(Boolean);
-      const inner = [el("span", { class: "line-no" }, String(i + 1)), el("span", { class: "who" }, face(person(x))),
-        ...tags.map((t) => el("span", { class: "tag" }, t)), el("span", { class: "meta" }, `${s.games[x] || 0} played`)];
-      return canEdit() ? el("button", { type: "button", class: `item${s.away.includes(x) ? " away" : ""}`, onclick: () => playerSheet(x, s) }, ...inner)
-        : el("div", { class: `item${s.away.includes(x) ? " away" : ""}` }, ...inner);
-    };
-    sections.push(card(head("In line", role.runner && el("button", { type: "button", class: "secondary", onclick: (e) => act(e.target, addPlayersSheet) }, "Add")),
-      s.order.length ? el("div", { class: "list" }, ...s.order.map(row)) : empty("Nobody waiting."),
-      canEdit() && s.order.length > 0 && el("p", { class: "hint" }, "Tap someone to skip them, give them a break or pair them.")));
+    const waitingList = s.order.filter((x) => !inNext.includes(x) && !s.away.includes(x));
+    const onBreak = s.order.filter((x) => s.away.includes(x));
+    const row = (x, mark) => el("div", { class: `item${s.away.includes(x) ? " away" : ""}` },
+      el("span", { class: "line-no", "aria-label": s.away.includes(x) ? "On a break" : `Number ${mark}` }, String(mark)),
+      el("span", { class: "who" }, face(person(x))),
+      partner(x) && el("span", { class: "tag", title: `Plays with ${person(partner(x))?.name}` }, `🔗 ${person(partner(x))?.icon || "👤"}`),
+      s.skipped.includes(x) && el("span", { class: "tag", title: "Skips the next match" }, "⏭"),
+      el("span", { class: "meta", title: "Matches played" }, `🏓 ${s.games[x] || 0}`),
+      canEdit() && el("button", { type: "button", class: "icon-btn", "aria-label": `Options for ${person(x)?.name}`, onclick: () => playerSheet(x, s) }, "⋯"));
+    sections.push(el("section", { class: "card upnext" },
+      head("Queue",
+        canEdit() && s.next?.manual && el("button", { type: "button", class: "icon-btn", "aria-label": "Pick the next match again", onclick: (e) => act(e.target, () => save((st) => rot.repick(st, v.algorithm), "picked again")) }, "↻"),
+        role.runner && el("button", { type: "button", class: "icon-btn", "aria-label": "Add players", onclick: (e) => act(e.target, addPlayersSheet) }, "+")),
+      (s.next || canEdit()) && court(sideOf("a"), sideOf("b"), { next: true }),
+      waitingList.length || onBreak.length ? el("div", { class: "list" }, ...waitingList.map((x, i) => row(x, i + 1)), ...onBreak.map((x) => row(x, "☕")))
+        : !s.next && empty("Nobody waiting.")));
 
     sections.push(matchList(v.matches.filter((m) => m.ended_at).slice(-5).reverse(), "Last matches"));
 
@@ -614,8 +616,6 @@ async function live(code, role) {
         el("button", { type: "button", class: "secondary", onclick: (e) => {
           if (confirm("End the session? Matches on court end too.")) act(e.target, async () => { await pb.endSession(v.id); await load(); });
         } }, "End session")));
-    } else if (!role.helper) {
-      sections.push(el("p", { class: "hint" }, `${v.club ? `${v.club} · ` : ""}updates by itself.`));
     }
     show(...sections);
   }
