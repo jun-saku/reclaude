@@ -336,6 +336,8 @@
           buttons.length > 0 && el("section", {}, el("h3", {}, "Account"), el("div", { class: "row" }, ...buttons)),
           el("section", {}, el("h3", {}, "Roles"),
             rows.length ? el("div", { class: "roles" }, ...rows) : el("p", { class: "empty" }, "No roles."),
+            a.role === "superuser" && el("p", { class: "empty" }, "A superuser already holds every role in every project."),
+            self && el("p", { class: "empty" }, "Nobody changes their own roles."),
             adder));
         const gear = el("button", { type: "button", class: "gear", "aria-label": `Actions for @${a.username}`,
           "aria-expanded": "false", "aria-controls": `actions-${a.id}` }, "⚙️");
