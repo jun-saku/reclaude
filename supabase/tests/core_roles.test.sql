@@ -5,9 +5,9 @@ create extension if not exists pgtap with schema extensions;
 select plan(33);
 
 -- A project with its own roles, as its migration would add them.
-insert into core.apps (name, title) values ('pickleball', 'Pickleball');
+insert into core.apps (name, title) values ('quiz', 'Quiz');
 insert into core.app_role_names (app, role, title) values
-  ('pickleball', 'organiser', 'Organiser'), ('pickleball', 'scorekeeper', 'Scorekeeper');
+  ('quiz', 'organiser', 'Organiser'), ('quiz', 'scorekeeper', 'Scorekeeper');
 
 -- S becomes the superuser and invites A, B and C (plain accounts).
 insert into auth.users (id, aud, role, is_anonymous) values
@@ -31,17 +31,17 @@ do $$ begin perform core.make_account('bob', 'BBBBBBBBBBBBBBBB', current_setting
 set local request.jwt.claims = '{"sub": "00000000-0000-0000-0000-00000000000c", "role": "authenticated"}';
 do $$ begin perform core.make_account('cyd', 'CCCCCCCCCCCCCCCC', current_setting('t.c')); end $$;
 
-select is((select count(*) from core.apps), 1::bigint, 'anyone signed in reads the projects');
-select is((select count(*) from core.app_role_names), 2::bigint, 'and their roles');
-select ok(not core.has_app_role('pickleball', 'organiser'), 'C has no project role');
+select is((select count(*) from core.apps where name = 'quiz'), 1::bigint, 'anyone signed in reads the projects');
+select is((select count(*) from core.app_role_names where app = 'quiz'), 2::bigint, 'and their roles');
+select ok(not core.has_app_role('quiz', 'organiser'), 'C has no project role');
 select is((select count(*) from core.accounts), 1::bigint, 'a plain account sees only itself');
 
 -- Plain accounts can't give roles.
 set local request.jwt.claims = '{"sub": "00000000-0000-0000-0000-00000000000b", "role": "authenticated"}';
 select throws_ok($$ select core.set_role('00000000-0000-0000-0000-00000000000b', 'superuser') $$, '42501', null, 'a plain account cannot give itself a core role');
-select throws_ok($$ select core.give_app_role('00000000-0000-0000-0000-00000000000c', 'pickleball', 'organiser') $$, '42501', null,
+select throws_ok($$ select core.give_app_role('00000000-0000-0000-0000-00000000000c', 'quiz', 'organiser') $$, '42501', null,
   'nor anyone a project role');
-select throws_ok($$ insert into core.app_roles (user_id, app, role) values ('00000000-0000-0000-0000-00000000000b', 'pickleball', 'organiser') $$,
+select throws_ok($$ insert into core.app_roles (user_id, app, role) values ('00000000-0000-0000-0000-00000000000b', 'quiz', 'organiser') $$,
   '42501', null, 'nor write roles directly');
 
 -- Core roles: superusers only, never their own.
@@ -51,7 +51,7 @@ select throws_ok($$ select core.set_role('00000000-0000-0000-0000-00000000000a',
 select throws_ok($$ select core.set_role('00000000-0000-0000-0000-000000000005', 'admin') $$, '42501', null, 'S cannot change their own roles');
 select throws_ok($$ select core.remove_role('00000000-0000-0000-0000-000000000005') $$, '42501', null, 'so S stays a superuser');
 select throws_ok($$ select core.set_role('00000000-0000-0000-0000-0000000000ff', 'admin') $$, 'P0002', null, 'no role for an account that isn''t there');
-select throws_ok($$ insert into core.roles (user_id, role, scope) values ('00000000-0000-0000-0000-00000000000b', 'admin', 'pickleball') $$,
+select throws_ok($$ insert into core.roles (user_id, role, scope) values ('00000000-0000-0000-0000-00000000000b', 'admin', 'quiz') $$,
   '42501', null, 'core roles are written only by these functions');
 
 -- A (core admin): sees every account, gives and takes project roles, but no core roles.
@@ -60,35 +60,35 @@ select ok(core.is_admin() and not core.is_superuser(), 'A is an admin');
 select is((select count(*) from core.accounts), 4::bigint, 'an admin sees every account');
 select throws_ok($$ select core.set_role('00000000-0000-0000-0000-00000000000b', 'admin') $$, '42501', null, 'an admin cannot give core roles');
 select throws_ok($$ select core.set_active('00000000-0000-0000-0000-00000000000b', false) $$, '42501', null, 'nor change accounts');
-select lives_ok($$ select core.give_app_role('00000000-0000-0000-0000-00000000000b', 'pickleball', 'organiser') $$, 'A makes B an organiser');
-select lives_ok($$ select core.give_app_role('00000000-0000-0000-0000-00000000000b', 'pickleball', 'scorekeeper') $$, 'and a scorekeeper (several roles)');
-select lives_ok($$ select core.give_app_role('00000000-0000-0000-0000-00000000000b', 'pickleball', 'organiser') $$, 'giving it again is fine');
-select throws_ok($$ select core.give_app_role('00000000-0000-0000-0000-00000000000b', 'pickleball', 'referee') $$, 'P0002', null, 'only the project''s own roles');
+select lives_ok($$ select core.give_app_role('00000000-0000-0000-0000-00000000000b', 'quiz', 'organiser') $$, 'A makes B an organiser');
+select lives_ok($$ select core.give_app_role('00000000-0000-0000-0000-00000000000b', 'quiz', 'scorekeeper') $$, 'and a scorekeeper (several roles)');
+select lives_ok($$ select core.give_app_role('00000000-0000-0000-0000-00000000000b', 'quiz', 'organiser') $$, 'giving it again is fine');
+select throws_ok($$ select core.give_app_role('00000000-0000-0000-0000-00000000000b', 'quiz', 'referee') $$, 'P0002', null, 'only the project''s own roles');
 select throws_ok($$ select core.give_app_role('00000000-0000-0000-0000-00000000000b', 'chess', 'organiser') $$, 'P0002', null, 'only projects that exist');
-select throws_ok($$ select core.give_app_role('00000000-0000-0000-0000-00000000000a', 'pickleball', 'organiser') $$, '42501', null, 'A cannot give themselves one');
+select throws_ok($$ select core.give_app_role('00000000-0000-0000-0000-00000000000a', 'quiz', 'organiser') $$, '42501', null, 'A cannot give themselves one');
 select is((select count(*) from core.app_roles), 2::bigint, 'an admin sees everyone''s project roles');
 
 set local request.jwt.claims = '{"sub": "00000000-0000-0000-0000-00000000000b", "role": "authenticated"}';
-select ok(core.has_app_role('pickleball', 'organiser') and core.has_app_role('pickleball', 'scorekeeper'), 'B holds both roles');
+select ok(core.has_app_role('quiz', 'organiser') and core.has_app_role('quiz', 'scorekeeper'), 'B holds both roles');
 select ok(not core.is_admin() and not core.has_role('admin'), 'project roles aren''t core roles');
 set local request.jwt.claims = '{"sub": "00000000-0000-0000-0000-00000000000c", "role": "authenticated"}';
 select is((select count(*) from core.app_roles), 0::bigint, 'others see only their own project roles');
 
 set local request.jwt.claims = '{"sub": "00000000-0000-0000-0000-00000000000a", "role": "authenticated"}';
-select lives_ok($$ select core.remove_app_role('00000000-0000-0000-0000-00000000000b', 'pickleball', 'scorekeeper') $$, 'A takes one away');
+select lives_ok($$ select core.remove_app_role('00000000-0000-0000-0000-00000000000b', 'quiz', 'scorekeeper') $$, 'A takes one away');
 set local request.jwt.claims = '{"sub": "00000000-0000-0000-0000-00000000000b", "role": "authenticated"}';
-select ok(core.has_app_role('pickleball', 'organiser') and not core.has_app_role('pickleball', 'scorekeeper'), 'B keeps the other');
+select ok(core.has_app_role('quiz', 'organiser') and not core.has_app_role('quiz', 'scorekeeper'), 'B keeps the other');
 
 -- A superuser holds every project role; a deactivated account holds none.
 set local request.jwt.claims = '{"sub": "00000000-0000-0000-0000-000000000005", "role": "authenticated"}';
-select ok(core.has_app_role('pickleball', 'scorekeeper'), 'a superuser passes every project role check');
+select ok(core.has_app_role('quiz', 'scorekeeper'), 'a superuser passes every project role check');
 select lives_ok($$ select core.set_active('00000000-0000-0000-0000-00000000000b', false) $$, 'S deactivates B');
 set local request.jwt.claims = '{"sub": "00000000-0000-0000-0000-00000000000b", "role": "authenticated"}';
-select ok(not core.has_app_role('pickleball', 'organiser'), 'a deactivated account holds no project role');
+select ok(not core.has_app_role('quiz', 'organiser'), 'a deactivated account holds no project role');
 reset role;
 select is((select array_agg((detail ->> 'app') || ' ' || (detail ->> 'role') || ' ' || action order by id) from core.audit
   where action in ('gave role', 'removed role')),
-  array['core admin gave role', 'pickleball organiser gave role', 'pickleball scorekeeper gave role', 'pickleball scorekeeper removed role'],
+  array['core admin gave role', 'quiz organiser gave role', 'quiz scorekeeper gave role', 'quiz scorekeeper removed role'],
   'each change is in the audit log (giving the same role twice once)');
 
 select * from finish();
