@@ -107,7 +107,7 @@
     .hero img { width: 88px; height: 88px; border-radius: 22px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3); }
     .hero h2 { font-size: 1.5rem; }
     .hero p { color: rgba(255, 255, 255, 0.92); }
-    .hero a.button { background: var(--ball); color: var(--ball-text); align-self: stretch; }
+    .hero :is(a.button, button) { background: var(--ball); color: var(--ball-text); align-self: stretch; }
     .steps { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 12px; counter-reset: step; }
     .steps li { display: flex; gap: 12px; align-items: flex-start; }
     .steps li::before { counter-increment: step; content: counter(step); flex: none; display: grid; place-items: center; width: 28px; height: 28px;
@@ -118,6 +118,15 @@
     .feature b { font-size: 0.95rem; }
     .feature span { font-size: 0.85rem; color: var(--muted); }
     .big-start { min-height: 56px; font-size: 1.1rem; }
+    .me-player { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 12px; background: var(--next); }
+    .me-head { display: flex; align-items: center; gap: 10px; }
+    .me-head .who { flex: 1; min-width: 0; font-size: 1.1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .me-icon { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: var(--ball); font-size: 1.4rem; flex: none; }
+    .me-nums { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; text-align: center; }
+    .me-nums span { display: flex; flex-direction: column; font-size: 0.8rem; color: var(--muted); }
+    .me-nums b { font-size: 1.3rem; color: var(--text); font-variant-numeric: tabular-nums; }
+    .code-in { font-family: ui-monospace, monospace; letter-spacing: 0.05em; text-transform: uppercase; }
+    .bigcode { font-size: 1.2rem; letter-spacing: 0.08em; font-family: ui-monospace, monospace; }
 
     dialog { width: min(440px, calc(100% - 32px)); border: 1px solid var(--line); border-radius: 16px; padding: 0;
       background: var(--panel); color: var(--text); }

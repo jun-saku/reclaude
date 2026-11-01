@@ -5,6 +5,8 @@
 //   ./?s=<id>          run a session: its managers and helpers (courts, up next, the line and its overrides)
 //   ./?s=<id>&h=<code> become a helper with the session's helper code (the QR its manager shows)
 //   ./?w=<code>        the live view: anyone with the link, read only (an ended session: its results)
+//   ./?link=<code>     link your account to a player (the QR a manager shows)
+//   ./?me              your games: your linked players, their numbers and sessions (accounts; the app home for non-managers)
 import * as pb from "../../shared/pickleball.js";
 import { CoreError } from "../../shared/core.js";
 import * as rot from "./rotation.js";
@@ -88,10 +90,12 @@ let me;
     if (params.has("w")) await watchView(params.get("w"));
     else if (params.has("s") && params.has("h")) await joinAsHelper(params.get("s"), params.get("h"));
     else if (params.has("s")) await sessionView(params.get("s"));
-    else if (["dash", "club", "new", "players"].some((k) => params.has(k))) {
+    else if (params.has("link")) await linkView(params.get("link"));
+    else if (["dash", "club", "new", "players", "me"].some((k) => params.has(k))) {
       setBack(installed ? "" : here(), "About Pickleball");
       if (installed && params.has("dash")) $("back").hidden = true;
-      if (!me.manager) notManager();
+      if (params.has("me") || (params.has("dash") && !me.manager && me.account)) await myView();
+      else if (!me.manager) notManager();
       else if (params.has("club")) await clubView(params.get("club"));
       else if (params.has("new")) await newSession(params.get("new"));
       else if (params.has("players")) await playersView();
@@ -108,9 +112,8 @@ let installPrompt = null;
 addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); installPrompt = e; $("install-now")?.removeAttribute("hidden"); });
 
 function landing() {
-  const open = me.manager ? el("a", { class: "button", href: here("dash") }, "Open Pickleball")
-    : me.account ? el("p", {}, "You're signed in. Ask an admin for the manager role to run sessions.")
-      : el("a", { class: "button", href: "../profile/" }, "Sign in to run sessions");
+  const open = me.account ? el("a", { class: "button", href: here("dash") }, "Open Pickleball")
+    : el("a", { class: "button", href: "../profile/" }, "Sign in");
   const feature = (em, title, text) => el("div", { class: "feature" }, el("span", { class: "em", "aria-hidden": "true" }, em), el("b", {}, title), el("span", {}, text));
   show(
     el("section", { class: "card hero" },
@@ -154,6 +157,57 @@ function notManager() {
     el("a", { class: "button secondary", href: here() }, "About Pickleball")));
 }
 
+// ---------- players with an account ----------
+// The QR a manager shows: link this account to that player.
+async function linkView(code) {
+  $("back").hidden = !me.account;
+  setBack(here("me"), "My games");
+  if (!me.account) {
+    show(el("section", { class: "card hero" }, el("img", { src: "./icons/icon-192.png", alt: "" }), el("h2", {}, "Is this you?"),
+      el("p", {}, "Sign in to your account, then open this link again to see your games."),
+      el("a", { class: "button", href: "../profile/" }, "Sign in")));
+    return;
+  }
+  show(el("section", { class: "card hero" }, el("img", { src: "./icons/icon-192.png", alt: "" }), el("h2", {}, "Is this you?"),
+    el("p", {}, `Link this player to @${me.account.username} to see your matches and numbers.`),
+    el("button", { type: "button", class: "big-start", onclick: (e) => act(e.target, async () => {
+      const p = await pb.linkPlayer(code);
+      location.replace(here(`me&linked=${encodeURIComponent(p.name)}`));
+    }) }, "🔗 Link my account")));
+}
+
+// Your games: your linked players (you, in each club), their numbers, the sessions they played in.
+async function myView() {
+  if (me.manager) setBack(here("dash"), "Pickleball home");
+  if (!me.account) { notManager(); return; }
+  if (params.has("linked")) note(`Linked: ${params.get("linked")}.`);
+  const games = await pb.myGames();
+  const sum = (k) => games.players.reduce((n, p) => n + (p[k] || 0), 0);
+  const hours = (min) => (min < 60 ? `${min} min` : `${Math.floor(min / 60)} h ${min % 60} min`);
+  stats(games.players.length ? [[sum("matches"), "matches"], [sum("wins"), "wins"], [hours(sum("minutes")), "played"]] : null);
+  const codeInput = el("input", { class: "code-in", placeholder: "XXXX-XXXX-XXXX-XXXX", maxlength: 19, autocapitalize: "characters", "aria-label": "Link code" });
+  const player = (p) => el("div", { class: "me-player" },
+    el("div", { class: "me-head" }, el("span", { class: "me-icon", "aria-hidden": "true" }, p.icon || "👤"), el("b", { class: "who" }, p.name),
+      el("button", { type: "button", class: "icon-btn", "aria-label": `Unlink ${p.name}`, onclick: (e) => {
+        if (confirm(`Unlink ${p.name} from your account?`)) act(e.target, async () => { await pb.unlinkPlayer(p.id); await myView(); });
+      } }, "✕")),
+    el("div", { class: "me-nums" },
+      ...[[p.sessions, "sessions"], [p.matches, "matches"], [p.wins, "wins"], [p.matches ? `${Math.round((100 * p.wins) / p.matches)}%` : "–", "won"]]
+        .map(([n, label]) => el("span", {}, el("b", {}, String(n)), label))));
+  show(
+    games.players.length ? card(head("You play as"), ...games.players.map(player))
+      : el("section", { class: "card hero" }, el("img", { src: "./icons/icon-192.png", alt: "" }), el("h2", {}, "Your games"),
+        el("p", {}, me.manager ? "Link your account to your player to see your own matches." : "Ask a manager for your link QR to see your matches here.")),
+    games.sessions.length > 0 && card(head("Sessions"), el("div", { class: "list" }, ...games.sessions.map((x) => el("a", { class: "item", href: here(`w=${x.watch_code}`) },
+      el("span", { class: "who" }, !x.ended_at && el("span", { class: "live-dot", "aria-hidden": "true" }), x.club || "Pickup session"),
+      el("span", { class: "meta" }, `${x.matches} match${x.matches === 1 ? "" : "es"} · ${day(x.started_at)}`))))),
+    card(head("Have a code?"), el("div", { class: "form" }, codeInput, el("button", { type: "button", class: "secondary", onclick: (e) => act(e.target, async () => {
+      const p = await pb.linkPlayer(codeInput.value);
+      note(`Linked: ${p.name}.`);
+      await myView();
+    }) }, "Link"))));
+}
+
 // ---------- the app's home (managers) ----------
 const runs = (s, clubs) => s.started_by === me.id || !!clubs.find((c) => c.id === s.club_id)?.managers.includes(me.id);
 
@@ -182,18 +236,57 @@ async function dashboard() {
       past.length ? el("div", { class: "list" }, ...past.slice(0, 10).map((s) => el("a", { class: "item", href: here(`w=${s.watch_code}`) },
         el("span", { class: "who" }, clubName(s.club_id)), el("span", { class: "meta" }, day(s.started_at)))))
         : empty("Finished sessions and their results show up here.")),
-    el("a", { class: "button secondary", href: here("players") }, `All players (${players.length})`));
+    el("div", { class: "row" },
+      el("a", { class: "button secondary", href: here("players") }, `👥 All players (${players.length})`),
+      el("a", { class: "button secondary", href: here("me") }, "🏅 My games")));
 }
 
 // A player in a list, with Edit (and whatever else `extra` adds).
+// Who each player is linked to (pb.links(), by player id), for the player rows; loaded by the views that show them.
+let linked = {};
+const loadLinks = async () => { linked = Object.fromEntries((await pb.links()).map((l) => [l.player_id, l])); };
 function playerRow(p, done, ...extra) {
+  const link = linked[p.id];
   const edit = el("button", { type: "button", class: "icon-btn", "aria-label": `Edit ${p.name}`, onclick: () => openSheet(`Edit ${p.name}`, (close) => {
     const name = el("input", { value: p.name, maxlength: 24, "aria-label": "Name" });
     const icon = el("input", { class: "emoji", value: p.icon, maxlength: 8, "aria-label": "Icon (an emoji)" });
     return [el("div", { class: "form" }, icon, name),
-      el("button", { type: "button", onclick: (e) => act(e.target, async () => { await pb.editPlayer(p.id, name.value, icon.value); close(); await done(); }) }, "Save")];
+      el("button", { type: "button", onclick: (e) => act(e.target, async () => { await pb.editPlayer(p.id, name.value, icon.value); close(); await done(); }) }, "Save"),
+      link ? el("div", { class: "item" }, el("span", { class: "who" }, `🔗 ${link.avatar || "👤"} @${link.username}`),
+        el("button", { type: "button", class: "secondary", onclick: (e) => {
+          if (confirm(`Unlink ${p.name} from @${link.username}?`)) act(e.target, async () => { await pb.unlinkPlayer(p.id); close(); await done(); });
+        } }, "Unlink"))
+        : el("button", { type: "button", class: "secondary", onclick: (e) => act(e.target, () => linkSheet(p)) }, "🔗 Link an account")];
   }) }, "✏️");
-  return el("div", { class: "item" }, el("span", { class: "who" }, face(p)), ...extra, edit);
+  return el("div", { class: "item" }, el("span", { class: "who" }, face(p)),
+    link && el("span", { class: "tag", title: `Linked to @${link.username}` }, "🔗"), ...extra, edit);
+}
+// A QR code of a link, as an SVG (only its dark squares), or nothing if it can't be made.
+async function qrBox(url, label) {
+  const box = el("div", { class: "qr" });
+  try {
+    const { qrcode } = await import("../../shared/qrcode.js");
+    const qr = qrcode(0, "M"); qr.addData(url); qr.make();
+    const n = qr.getModuleCount(), q = 4;
+    let d = "";
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (qr.isDark(y, x)) d += `M${x + q} ${y + q}h1v1h-1z`;
+    box.innerHTML = `<svg viewBox="0 0 ${n + 2 * q} ${n + 2 * q}" role="img" aria-label="${label}"><rect width="100%" height="100%" fill="#fff"/><path d="${d}" fill="#111"/></svg>`;
+  } catch {}
+  return box;
+}
+async function shareLink(url, title) {
+  if (navigator.share) { try { await navigator.share({ title, url }); return; } catch (err) { if (err?.name === "AbortError") return; } }
+  await navigator.clipboard.writeText(url);
+  note("Link copied.");
+}
+// A one-time code (and QR) that links someone's account to this player.
+async function linkSheet(p) {
+  const code = await pb.linkCode(p.id);
+  const url = new URL(here(`link=${code.replace(/-/g, "")}`), location.href).href;
+  const box = await qrBox(url, `QR code: scan to link your account to ${p.name}`);
+  openSheet(`Link ${face(p)}`, () => [el("p", { class: "muted" }, "Scan with the account to link. Works once, for 7 days."), box,
+    el("p", { class: "bigcode" }, code),
+    el("button", { type: "button", class: "secondary", onclick: (e) => act(e.target, () => shareLink(url, `You on Pickleball: ${p.name}`)) }, "Share link")]);
 }
 const newPlayerForm = (label, onAdd) => {
   const name = el("input", { placeholder: "Name", maxlength: 24, "aria-label": `${label}'s name` });
@@ -207,7 +300,7 @@ const newPlayerForm = (label, onAdd) => {
 
 async function playersView() {
   setBack(here("dash"), "Pickleball home");
-  const players = await pb.players();
+  const [players] = await Promise.all([pb.players(), loadLinks()]);
   show(card(head(`Players (${players.length})`),
     players.length ? el("div", { class: "list" }, ...players.map((p) => playerRow(p, playersView))) : empty("No players yet."),
     newPlayerForm("New player", () => playersView())));
@@ -216,7 +309,7 @@ async function playersView() {
 // ---------- a club ----------
 async function clubView(id) {
   setBack(here("dash"), "Pickleball home");
-  const [clubs, players, managers] = await Promise.all([pb.clubs(), pb.players(), pb.managers()]);
+  const [clubs, players, managers] = await Promise.all([pb.clubs(), pb.players(), pb.managers(), loadLinks()]);
   const club = clubs.find((c) => c.id === id);
   if (!club) { show(card(empty("There's no such club."))); return; }
   const mine = club.managers.includes(me.id);
@@ -499,15 +592,7 @@ async function live(code, role) {
   async function helperSheet() {
     const code = await pb.helperCode(v.id);
     const link = new URL(here(`s=${v.id}&h=${code.replace(/-/g, "")}`), location.href).href;
-    const box = el("div", { class: "qr" });
-    try {
-      const { qrcode } = await import("../../shared/qrcode.js");
-      const qr = qrcode(0, "M"); qr.addData(link); qr.make();
-      const n = qr.getModuleCount(), q = 4;
-      let d = "";
-      for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (qr.isDark(y, x)) d += `M${x + q} ${y + q}h1v1h-1z`;
-      box.innerHTML = `<svg viewBox="0 0 ${n + 2 * q} ${n + 2 * q}" role="img" aria-label="QR code: scan to help run this session"><rect width="100%" height="100%" fill="#fff"/><path d="${d}" fill="#111"/></svg>`;
-    } catch {}
+    const box = await qrBox(link, "QR code: scan to help run this session");
     openSheet("Helper QR", () => [
       el("p", { class: "muted" }, "Scan to help run the courts."), box,
       el("button", { type: "button", class: "secondary", onclick: (e) => act(e.target, () => share(link, "Help run the courts")) }, "Share link")]);

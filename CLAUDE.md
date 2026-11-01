@@ -17,7 +17,7 @@ The user usually works from their phone, so keep replies short and end with the 
   `apps/plaza/space.js`, run by the game server), Pickleball `/apps/pickleball/` (court rotation: managers run sessions
   from clubs of players, helpers with a session's QR run the courts, anyone with its live link watches; its own
   manifest and icons, so it also installs as its own app; data in `shared/pickleball.js`, who plays next in
-  `apps/pickleball/rotation.js`; `./` is its about page, `./?dash` the app home where the installed app opens), and the admin panel `/apps/admin/` (invites for admins; accounts and the log for superusers;
+  `apps/pickleball/rotation.js`; `./` is its about page, `./?dash` the app home where the installed app opens; players with an account link it to their player with a manager's QR, `./?link=<code>`, and see their games at `./?me`), and the admin panel `/apps/admin/` (invites for admins; accounts and the log for superusers;
   linked from the Profile page for admins only, not from the home page). The database checks every admin action; the
   page can also be put behind Cloudflare Access.
 - Every page's title row: back `‹` (game → games page, games page and apps → home), the title, and the profile icon
