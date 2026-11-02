@@ -142,6 +142,10 @@
     .actions button { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 4px; font-size: 0.85rem; white-space: normal; }
     .actions .ic { font-size: 1.4rem; line-height: 1.1; }
 
+    /* Changes glide (drawMoving in app.js): quick, and not for those who'd rather not have motion. */
+    ::view-transition-group(*) { animation-duration: 220ms; animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1); }
+    ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 120ms; }
+    @media (prefers-reduced-motion: reduce) { ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none; } }
     /* Hold and drag */
     [data-drag] { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
     .grip { flex: none; color: var(--muted); font-size: 1.1rem; margin-right: -4px; }

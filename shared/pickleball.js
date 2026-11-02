@@ -387,7 +387,11 @@ const fake = {
   },
 };
 
-const backend = () => (app.fake ? fake : live);
+// With ?backend=fake&lag=<ms>, every call waits that long first: a slow phone network, for the UI tests.
+const lag = app.fake ? Number(new URLSearchParams(location.search).get("lag")) || 0 : 0;
+const slowFake = lag ? new Proxy(fake, { get: (t, k) => (typeof t[k] === "function"
+  ? async (...args) => { await new Promise((ok) => setTimeout(ok, lag)); return t[k](...args); } : t[k]) }) : fake;
+const backend = () => (app.fake ? slowFake : live);
 
 // ---------- API ----------
 export async function me() {
