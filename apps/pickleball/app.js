@@ -466,8 +466,25 @@ async function live(code, role) {
     return true;
   }
   async function poll() {
-    if (busy || sheet.open || document.hidden) return;
-    try { const now = await pb.watch(code); if (now) { v = now; draw(); } } catch {}
+    if (busy || queued || sheet.open || document.hidden) return;
+    try { const now = await pb.watch(code); if (now && !busy && !queued) { v = now; draw(); } } catch {}
+  }
+
+  // Changes show at once: each is applied here first (and drawn), then sent in the background, one at a time and in
+  // order. The server's version of the session is tracked as the changes go; if someone else changed it meanwhile,
+  // the change is made again on the latest one, and if anything fails, the page shows the server's version again.
+  let chain = Promise.resolve(), queued = 0;
+  function send(task) {
+    queued++;
+    chain = chain.then(task).catch(async (err) => { showError(err); await resync(); }).finally(() => { queued--; });
+    return chain;
+  }
+  async function resync() { try { const now = await pb.watch(code); if (now) { v = now; drawMoving(); } } catch {} }
+  const conflict = (err) => /someone else just changed/i.test(err?.message || "");
+  // Draws with the players gliding to their new places, where the browser can (and motion is welcome).
+  function drawMoving() {
+    if (document.startViewTransition && !matchMedia("(prefers-reduced-motion: reduce)").matches) document.startViewTransition(draw);
+    else draw();
   }
 
   // The line as the page sees it now: who's here and on a court, then up next.
@@ -477,35 +494,56 @@ async function live(code, role) {
   const state = () => rot.refresh(rot.tidy(v.state, herePlayers(), onCourt()), v.algorithm);
   const person = (pid) => v.players.find((p) => p.id === pid);
   const canEdit = () => role.helper && !v.ended_at;
-  const chip = (pid, attrs = {}, tag = "span", ...extra) => el(tag, { class: "pchip", ...attrs },
-    el("span", { "aria-hidden": "true" }, person(pid)?.icon || "👤"), el("span", { class: "name" }, person(pid)?.name || "?"), ...extra);
+  // Each person's chip or row carries their name for the page's transitions, so they glide from line to court.
+  const moving = (node, pid) => { node.style.viewTransitionName = `p-${pid}`; return node; };
+  const chip = (pid, attrs = {}, tag = "span", ...extra) => moving(el(tag, { class: "pchip", ...attrs },
+    el("span", { "aria-hidden": "true" }, person(pid)?.icon || "👤"), el("span", { class: "name" }, person(pid)?.name || "?"), ...extra), pid);
 
   // Saves a change to the line on the latest version (`change` gets the state and returns the new one).
+  // A change to the line: `change` gets the state and returns the new one.
   async function save(change, action, detail = null) {
-    busy = true;
-    try {
-      await load();
-      await pb.saveState(v.id, v.version, change(state()), action, detail);
-      await load();
-    } finally { busy = false; }
-  }
-  async function startOn(court, button) {
-    await act(button, async () => {
-      busy = true;
-      try {
-        await load();
-        const before = state();
-        const { state: after, match } = rot.startNext(before, v.algorithm);
-        if (!match) throw new CoreError("Each side needs at least one player.");
-        await pb.saveState(v.id, v.version, after, "started match", { court });
-        try { await pb.startMatch(v.id, court, match.a, match.b); } catch (err) {
-          await load();
-          await pb.saveState(v.id, v.version, before, "undid start");
-          throw err;
-        }
-        await load();
-      } finally { busy = false; }
+    const next = change(state());
+    v = { ...v, state: next };
+    drawMoving();
+    send(async () => {
+      try { { const ver = await pb.saveState(v.id, v.version, next, action, detail); v.version = ver; } } catch (err) {
+        if (!conflict(err)) throw err;
+        const now = await pb.watch(code);
+        if (!now) throw err;
+        v = now;
+        const again = change(state());
+        v = { ...v, state: again };
+        drawMoving();
+        { const ver = await pb.saveState(v.id, v.version, again, action, detail); v.version = ver; }
+      }
     });
+  }
+  // The next match goes on a court: on screen now, then saved (the line, then the match).
+  async function startOn(court) {
+    const before = state();
+    const { state: after, match } = rot.startNext(before, v.algorithm);
+    if (!match) { showError(new CoreError("Each side needs at least one player.")); return; }
+    if (v.matches.some((m) => !m.ended_at && m.court === court)) return;
+    const pending = { id: null, court, side_a: match.a, side_b: match.b, started_at: new Date().toISOString(), ended_at: null, score_a: null, score_b: null };
+    v = { ...v, state: after, matches: [...v.matches, pending] };
+    drawMoving();
+    send(async () => {
+      { const ver = await pb.saveState(v.id, v.version, after, "started match", { court }); v.version = ver; }
+      try {
+        pending.id = await pb.startMatch(v.id, court, match.a, match.b);
+        v.version++;
+      } catch (err) {
+        const now = await pb.watch(code);
+        if (now) await pb.saveState(v.id, now.version, before, "undid start");
+        throw err;
+      }
+    });
+  }
+  // Someone arrives or leaves: on screen now, then saved.
+  function setHere(pid, here) {
+    v = { ...v, players: v.players.map((p) => (p.id === pid ? { ...p, here } : p)) };
+    drawMoving();
+    send(async () => { await pb.setHere(v.id, pid, here); v.version++; });
   }
   const sideLines = (ids) => ids.map((x) => el("span", { class: "who" }, face(person(x))));
   function endMatchSheet(m) {
@@ -524,14 +562,32 @@ async function live(code, role) {
         el("div", { class: "scores" },
           el("label", {}, el("span", {}, "Left"), a),
           el("label", {}, el("span", {}, "Right"), b)),
-        el("button", { type: "button", onclick: (e) => act(e.target, async () => {
-          busy = true;
-          try {
-            await pb.endMatch(m.id, a.value, b.value);
-            close();
-            await save((s) => rot.finish(s, v.algorithm, { a: m.side_a, b: m.side_b }, winner), "ended match", { match: m.id, winner });
-          } finally { busy = false; }
-        }) }, "End match")];
+        el("button", { type: "button", onclick: () => {
+          const n = (x) => (x === "" ? null : Number(x));
+          const [sa, sb] = [n(a.value), n(b.value)];
+          if ([sa, sb].some((x) => x != null && !(Number.isInteger(x) && x >= 0 && x <= 99))) { showError(new CoreError("A score is a number from 0 to 99.")); return; }
+          if ((sa == null) !== (sb == null)) { showError(new CoreError("Give both scores, or neither.")); return; }
+          showError(null);
+          close();
+          // On screen now: the court frees up and the players go back in line; then saved (the match, then the line).
+          const ended = { ...m, ended_at: new Date().toISOString(), score_a: sa, score_b: sb };
+          const next = rot.finish(state(), v.algorithm, { a: m.side_a, b: m.side_b }, winner);
+          v = { ...v, matches: v.matches.map((x) => (x === m ? ended : x)), state: next };
+          drawMoving();
+          send(async () => {
+            const id = m.id ?? ended.id ?? (await pb.watch(code))?.matches.find((x) => !x.ended_at && x.court === m.court)?.id;
+            await pb.endMatch(id, sa, sb);
+            v.version++;
+            try { { const ver = await pb.saveState(v.id, v.version, next, "ended match", { match: id, winner }); v.version = ver; } } catch (err) {
+              if (!conflict(err)) throw err;
+              const now = await pb.watch(code);
+              v = now;
+              v = { ...v, state: rot.finish(state(), v.algorithm, { a: m.side_a, b: m.side_b }, winner) };
+              drawMoving();
+              { const ver = await pb.saveState(v.id, v.version, v.state, "ended match", { match: id, winner }); v.version = ver; }
+            }
+          });
+        } }, "End match")];
     });
   }
   // Managers, from the Players list: link an account to a player (or see and undo it), and keep a guest (made for
@@ -569,7 +625,7 @@ async function live(code, role) {
             (x) => save((st) => rot.pair(st, v.algorithm, pid, x), "paired", { player: pid, with: x }))),
         role.runner && action("👋", "Leave", (e) => {
           if (!confirm(`${p.name} leaves the session?`)) return;
-          act(e.target, async () => { close(); busy = true; try { await pb.setHere(v.id, pid, false); await load(); } finally { busy = false; } });
+          close(); setHere(pid, false);
         }))];
     });
   }
@@ -619,11 +675,14 @@ async function live(code, role) {
     const all = await pb.players();
     const ids = new Set(v.players.filter((p) => p.here).map((p) => p.id));
     const rest = regular(all).filter((p) => !ids.has(p.id));
-    const add = (pid) => act(null, async () => { busy = true; try { await pb.setHere(v.id, pid, true); await load(); } finally { busy = false; } });
-    openSheet("Add players", (close) => [rest.length > 0 && el("div", { class: "list" }, ...rest.map((p) => el("button", { type: "button", class: "item", onclick: () => { close(); add(p.id); } },
+    const add = (pid, p) => {
+      if (p && !v.players.some((x) => x.id === pid)) v = { ...v, players: [...v.players, { ...p, here: true }] };
+      setHere(pid, true);
+    };
+    openSheet("Add players", (close) => [rest.length > 0 && el("div", { class: "list" }, ...rest.map((p) => el("button", { type: "button", class: "item", onclick: () => { close(); add(p.id, p); } },
       el("span", { class: "who" }, face(p)), el("span", { class: "meta" }, "Add")))),
     el("p", { class: "muted" }, "Or a guest:"),
-    newPlayerForm("Guest", async (pid) => { close(); await add(pid); }, true)]);
+    newPlayerForm("Guest", async (pid, p) => { close(); add(pid, p); }, true)]);
   }
   async function helperSheet() {
     const code = await pb.helperCode(v.id);
@@ -667,6 +726,7 @@ async function live(code, role) {
       const box = from.getBoundingClientRect();
       const ghost = from.cloneNode(true);
       ghost.classList.add("ghost");
+      ghost.style.viewTransitionName = "none";
       Object.assign(ghost.style, { width: `${box.width}px`, left: `${box.left}px`, top: `${box.top}px` });
       document.body.append(ghost);
       from.classList.add("lifted");
@@ -702,7 +762,7 @@ async function live(code, role) {
     const target = e.type === "pointercancel" ? null : over;
     if (!target) return;
     const kind = target.dataset.drop, other = target.dataset.pid, side = target.dataset.side;
-    if (pid === "match") { if (kind === "court") await startOn(Number(target.dataset.court), null); return; }
+    if (pid === "match") { if (kind === "court") startOn(Number(target.dataset.court)); return; }
     if (kind === "court") return;
     const s = state();
     const inNext = (x) => !!s.next && [...s.next.a, ...s.next.b].includes(x);
@@ -799,7 +859,7 @@ async function live(code, role) {
           m && el("span", { class: "timer" }, el("span", { class: "live-dot", "aria-hidden": "true" }), ago(m.started_at))),
         m ? court(m.side_a.map((x) => chip(x)), m.side_b.map((x) => chip(x))) : court([], [], { freeText: "Free", court: c }),
         canEdit() && (m ? el("button", { type: "button", class: "secondary", onclick: () => endMatchSheet(m) }, "End match")
-          : s.next?.a.length && s.next?.b.length && el("button", { type: "button", onclick: (e) => startOn(c, e.target) }, "Start next match here"))));
+          : s.next?.a.length && s.next?.b.length && el("button", { type: "button", onclick: () => startOn(c) }, "Start next match here"))));
     }
 
     // The queue: the next match (on a dashed court: tap a player for options, an empty spot to add someone), then
@@ -816,7 +876,7 @@ async function live(code, role) {
     const inNext = s.next ? [...s.next.a, ...s.next.b] : [];
     const waitingList = s.order.filter((x) => !inNext.includes(x) && !s.away.includes(x));
     const onBreak = s.order.filter((x) => s.away.includes(x));
-    const row = (x, mark) => el("div", { class: `item${s.away.includes(x) ? " away" : ""}`, ...(canEdit() ? { "data-drag": x, "data-drop": "row", "data-pid": x } : {}) },
+    const row = (x, mark) => moving(el("div", { class: `item${s.away.includes(x) ? " away" : ""}`, ...(canEdit() ? { "data-drag": x, "data-drop": "row", "data-pid": x } : {}) },
       canEdit() && el("span", { class: "grip", "aria-hidden": "true" }, "⠿"),
       el("span", { class: "line-no", "aria-label": s.away.includes(x) ? "On a break" : `Number ${mark}` }, String(mark)),
       el("span", { class: "who" }, face(person(x))),
@@ -824,7 +884,7 @@ async function live(code, role) {
       s.skipped.includes(x) && el("span", { class: "tag", title: "Skips the next match" }, "⏭"),
       person(x)?.guest && el("span", { class: "tag", title: "Guest: this session only" }, "Guest"),
       el("span", { class: "meta", title: "Matches played" }, `🏓 ${s.games[x] || 0}`),
-      canEdit() && el("button", { type: "button", class: "icon-btn", "aria-label": `Options for ${person(x)?.name}`, onclick: () => playerSheet(x, s) }, "⋯"));
+      canEdit() && el("button", { type: "button", class: "icon-btn", "aria-label": `Options for ${person(x)?.name}`, onclick: () => playerSheet(x, s) }, "⋯")), x);
     sections.push(el("section", { class: "card upnext" },
       head("Queue",
         canEdit() && s.next?.manual && el("button", { type: "button", class: "icon-btn", "aria-label": "Pick the next match again", onclick: (e) => act(e.target, () => save((st) => rot.repick(st, v.algorithm), "picked again")) }, "↻"),
