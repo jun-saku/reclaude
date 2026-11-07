@@ -86,6 +86,14 @@ Summary (who owes whom), Checklist, Poll, Links (files later).
 - Date poll: everyone picks the dates that work; the best ones are highlighted; a planner can make them the trip dates.
 - A planner closes a poll; the winning option can become an itinerary item.
 
+### Links between things
+
+- One `links` table joins any two things on the trip: a note, itinerary item, expense, budget line, checklist item,
+  poll. Both ends show it ("Linked: Lunch receipt ₱3,200"), and a tap opens the other.
+- In a note, type `+` or tap "Link" to pick a thing; it shows as a chip inside the text. From an item, "Link a note"
+  (an existing one or a new one).
+- Deleting a thing removes its links, not the other thing. Links are logged.
+
 ### Notes and Links
 
 - Notes: simple formatting (headings, bold, lists, links), written without a library.
