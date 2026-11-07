@@ -88,6 +88,8 @@ Summary (who owes whom), Checklist, Poll, Links (files later).
 
 ### Links between things
 
+- Optional: nothing asks for a link when adding a thing, and nothing shows until one is made (no empty "Linked"
+  rows; just a small "Link" action in each thing's menu).
 - One `links` table joins any two things on the trip: a note, itinerary item, expense, budget line, checklist item,
   poll. Both ends show it ("Linked: Lunch receipt ₱3,200"), and a tap opens the other.
 - In a note, type `+` or tap "Link" to pick a thing; it shows as a chip inside the text. From an item, "Link a note"
