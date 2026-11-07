@@ -68,9 +68,28 @@ Summary (who owes whom), Checklist, Poll, Links (files later).
   estimate (feeds the budget; can become an expense later).
 - Anyone can mark "Not going" / "Not interested" on an item (and undo it).
 
-### Still to design
+### Chat
 
-Chat, Notes, Checklist, Poll, Links.
+- One chat per trip, plus a comment thread on any item (itinerary item, expense, poll), linked from the chat.
+- Emoji reactions and replies; @name mentions (highlighted for that person).
+- Pin a message to a section: it becomes a note, itinerary item or poll option.
+- Photos later (needs file storage).
+
+### Checklist
+
+- Shared to-dos (e.g. book the hotel): can be given to someone, optional due date.
+- Packing list: one list, each person ticks their own copy.
+
+### Poll
+
+- Single or multiple choice; anyone can add options unless locked.
+- Date poll: everyone picks the dates that work; the best ones are highlighted; a planner can make them the trip dates.
+- A planner closes a poll; the winning option can become an itinerary item.
+
+### Notes and Links
+
+- Notes: simple formatting (headings, bold, lists, links), written without a library.
+- Links: bookings, tickets and other links with a title. File uploads later.
 
 ## Activity log (planners only)
 
