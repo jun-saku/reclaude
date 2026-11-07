@@ -17,7 +17,8 @@ skips `_` files). Name and URL still to decide (`/apps/trip/`?).
 
 ## Trip and people
 
-- A planner (with an account, app role `planner`) creates the trip and can add co-planners.
+- Any account (accounts are invite-only already) creates a trip and is its first planner; planners make others
+  planners (people with a linked account). A trip keeps at least one. No admin role needed.
 - The planner adds people by name. Only planners add people.
 - Join link `?t=<code>`: "Who are you?" → tap a name → the device signs in anonymously and is tied to that name. A taken
   name can't be picked again; the planner can free it (lost phone).
@@ -112,7 +113,7 @@ Summary (who owes whom), Checklist, Poll, Links (files later).
 
 ## PRs (one each)
 
-1. Schema, people, join flow, log, tests.
+1. Schema, people, join flow, log, tests. (`supabase/migrations/20261108000000_trip.sql`)
 2. Page with sections: Notes and Itinerary, and the Log tab.
 3. Chat (Realtime).
 4. Expenses, Summary and invoices, then Budget.
