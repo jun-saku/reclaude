@@ -6,6 +6,7 @@
 //   ./?id=<trip>&people the people on it and the join link (planners add, rename, free and remove names)
 //   ./?id=<trip>&edit   the trip's details, archiving (planners)
 //   ./?id=<trip>&log    every change (planners)
+//   ./?id=<trip>&chat   the trip's chat; &about=<item>: that itinerary item's comments
 import * as tr from "../../shared/trip.js";
 import { CoreError, localProfile } from "../../shared/core.js";
 
@@ -117,6 +118,7 @@ let me;
       if (params.has("people")) await peopleView(id);
       else if (params.has("edit")) await editView(id);
       else if (params.has("log")) await logView(id);
+      else if (params.has("chat")) await chatView(id, params.get("about"));
       else await tripView(id);
     } else if (params.has("new")) newView();
     else await homeView();
@@ -215,9 +217,13 @@ const canEdit = (section) => !data.trip.archived_at && (!section?.locked || data
 async function loadTrip(id) {
   tripId = id;
   data = await tr.load(id);
-  if (data) lastVersion = data.trip.version;
+  if (data) {
+    lastVersion = data.trip.version;
+    [data.threads, data.latest] = await Promise.all([tr.threadCounts(id).catch(() => ({})), tr.latestMessage(id).catch(() => 0)]);
+  }
   return data;
 }
+const seenKey = (id) => `trip-seen-${id}`;
 function notOnTrip() {
   setBack(here(), "Your trips");
   show(card(el("h2", {}, "You're not on this trip"),
@@ -226,17 +232,24 @@ function notOnTrip() {
     el("a", { class: "button secondary", href: "../profile/" }, "Sign in")));
 }
 
-// Refresh when anything changes (checked every 15 s while the page shows and nothing is being edited).
-let poller;
+// Refresh when anything changes: live (Realtime), and checked once a minute in case that drops. While a sheet is
+// open or notes are being written, the refresh waits until they're done.
+let poller, stopFollowing, behind = false;
 function watchTrip(redraw) {
   clearInterval(poller);
+  stopFollowing?.();
+  const refresh = async () => {
+    if (sheetOpen || editing) { behind = true; return; }
+    behind = false;
+    try { await loadTrip(tripId); if (data) redraw(); else notOnTrip(); } catch {}
+  };
+  stopFollowing = tr.follow(tripId, ({ table }) => { if (!table || table === "changes" || table === "messages") refresh(); });
+  sheet.addEventListener("close", () => { if (behind) refresh(); });
+  addEventListener("trip-editing-done", () => { if (behind) refresh(); });
   poller = setInterval(async () => {
-    if (document.hidden || sheetOpen || editing) return;
-    try {
-      const v = await tr.version(tripId);
-      if (v != null && v !== lastVersion) { await loadTrip(tripId); if (data) redraw(); }
-    } catch {}
-  }, 15000);
+    if (document.hidden) return;
+    try { const v = await tr.version(tripId); if (v != null && v !== lastVersion) refresh(); } catch {}
+  }, 60000);
 }
 async function after(fn, redraw) { await fn(); await loadTrip(tripId); if (data) redraw(); else notOnTrip(); }
 
@@ -259,6 +272,8 @@ function drawTrip() {
       el("p", {}, [dates(t.starts_on, t.ends_on), `You're ${mine?.name || "here"}`].filter(Boolean).join(" · ")),
       el("div", { class: "buttons" },
         el("a", { class: "button", href: here(`id=${t.id}&people`), "aria-label": `People (${data.people.filter((p) => !p.removed_at).length})` }, "👥 People"),
+        el("a", { class: "button", href: here(`id=${t.id}&chat`), "aria-label": data.latest > Number(local.get(seenKey(t.id), 0)) ? "Chat (new messages)" : "Chat" },
+          "💬 Chat", data.latest > Number(local.get(seenKey(t.id), 0)) && el("span", { class: "new-dot", "aria-hidden": "true" })),
         data.planner && el("a", { class: "button", href: here(`id=${t.id}&log`) }, "📜 Log"),
         data.planner && el("a", { class: "button", href: here(`id=${t.id}&edit`) }, "⚙️ Trip"))),
     t.archived_at && el("p", { class: "banner" }, "This trip is archived: read only."),
@@ -362,7 +377,7 @@ function notesBody(s, box) {
     editing++;
     const area = el("textarea", { class: "notes-edit", "aria-label": s.title, maxlength: 20000 });
     area.value = s.body;
-    const done = () => { editing = Math.max(0, editing - 1); };
+    const done = () => { editing = Math.max(0, editing - 1); dispatchEvent(new Event("trip-editing-done")); };
     box.replaceChildren(box.firstChild, area,
       el("p", { class: "format-help" }, "# Heading · - list · **bold** · links as they are"),
       el("div", { class: "buttons" },
@@ -417,6 +432,7 @@ function stop(i, s, showDay = false) {
   const time = i.starts_at ? `${hhmm(i.starts_at)}${i.ends_at ? `–${hhmm(i.ends_at)}` : ""}` : "";
   const tags = [
     showDay && i.day && el("span", { class: "tag sea" }, day(i.day)),
+    data.threads?.[i.id] > 0 && el("span", { class: "tag" }, `💬 ${data.threads[i.id]}`),
     i.cost != null && el("span", { class: "tag" }, `≈ ${money(Number(i.cost), i.cost_currency)}`),
     going.length > 0 && el("span", { class: "tag" }, `👥 ${going.map((p) => p.name).join(", ")}`),
     ...Object.entries(tr.OPT_OUTS).map(([k, label]) => {
@@ -469,6 +485,8 @@ function itemSheet(s, i) {
           ...people.map((p, n) => el("label", { class: "check" }, checks[n], face(p)))),
         el("div", { class: "pair" }, field("Cost estimate", cost), field("Currency", cur))),
       can && el("button", { type: "button", onclick: go(() => after(() => (i ? tr.editItem(i.id, fields()) : tr.addItem(s.id, fields())), drawTrip)) }, i ? "Save" : "Add"),
+      i && el("a", { class: "button secondary", href: here(`id=${tripId}&chat&about=${i.id}`) },
+        data.threads?.[i.id] ? `💬 Comments (${data.threads[i.id]})` : "💬 Comment"),
       i && actions(
         ...Object.entries(tr.OPT_OUTS).map(([k, label]) => action(myOut?.kind === k ? "↩️" : k === "not_going" ? "🙅" : "😐",
           myOut?.kind === k ? `I'm in after all` : label, go(() => after(() => tr.optOut(i.id, myOut?.kind === k ? null : k), drawTrip)))),
@@ -612,6 +630,7 @@ const ACTIONS = {
   "section.add": "added the section", "section.edit": "changed the section", "section.order": "reordered the sections",
   "section.lock": "locked", "section.unlock": "unlocked", "section.delete": "deleted the section", "note.save": "edited the notes",
   "item.add": "added", "item.edit": "changed", "item.move": "moved", "item.delete": "deleted", "item.opt_out": "changed going for",
+  "message.edit": "edited a message", "message.delete": "deleted a message",
 };
 async function logView(id) {
   setBack(here(`id=${id}`), "Back to the trip");
@@ -649,4 +668,201 @@ async function logView(id) {
   more.addEventListener("click", (e) => act(e.target, loadMore));
   show(card(head("Log"), el("p", { class: "empty" }, "Every change on the trip. Only planners see this."), list, more));
   await loadMore();
+}
+
+// ---------- the chat ----------
+// One chat per trip, and a comment thread per itinerary item (about). Live: new messages and reactions show as they come.
+async function chatView(id, about) {
+  setBack(here(`id=${id}`), "Back to the trip");
+  if (!(await loadTrip(id))) { notOnTrip(); return; }
+  const item = about && data.items.find((i) => i.id === about);
+  if (about && !item) { show(card(el("h2", {}, "That item isn't there any more"), el("a", { class: "button secondary", href: here(`id=${id}`) }, "Back to the trip"))); return; }
+  const archived = !!data.trip.archived_at;
+  let msgs = [], reacts = [], more = false, replyTo = null;
+  const list = el("div", { class: "chat", "aria-live": "polite" });
+  const older = el("button", { type: "button", class: "secondary", hidden: true }, "Show older");
+  const box = el("textarea", { rows: 1, maxlength: 2000, placeholder: item ? "Add a comment" : "Message the group", "aria-label": item ? "Comment" : "Message" });
+  const send = el("button", { type: "button", class: "send", "aria-label": "Send" }, "➤");
+  const replying = el("div", { class: "replying", hidden: true });
+  const suggest = el("div", { class: "suggest", hidden: true });
+  const people = () => data.people.filter((p) => !p.removed_at);
+  const byId = (mid) => msgs.find((m) => m.id === mid);
+
+  // @mentions: typing @ suggests names; a name tapped goes in as @Name.
+  const mentionAt = () => {
+    const upto = box.value.slice(0, box.selectionStart);
+    const m = upto.match(/(^|\s)@([^\s@]*)$/);
+    return m ? { start: upto.length - m[2].length - 1, query: m[2].toLowerCase() } : null;
+  };
+  const updateSuggest = () => {
+    const at = mentionAt();
+    const found = at ? people().filter((p) => p.id !== data.me && p.name.toLowerCase().startsWith(at.query)).slice(0, 6) : [];
+    suggest.hidden = !found.length;
+    suggest.replaceChildren(...found.map((p) => el("button", { type: "button", class: "secondary", onclick: () => {
+      const a = mentionAt();
+      if (!a) return;
+      const before = box.value.slice(0, a.start), after = box.value.slice(box.selectionStart);
+      box.value = `${before}@${p.name} ${after}`;
+      const pos = before.length + p.name.length + 2;
+      box.setSelectionRange(pos, pos);
+      box.focus();
+      updateSuggest();
+    } }, face(p))));
+  };
+  const grow = () => { box.style.height = "auto"; box.style.height = `${Math.min(box.scrollHeight, 160)}px`; };
+  box.addEventListener("input", () => { grow(); updateSuggest(); });
+  box.addEventListener("click", updateSuggest);
+  box.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); send.click(); } });
+  const mentionsIn = (text) => people().filter((p) => text.includes(`@${p.name}`)).map((p) => p.id);
+  const setReply = (m) => {
+    replyTo = m?.id || null;
+    replying.hidden = !m;
+    if (m) replying.replaceChildren(el("span", { class: "who" }, `↩︎ ${person(m.person_id)?.name || "Someone"}: ${m.body.slice(0, 80)}`),
+      el("button", { type: "button", class: "icon-btn", "aria-label": "Don't reply", onclick: () => setReply(null) }, "✕"));
+    if (m) box.focus();
+  };
+  send.addEventListener("click", () => act(send, async () => {
+    if (!box.value.trim()) return;
+    await tr.sendMessage(id, box.value, { replyTo, about, mentions: mentionsIn(box.value) });
+    box.value = ""; grow(); setReply(null); suggest.hidden = true;
+    await refresh(true);
+  }));
+
+  // The text of a message: links and @names as elements, the rest as text.
+  const names = () => people().map((p) => p.name).sort((a, b) => b.length - a.length);
+  const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  function richText(text) {
+    const n = names();
+    const re = new RegExp(`(https?:\\/\\/[^\\s<>"]+)${n.length ? `|@(${n.map(escapeRe).join("|")})` : ""}`, "g");
+    const out = [];
+    let at = 0, m;
+    while ((m = re.exec(text))) {
+      if (m.index > at) out.push(text.slice(at, m.index));
+      if (m[1]) out.push(el("a", { href: m[1], target: "_blank", rel: "noopener noreferrer" }, m[1]));
+      else out.push(el("span", { class: "mention" }, `@${m[2]}`));
+      at = re.lastIndex;
+    }
+    if (at < text.length) out.push(text.slice(at));
+    return out;
+  }
+  const clock = (iso) => new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  const dayOf = (iso) => new Date(iso).toLocaleDateString("sv");
+  function draw(stick) {
+    const nearBottom = innerHeight + scrollY >= document.documentElement.scrollHeight - 120;
+    const rows = [];
+    let lastDay = null, last = null;
+    for (const m of msgs) {
+      const d = dayOf(m.at);
+      if (d !== lastDay) { rows.push(el("p", { class: "chat-day" }, day(d))); lastDay = d; last = null; }
+      const mine = m.person_id === data.me;
+      const who = person(m.person_id);
+      const grouped = last && last.person_id === m.person_id && new Date(m.at) - new Date(last.at) < 5 * 60000;
+      const quote = m.reply_to && (byId(m.reply_to) ? el("span", { class: "quote" }, `↩︎ ${person(byId(m.reply_to).person_id)?.name || "Someone"}: ${
+        byId(m.reply_to).deleted_at ? "deleted" : byId(m.reply_to).body.slice(0, 80)}`) : el("span", { class: "quote" }, "↩︎ an earlier message"));
+      const mineReacts = reacts.filter((r) => r.message_id === m.id);
+      const counts = {};
+      for (const r of mineReacts) (counts[r.emoji] ||= []).push(r.person_id);
+      const bubble = el("div", { class: "bubble", tabindex: m.deleted_at ? null : 0, role: m.deleted_at ? null : "button",
+        "aria-label": m.deleted_at ? null : `Message from ${who?.name || "someone"}: options`,
+        onclick: (e) => { if (!m.deleted_at && !e.target.closest("a")) messageSheet(m); },
+        onkeydown: (e) => { if (e.key === "Enter" && !m.deleted_at && e.target === e.currentTarget) messageSheet(m); } },
+        quote, m.deleted_at ? el("span", { class: "gone" }, "Message deleted") : el("span", { class: "text" }, ...richText(m.body)),
+        el("span", { class: "stamp" }, clock(m.at), m.edited_at && !m.deleted_at ? " · edited" : ""));
+      rows.push(el("div", { class: `msg${mine ? " mine" : ""}${grouped ? " grouped" : ""}${m.mentions?.includes(data.me) ? " for-me" : ""}`, id: `m${m.id}` },
+        !mine && !grouped && el("span", { class: "from" }, face(who)),
+        bubble,
+        Object.keys(counts).length > 0 && el("div", { class: "reacts" }, ...Object.entries(counts).map(([emoji, who]) =>
+          el("button", { type: "button", class: `react${who.includes(data.me) ? " on" : ""}`, disabled: archived,
+            "aria-label": `${emoji} ${who.map((p) => person(p)?.name || "someone").join(", ")}`, "aria-pressed": String(who.includes(data.me)),
+            onclick: (e) => act(e.target, async () => { await tr.react(m.id, emoji, !who.includes(data.me)); await refresh(); }) },
+            `${emoji} ${who.length}`)))));
+      last = m;
+    }
+    list.replaceChildren(...rows);
+    if (!msgs.length) list.append(empty(item ? "No comments yet. Ask or add a detail." : "No messages yet. Say hi!"));
+    older.hidden = !more;
+    if (stick || nearBottom) requestAnimationFrame(() => scrollTo(0, document.documentElement.scrollHeight));
+  }
+  async function refresh(stick = false) {
+    const got = await tr.messages(id, { about, limit: Math.max(50, msgs.length) });
+    msgs = got.messages; reacts = got.reactions;
+    more = got.messages.length >= Math.max(50, msgs.length) && msgs.length >= 50;
+    if (!about && msgs.length) local.set(seenKey(id), msgs.at(-1).id);
+    draw(stick);
+  }
+  older.addEventListener("click", () => act(older, async () => {
+    const first = msgs[0]?.id;
+    const got = await tr.messages(id, { about, before: first, limit: 50 });
+    msgs = [...got.messages, ...msgs]; reacts = [...got.reactions, ...reacts];
+    more = got.messages.length >= 50;
+    draw(false);
+    document.getElementById(`m${first}`)?.scrollIntoView();
+  }));
+
+  function messageSheet(m) {
+    const mine = m.person_id === data.me;
+    const targets = data.sections.filter((s) => ["notes", "itinerary"].includes(s.kind) && canEdit(s));
+    openSheet(mine ? "Your message" : `${person(m.person_id)?.name || "Someone"}'s message`, (close) => {
+      const go = (fn) => (e) => act(e.target, async () => { close(); await fn(); });
+      return [
+        el("p", { class: "sheet-quote" }, m.body.length > 200 ? `${m.body.slice(0, 200)}…` : m.body),
+        !archived && el("div", { class: "emoji-row" }, ...tr.REACTIONS.map((emoji) => {
+          const on = reacts.some((r) => r.message_id === m.id && r.person_id === data.me && r.emoji === emoji);
+          return el("button", { type: "button", class: `secondary${on ? " on" : ""}`, "aria-label": `React ${emoji}`, "aria-pressed": String(on),
+            onclick: go(async () => { await tr.react(m.id, emoji, !on); await refresh(); }) }, emoji);
+        })),
+        actions(
+          !archived && action("↩️", "Reply", go(() => setReply(m))),
+          action("📋", "Copy", go(async () => { await navigator.clipboard.writeText(m.body); note("Copied."); })),
+          !archived && !about && targets.length > 0 && action("📌", "Pin to…", () => pinSheet(m, targets)),
+          !archived && mine && action("✏️", "Edit", () => editSheet(m)),
+          !archived && (mine || data.planner) && action("🗑️", "Delete", go(async () => {
+            if (!confirm("Delete this message? Planners can still see it in the log.")) return;
+            await tr.deleteMessage(m.id); await refresh();
+          }), { class: "secondary danger" })),
+      ];
+    });
+  }
+  function editSheet(m) {
+    openSheet("Edit message", (close) => {
+      const area = el("textarea", { maxlength: 2000, "aria-label": "Message" });
+      area.value = m.body;
+      return [el("label", { class: "field" }, area),
+        el("button", { type: "button", onclick: (e) => act(e.target, async () => { await tr.editMessage(m.id, area.value); close(); await refresh(); }) }, "Save")];
+    });
+  }
+  // Pins a message: a line in a notes section, or an item in an itinerary.
+  function pinSheet(m, targets) {
+    const by = person(m.person_id)?.name || "someone";
+    openSheet("Pin to…", (close) => [
+      el("div", { class: "list" }, ...targets.map((s) => el("button", { type: "button", class: "item", onclick: (e) => act(e.target, async () => {
+        if (s.kind === "notes") {
+          const line = m.body.replace(/\s*\n\s*/g, " ");
+          await tr.saveNote(s.id, s.version, `${s.body.replace(/\s+$/, "")}${s.body.trim() ? "\n" : ""}- ${line} (${by})`);
+        } else {
+          const first = m.body.split("\n")[0].trim();
+          const title = [...first].length > 120 ? `${[...first].slice(0, 119).join("")}…` : first;
+          await tr.addItem(s.id, { title, note: m.body === title ? "" : m.body.slice(0, 2000) });
+        }
+        close();
+        await loadTrip(id);
+        note(`Pinned to ${s.title}.`);
+      }) }, el("span", { class: "who" }, `${tr.KINDS[s.kind].icon} ${s.title}`)))),
+      el("p", { class: "empty" }, "Notes get it as a line; an itinerary gets it as a new item to fill in."),
+    ]);
+  }
+
+  show(
+    card(head(item ? `💬 ${item.title}` : "💬 Chat"),
+      item && el("p", { class: "empty" }, [item.day && day(item.day), item.starts_at && hhmm(item.starts_at), item.place].filter(Boolean).join(" · ") || "Comments on this item."),
+      older, list),
+    !archived && el("div", { class: "composer" }, replying, suggest, el("div", { class: "compose-row" }, box, send)),
+    archived && el("p", { class: "banner" }, "This trip is archived: read only."),
+  );
+  await refresh(true);
+  stopFollowing?.();
+  stopFollowing = tr.follow(id, ({ table }) => {
+    if (!table || table === "messages" || table === "reactions") refresh();
+    if (table === "changes") loadTrip(id).then(() => draw(false)).catch(() => {});
+  });
 }
