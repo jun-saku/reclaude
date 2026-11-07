@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#161618" media="(prefers-color-scheme: dark)">
+  <title>Trip</title>
+  <meta name="description" content="Plan a trip with your group in one place: notes, itinerary and more, no accounts needed to join.">
+  <link rel="stylesheet" href="../../shared/base.css">
+  <style>
+    :root { --sea: #1f6f8b; --sea-soft: color-mix(in srgb, var(--sea) 12%, var(--panel)); --sea-text: #155a72; }
+    @media (prefers-color-scheme: dark) { :root { --sea: #3d9cbf; --sea-soft: color-mix(in srgb, var(--sea) 18%, var(--panel)); --sea-text: #8fd0ea; } }
+    a.button { display: flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 18px; border-radius: 12px;
+      background: var(--accent); color: var(--on-accent); font-weight: 650; text-decoration: none; text-align: center; }
+    a.button.secondary { background: var(--soft); color: var(--text); }
+    .views { display: flex; flex-direction: column; gap: 12px; }
+    .head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .head h2 { min-width: 0; overflow-wrap: anywhere; display: flex; align-items: center; gap: 6px; }
+    .tools { display: flex; gap: 6px; flex: none; }
+    .list { display: flex; flex-direction: column; gap: 6px; }
+    .item { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 2px 0; }
+    .item .who { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .item .meta { color: var(--muted); font-size: 0.85rem; white-space: nowrap; }
+    a.item { color: var(--text); text-decoration: none; }
+    a.item::after { content: "›"; color: var(--muted); font-size: 1.4rem; }
+    button.item { width: 100%; background: transparent; color: var(--text); padding: 0; text-align: left; font-weight: 500; }
+    .icon-btn { padding: 0; width: 44px; background: var(--soft); color: var(--text); }
+    .empty { color: var(--muted); font-size: 0.95rem; }
+    .tag { display: inline-block; font-size: 0.8rem; font-weight: 650; padding: 2px 8px; border-radius: 999px; background: var(--soft); white-space: nowrap; color: var(--text); }
+    .tag.sea { background: var(--sea-soft); color: var(--sea-text); }
+    .tags { display: flex; gap: 6px; flex-wrap: wrap; }
+    .field { display: flex; flex-direction: column; gap: 4px; font-weight: 650; font-size: 0.9rem; min-width: 0; }
+    .field input, .field select, .field textarea, textarea.notes-edit {
+      font: inherit; font-weight: 400; min-width: 0; width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 12px;
+      border: 1px solid var(--line); background: var(--bg); color: var(--text); }
+    .field textarea { min-height: 88px; resize: vertical; }
+    .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .pair.emoji-first { grid-template-columns: 72px 1fr; }
+    .check { display: flex; align-items: center; gap: 10px; min-height: 44px; font-weight: 500; }
+    .check input { width: 22px; height: 22px; min-width: 22px; min-height: 22px; margin: 11px; accent-color: var(--accent); }
+    .buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+    .buttons > * { flex: 1; }
+
+    /* The trip's head */
+    .hero { text-align: center; align-items: center; background: linear-gradient(160deg, var(--sea) 0%, #164d61 100%); color: #fff; border: 0; }
+    .hero .big { font-size: 2.6rem; line-height: 1; }
+    .hero h2 { font-size: 1.4rem; overflow-wrap: anywhere; }
+    .hero p { color: rgba(255, 255, 255, 0.92); }
+    .hero .tag { background: rgba(255, 255, 255, 0.2); color: #fff; }
+    .hero :is(a.button, button) { background: #fff; color: #164d61; align-self: stretch; }
+    .hero .buttons { align-self: stretch; }
+    .hero .buttons :is(a.button, button) { background: rgba(255, 255, 255, 0.18); color: #fff; flex: 1 1 auto; padding: 0 10px; white-space: nowrap; }
+    .banner { background: var(--soft); border-radius: 12px; padding: 10px 12px; font-size: 0.95rem; text-align: center; }
+
+    /* Notes, as drawn */
+    .notes { display: flex; flex-direction: column; gap: 8px; overflow-wrap: anywhere; line-height: 1.45; }
+    .notes h3, .notes h4, .notes h5 { margin: 6px 0 0; }
+    .notes h3 { font-size: 1.15rem; } .notes h4 { font-size: 1.02rem; } .notes h5 { font-size: 0.95rem; color: var(--muted); }
+    .notes ul, .notes ol { margin: 0; padding-left: 22px; }
+    .notes a { color: var(--sea-text); }
+    textarea.notes-edit { min-height: 220px; resize: vertical; font-family: inherit; line-height: 1.45; }
+    .format-help { font-size: 0.85rem; color: var(--muted); }
+
+    /* Itinerary */
+    .day { font-size: 0.85rem; font-weight: 750; text-transform: uppercase; letter-spacing: 0.04em; color: var(--sea-text); margin-top: 6px; }
+    .stop { display: grid; grid-template-columns: 56px 1fr; gap: 10px; align-items: start; width: 100%; padding: 8px 0; background: transparent;
+      color: var(--text); text-align: left; font-weight: 500; border-top: 1px solid var(--line); border-radius: 0; }
+    .stop:first-child { border-top: 0; }
+    .stop .time { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 0.9rem; color: var(--sea-text); padding-top: 1px; }
+    .stop .what { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+    .stop .title { font-weight: 650; overflow-wrap: anywhere; }
+    .stop .place { font-size: 0.88rem; color: var(--muted); overflow-wrap: anywhere; }
+    .stop.out .title { text-decoration: line-through; color: var(--muted); }
+    .stop-wrap { display: flex; flex-direction: column; }
+
+    /* The log */
+    .entry { display: flex; flex-direction: column; gap: 2px; padding: 8px 0; border-top: 1px solid var(--line); }
+    .entry:first-child { border-top: 0; }
+    .entry .when { font-size: 0.8rem; color: var(--muted); }
+    .entry .change { font-size: 0.88rem; color: var(--muted); overflow-wrap: anywhere; }
+
+    .code-in { font-family: ui-monospace, monospace; letter-spacing: 0.05em; text-transform: uppercase; }
+    .linkbox { font-family: ui-monospace, monospace; font-size: 0.85rem; overflow-wrap: anywhere; background: var(--soft); border-radius: 10px; padding: 8px 10px; }
+    .qr { display: flex; justify-content: center; }
+    .qr svg { width: 200px; height: 200px; border-radius: 10px; border: 1px solid var(--line); background: #fff; }
+
+    dialog { width: min(440px, calc(100% - 32px)); max-height: calc(100% - 32px); border: 1px solid var(--line); border-radius: 16px; padding: 0;
+      background: var(--panel); color: var(--text); }
+    dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
+    dialog form { display: flex; flex-direction: column; gap: 12px; padding: 16px; }
+    details.more summary { cursor: pointer; font-weight: 650; min-height: 44px; display: flex; align-items: center; }
+    details.more[open] { display: flex; flex-direction: column; gap: 10px; }
+    .actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); gap: 8px; }
+    .actions button { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 4px; font-size: 0.85rem; white-space: normal; }
+    .actions .ic { font-size: 1.4rem; line-height: 1.1; }
+    .danger { color: var(--danger); }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="title-bar">
+      <a class="home-link" id="back" href="../../" aria-label="Home">‹</a>
+      <h1>Trip</h1>
+      <a class="me-link" href="../profile/" aria-label="Your profile">👤</a>
+    </div>
+    <div id="view" class="views"><p class="hint">Loading…</p></div>
+    <p class="error" id="error" role="alert"></p>
+    <p class="hint" id="note" role="status"></p>
+    <dialog id="sheet"></dialog>
+  </main>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
