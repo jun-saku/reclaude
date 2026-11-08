@@ -16,7 +16,15 @@ const keep = params.get("backend") === "fake" ? "&backend=fake" : ""; // (the UI
 const here = (query = "") => `./?${query}${keep}`.replace("?&", "?").replace(/\?$/, "");
 const view = $("view");
 const show = (...kids) => view.replaceChildren(...kids.flat().filter(Boolean));
-const HANDOVERS = "trip-handovers"; // hand-over codes waiting for this device to sign in to its account
+const HANDOVERS = "trip-handovers";
+// Opened as the installed Trip app (its manifest starts at ./?app), or from the home screen: no ‹ out of it from its home.
+const installed = (() => {
+  const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  try { if (params.has("app")) sessionStorage.setItem("trip-app", "1"); return standalone && sessionStorage.getItem("trip-app") === "1"; }
+  catch { return standalone && params.has("app"); }
+})();
+let installPrompt = null;
+addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); installPrompt = e; document.getElementById("install-now")?.removeAttribute("hidden"); }); // hand-over codes waiting for this device to sign in to its account
 
 function el(tag, attrs = {}, ...kids) {
   const e = document.createElement(tag);
@@ -138,6 +146,7 @@ async function takeOverPending() {
 
 // ---------- home ----------
 async function homeView() {
+  if (installed) $("back").hidden = true;
   const trips = await tr.myTrips();
   if (trips.length) local.set("trip-joined", true);
   const today = new Date().toISOString().slice(0, 10);
@@ -157,6 +166,18 @@ async function homeView() {
       upcoming.length ? el("div", { class: "list" }, ...upcoming.map(row)) : empty("Nothing coming up.")),
     done.length > 0 && card(el("h2", {}, "Past trips"), el("div", { class: "list" }, ...done.map(row))),
     !trips.length && card(el("h2", {}, "Got a link?"), el("p", {}, "Open the trip link your planner sent you, then tap your name.")),
+    !installed && !matchMedia("(display-mode: standalone)").matches && el("details", { class: "card install" },
+      el("summary", {}, "📲 Install Trip on your phone"),
+      el("p", {}, "Trip works as its own app, with its own icon:"),
+      el("ul", { class: "steps" },
+        el("li", {}, el("b", {}, "iPhone: "), "open this page in Safari, tap Share, then Add to Home Screen."),
+        el("li", {}, el("b", {}, "Android: "), "open the browser menu and tap Install app.")),
+      el("button", { type: "button", id: "install-now", hidden: !installPrompt, onclick: async () => {
+        if (!installPrompt) return;
+        installPrompt.prompt();
+        installPrompt = null;
+        $("install-now").hidden = true;
+      } }, "Install Trip")),
   );
 }
 
