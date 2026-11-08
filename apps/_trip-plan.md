@@ -121,3 +121,6 @@ Summary (who owes whom), Checklist, Poll, Links (files later).
 4. Expenses, Summary and invoices, then Budget.
 5. Checklist and Poll.
 6. Offline copy, "My trips", keep-awake job.
+
+Also: Trip installs as its own app (`apps/trip/manifest.webmanifest`, icons by `node scripts/icons.cjs`), opening on
+your trips; push notifications next (needs the installed app on iPhone).
