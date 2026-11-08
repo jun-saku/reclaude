@@ -16,6 +16,12 @@ class_name = "GameRoom"
 name = "SPACES"
 class_name = "Space"
 
+# Trip's push notifications (src/push.js): the one object that keeps the push key pair. The database's requests are
+# checked against the PUSH_SECRET secret (set once: Workers & Pages → reclaude-games → Settings → Variables and Secrets).
+[[durable_objects.bindings]]
+name = "PUSH_KEYS"
+class_name = "PushKeys"
+
 # The free plan runs only SQLite-backed Durable Objects.
 [[migrations]]
 tag = "v1"
@@ -24,3 +30,7 @@ new_sqlite_classes = ["GameRoom"]
 [[migrations]]
 tag = "v2"
 new_sqlite_classes = ["Space"]
+
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["PushKeys"]

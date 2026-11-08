@@ -23,6 +23,12 @@ import { GAMES } from "./games.js";
 import { AuthError, readRoom, seatIn, verifyIdToken } from "./auth.js";
 import { Area, PATH as SPACE_PATH } from "./space.js";
 import { SPACES } from "./spaces.js";
+import { handlePush, storedKeys } from "./push.js";
+
+// Trip's push notifications: the one object that keeps the push key pair (src/push.js).
+export class PushKeys extends DurableObject {
+  keys() { return storedKeys(this.ctx.storage); }
+}
 
 const TICK_MS = 1000 / 30;     // the game advances in steps of this (at most 15 of them per message)
 const SEND_MS = 100;           // and is sent to the players 10 times a second
@@ -46,6 +52,8 @@ function send(socket, msg) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    // Trip's push notifications (src/push.js): plain HTTP, not a WebSocket.
+    if (url.pathname.startsWith("/push/")) return handlePush(request, env, url);
     const m = PATH.exec(url.pathname), s = SPACE_PATH.exec(url.pathname);
     if (!(m && GAMES[m[1]]) && !s) return new Response("Not found", { status: 404 });
     if (request.headers.get("Upgrade") !== "websocket") return new Response("Expected a WebSocket", { status: 426 });

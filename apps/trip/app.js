@@ -295,6 +295,7 @@ function drawTrip() {
         el("a", { class: "button", href: here(`id=${t.id}&people`), "aria-label": `People (${data.people.filter((p) => !p.removed_at).length})` }, "👥 People"),
         el("a", { class: "button", href: here(`id=${t.id}&chat`), "aria-label": data.latest > Number(local.get(seenKey(t.id), 0)) ? "Chat (new messages)" : "Chat" },
           "💬 Chat", data.latest > Number(local.get(seenKey(t.id), 0)) && el("span", { class: "new-dot", "aria-hidden": "true" })),
+        el("button", { type: "button", class: "bell", "aria-label": "Notifications", onclick: () => pushSheet() }, "🔔"),
         data.planner && el("a", { class: "button", href: here(`id=${t.id}&log`) }, "📜 Log"),
         data.planner && el("a", { class: "button", href: here(`id=${t.id}&edit`) }, "⚙️ Trip"))),
     t.archived_at && el("p", { class: "banner" }, "This trip is archived: read only."),
@@ -885,5 +886,47 @@ async function chatView(id, about) {
   stopFollowing = tr.follow(id, ({ table }) => {
     if (!table || table === "messages" || table === "reactions") refresh();
     if (table === "changes") loadTrip(id).then(() => draw(false)).catch(() => {});
+  });
+}
+
+// ---------- notifications ----------
+async function pushSheet() {
+  let state;
+  try { state = await tr.pushState(tripId); } catch (err) { showError(err); return; }
+  const s = state.settings;
+  const box = (key, label) => el("label", { class: "check" }, el("input", { type: "checkbox", checked: !!s[key], "data-key": key }), label);
+  openSheet("🔔 Notifications", (close) => {
+    const save = (e) => act(e.target, async () => {
+      const next = Object.fromEntries([...sheet.querySelectorAll("input[data-key]")].map((c) => [c.dataset.key, c.checked]));
+      await tr.setPushSettings(tripId, next);
+      close();
+      note("Saved.");
+    });
+    const choices = el("div", { class: "list" }, el("p", { class: "empty" }, "Tell me about:"),
+      box("mentions", "When someone @mentions me"), box("replies", "Replies to my messages"),
+      box("comments", "Comments on things I added"), box("all_messages", "Every chat message"));
+    if (state.support === "install") {
+      return [el("p", {}, "On iPhone, notifications work once Trip is on your Home Screen:"),
+        el("ol", { class: "steps" }, el("li", {}, "Tap Share, then Add to Home Screen."), el("li", {}, "Open Trip from there, and turn them on here.")),
+        choices, el("button", { type: "button", class: "secondary", onclick: save }, "Save")];
+    }
+    if (state.support !== "ok") return [el("p", {}, "This browser can't show notifications. Try Chrome, or Trip from your Home Screen on iPhone.")];
+    return [
+      el("p", { class: state.on ? "banner" : "" }, state.on ? "On for this phone." : "Get a notification on this phone when something's for you."),
+      !state.on && el("button", { type: "button", onclick: (e) => act(e.target, async () => {
+        await tr.enablePush(tripId);
+        await tr.setPushSettings(tripId, Object.fromEntries([...sheet.querySelectorAll("input[data-key]")].map((c) => [c.dataset.key, c.checked])));
+        close();
+        note("Notifications on.");
+      }) }, "Turn on notifications"),
+      choices,
+      state.on && el("button", { type: "button", onclick: save }, "Save"),
+      state.on && el("button", { type: "button", class: "secondary", onclick: (e) => act(e.target, async () => {
+        await tr.disablePush();
+        close();
+        note("Notifications off on this phone.");
+      }) }, "Turn off on this phone"),
+      el("p", { class: "empty" }, "These choices are for this trip. Turning them on or off is for this phone, on all your trips."),
+    ];
   });
 }

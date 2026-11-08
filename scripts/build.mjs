@@ -125,7 +125,7 @@ const CSP = {
   "img-src": ["'self'", "data:", "https://www.gstatic.com/recaptcha/"],
   "connect-src": ["'self'", "https://*.firebasedatabase.app", "wss://*.firebasedatabase.app", "https://*.googleapis.com",
     "https://www.google.com", "http://127.0.0.1:9000", "ws://127.0.0.1:9000", "http://127.0.0.1:9099",
-    "wss://play.reclaude.junsaku.dev", "ws://127.0.0.1:8787",
+    "wss://play.reclaude.junsaku.dev", "ws://127.0.0.1:8787", "https://play.reclaude.junsaku.dev/push/", "http://127.0.0.1:8787/push/",
     "https://xikukwpayubiyxcnlwme.supabase.co", "wss://xikukwpayubiyxcnlwme.supabase.co", "http://127.0.0.1:54321", "ws://127.0.0.1:54321"],
   "frame-src": ["https://www.google.com", "https://recaptcha.google.com"],
   "object-src": ["'none'"],

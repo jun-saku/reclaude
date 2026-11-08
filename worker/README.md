@@ -32,6 +32,16 @@ sign in with Supabase (accounts only, `src/supabase.js`), save their world for g
 anything. See [SPACES.md](SPACES.md); a space is a module listed in `src/spaces.js`, the page side is
 `shared/space.js`.
 
+## Push notifications (Trip)
+
+`src/push.js`: `GET /push/key` gives pages the server's Web Push public key; `POST /push/send` takes, from the
+database only, the phones to notify and the text, encrypts it for each phone and signs it (VAPID). The key pair is made
+by the server itself and kept in the `PushKeys` Durable Object. The database's requests carry a shared secret, set once
+in two places (the same long random value; never committed):
+- here: Workers & Pages → reclaude-games → Settings → Variables and Secrets → add a **Secret** named `PUSH_SECRET`;
+- in Supabase: SQL editor → `select vault.create_secret('<the value>', 'trip_push_secret');`
+Until both are set, nothing is sent. `tests/push.test.mjs` decrypts a push the way a phone does.
+
 ## Running it
 
 - Locally, against the Firebase emulator: `npm ci && npm run dev` (port 8787; pages use it with

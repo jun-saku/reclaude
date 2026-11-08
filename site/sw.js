@@ -4,6 +4,7 @@
 //   Versioned files (?v=hash, stamped by the build): this copy first, since a name never changes its content; only
 //   their newest version is kept.
 //   Other sites (Firebase, the game server): never touched.
+//   Push notifications (Trip's, sent by the game server, worker/src/push.js): shown, and a tap opens their page.
 const CACHE = "reclaude-2"; // a new name drops every older copy on the next visit
 
 // Kept from the start: the home page (the app's start), the games page, the manifest and icons. The page that registered this
@@ -45,5 +46,28 @@ self.addEventListener("fetch", (e) => {
       if (hit) return hit;
       throw err;
     }
+  })());
+});
+
+// A push: { title, body, url, tag } (a newer one with the same tag replaces the older).
+self.addEventListener("push", (e) => {
+  let d = {};
+  try { d = e.data?.json() || {}; } catch { d = { body: e.data?.text() || "" }; }
+  const url = new URL(typeof d.url === "string" && d.url.startsWith("/") ? d.url.slice(1) : "", self.registration.scope).href;
+  e.waitUntil(self.registration.showNotification(String(d.title || "reclaude").slice(0, 120), {
+    body: String(d.body || "").slice(0, 300), tag: d.tag || undefined, renotify: !!d.tag, data: { url },
+    icon: new URL("apps/trip/icons/icon-192.png", self.registration.scope).href,
+    badge: new URL("apps/trip/icons/favicon-32.png", self.registration.scope).href,
+  }));
+});
+// Tapping it: the page if it's open somewhere (brought to the front), else opened.
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  const url = e.notification.data?.url || self.registration.scope;
+  e.waitUntil((async () => {
+    for (const c of await self.clients.matchAll({ type: "window", includeUncontrolled: true })) {
+      if (c.url === url && "focus" in c) return c.focus();
+    }
+    return self.clients.openWindow(url);
   })());
 });
