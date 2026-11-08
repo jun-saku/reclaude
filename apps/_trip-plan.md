@@ -116,7 +116,8 @@ Summary (who owes whom), Checklist, Poll, Links (files later).
 1. Schema, people, join flow, log, tests. (`supabase/migrations/20261108000000_trip.sql`)
 2. Page with sections: Notes and Itinerary, and the Log tab. (`apps/trip/`, `shared/trip.js`,
    `supabase/migrations/20261109000000_trip_sections.sql`; its own installable app icon comes later)
-3. Chat (Realtime).
+3. Chat (Realtime). (`supabase/migrations/20261110000000_trip_chat.sql`; `core.app(name).watch` for live rows;
+   the trip page follows changes live too)
 4. Expenses, Summary and invoices, then Budget.
 5. Checklist and Poll.
 6. Offline copy, "My trips", keep-awake job.

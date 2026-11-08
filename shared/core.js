@@ -23,8 +23,8 @@
 //   core.cleanUsername(text), core.cleanKey(text), core.formatKey(key)  as the database takes them / shows them
 // An app's own module (shared/<app>.js, its schema in supabase/migrations/) builds on these, so it never makes its own
 // client: core.app(name) gives { db: its schema on this device's sign-in (null with ?backend=fake), run(query): the
-// rows or rpc result (throws a CoreError: the database's own message for its RCxxx refusals), fake: true with
-// ?backend=fake, read() / write(data): its own store in this browser for then }.
+// rows or rpc result (throws a CoreError: the database's own message for its RCxxx refusals), watch(tables, onChange):
+// its rows live (Realtime), fake: true with ?backend=fake, read() / write(data): its own store in this browser for then }.
 // It connects to the live project; on this machine (localhost, 127.0.0.1) to a local Supabase (`supabase start`,
 // which the security policy allows too); with ?backend=fake to nothing: this browser's storage only, for the UI tests.
 import { createClient } from "../shared/supabase-js.js";
@@ -635,6 +635,27 @@ export function app(name) {
       try { result = await query; } catch (err) { throw appError(err); }
       if (result.error) throw appError(result.error);
       return result.data;
+    },
+    // Follows rows of its tables live (Supabase Realtime, as row level security allows): watch([{ table, filter }],
+    // onChange) calls onChange({ table, type, row }) for every insert, update or delete, and returns a function that
+    // stops. With ?backend=fake: called (with nothing) whenever this app's store changes in another tab.
+    watch(tables, onChange) {
+      if (fake) {
+        const onStorage = (e) => { if (e.key === key) onChange({}); };
+        addEventListener("storage", onStorage);
+        return () => removeEventListener("storage", onStorage);
+      }
+      const channel = sb().channel(`${name}:${crypto.randomUUID()}`);
+      for (const { table, filter } of tables) {
+        channel.on("postgres_changes", { event: "*", schema: name, table, filter },
+          (p) => onChange({ table, type: p.eventType, row: p.eventType === "DELETE" ? p.old : p.new }));
+      }
+      let stopped = false;
+      (async () => {
+        try { const token = await accessToken(); if (token) sb().realtime.setAuth(token); } catch {}
+        if (!stopped) channel.subscribe();
+      })();
+      return () => { stopped = true; sb().removeChannel(channel); };
     },
     read() { try { return JSON.parse(localStorage.getItem(key)) || {}; } catch { return {}; } },
     write(data) { try { localStorage.setItem(key, JSON.stringify(data)); } catch {} },

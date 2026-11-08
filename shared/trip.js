@@ -22,6 +22,14 @@
 //     fields: { title, day, starts_at, ends_at, place, link, note, going, cost, cost_currency } (null clears one)
 //   await trip.optOut(item, kind)        'not_going', 'not_interested' or null, for yourself
 //   await trip.log(id, before)           planners: the 50 log rows before id `before` (newest first)
+// The chat (…_trip_chat.sql): one per trip, and a thread per itinerary item (`about`):
+//   await trip.messages(id, { about, before, limit })   { messages: [{ id, person_id, about, reply_to, body, mentions, at,
+//                                        edited_at, deleted_at }] (oldest first), reactions: [{ message_id, person_id, emoji }] }
+//   await trip.threadCounts(id)          { [item id]: number of comments }
+//   await trip.latestMessage(id)         the chat's newest message id (for "new" marks), or 0
+//   await trip.sendMessage(id, body, { replyTo, about, mentions }) / editMessage(message, body) / deleteMessage(message)
+//   await trip.react(message, emoji, on)
+//   trip.follow(id, onChange)            follows the trip (its changes, messages and reactions) live; returns stop()
 import * as core from "../shared/core.js";
 
 const app = core.app("trip");
@@ -166,6 +174,29 @@ const live = {
   },
 };
 
+live.messages = async (id, about, before, limit) => {
+  let q = app.db.from("messages").select("id, person_id, about, reply_to, body, mentions, at, edited_at, deleted_at")
+    .eq("trip_id", id).order("id", { ascending: false }).limit(limit);
+  q = about ? q.eq("about", about) : q.is("about", null);
+  if (before) q = q.lt("id", before);
+  const messages = (await rows(q)).reverse();
+  const reactions = messages.length ? await rows(app.db.from("reactions").select("message_id, person_id, emoji")
+    .in("message_id", messages.map((m) => m.id))) : [];
+  return { messages, reactions };
+};
+live.threadCounts = async (id) => {
+  const list = await rows(app.db.from("messages").select("about").eq("trip_id", id).not("about", "is", null).is("deleted_at", null));
+  const counts = {};
+  for (const m of list) counts[m.about] = (counts[m.about] || 0) + 1;
+  return counts;
+};
+live.latestMessage = async (id) => (await rows(app.db.from("messages").select("id").eq("trip_id", id).is("about", null)
+  .order("id", { ascending: false }).limit(1)))[0]?.id || 0;
+live.sendMessage = (id, body, replyTo, about, mentions) => rpc("send_message", { trip: id, body, reply_to: replyTo, about, mentions });
+live.editMessage = (message, body) => rpc("edit_message", { message, body });
+live.deleteMessage = (message) => rpc("delete_message", { message });
+live.react = (message, emoji, on) => rpc("react", { message, emoji, on_off: on });
+
 // ---------- ?backend=fake: this browser only (the same checks, roughly) ----------
 const no = (message) => { throw new CoreError(message); };
 const newId = () => crypto.randomUUID();
@@ -173,7 +204,7 @@ const newCode = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), (b)
 const now = () => new Date().toISOString();
 function db() {
   const d = app.read();
-  for (const k of ["trips", "people", "sections", "items", "optouts", "log", "handovers"]) d[k] ||= [];
+  for (const k of ["trips", "people", "sections", "items", "optouts", "log", "handovers", "messages", "reactions"]) d[k] ||= [];
   return d;
 }
 const uid = async () => (await core.signedIn())?.id || null;
@@ -522,6 +553,59 @@ const fake = {
   },
 };
 
+Object.assign(fake, {
+  async messages(id, about, before, limit) {
+    const d = db();
+    if (!(await fakeMe(d, id))) return { messages: [], reactions: [] };
+    const messages = d.messages.filter((m) => m.trip_id === id && (m.about || null) === (about || null) && (!before || m.id < before)).slice(-limit);
+    const ids = new Set(messages.map((m) => m.id));
+    return { messages, reactions: d.reactions.filter((r) => ids.has(r.message_id)) };
+  },
+  async threadCounts(id) {
+    const counts = {};
+    for (const m of db().messages) if (m.trip_id === id && m.about && !m.deleted_at) counts[m.about] = (counts[m.about] || 0) + 1;
+    return counts;
+  },
+  async latestMessage(id) { return db().messages.filter((m) => m.trip_id === id && !m.about).at(-1)?.id || 0; },
+  async sendMessage(id, body, replyTo, about, mentions) {
+    const d = db();
+    const me = await needEditor(d, id);
+    if (about && !d.items.some((i) => i.id === about && i.trip_id === id)) no("That item isn't there any more.");
+    const mid = (d.messages.at(-1)?.id || 0) + 1;
+    d.messages.push({ id: mid, trip_id: id, person_id: me, about: about || null, reply_to: replyTo || null, body,
+      mentions: (mentions || []).filter((p) => d.people.some((x) => x.id === p && x.trip_id === id)), at: now(), edited_at: null, deleted_at: null });
+    app.write(d);
+    return mid;
+  },
+  async editMessage(message, body) {
+    const d = db();
+    const m = d.messages.find((x) => x.id === message && !x.deleted_at) || no("That message isn't there any more.");
+    if ((await needEditor(d, m.trip_id)) !== m.person_id) no("Only whoever wrote it can change it.");
+    if (m.body === body) return;
+    await logged(d, m.trip_id, "message.edit", m.about, { message, old: m.body, new: body });
+    Object.assign(m, { body, edited_at: now() });
+    app.write(d);
+  },
+  async deleteMessage(message) {
+    const d = db();
+    const m = d.messages.find((x) => x.id === message && !x.deleted_at);
+    if (!m) return;
+    if ((await needEditor(d, m.trip_id)) !== m.person_id && !(await fakePlanner(d, m.trip_id))) no("Only whoever wrote it, or a planner, can delete it.");
+    await logged(d, m.trip_id, "message.delete", m.about, { message, by: m.person_id, old: m.body });
+    Object.assign(m, { body: "", mentions: [], deleted_at: now() });
+    d.reactions = d.reactions.filter((r) => r.message_id !== message);
+    app.write(d);
+  },
+  async react(message, emoji, on) {
+    const d = db();
+    const m = d.messages.find((x) => x.id === message && !x.deleted_at) || no("That message isn't there any more.");
+    const me = await needEditor(d, m.trip_id);
+    d.reactions = d.reactions.filter((r) => !(r.message_id === message && r.person_id === me && r.emoji === emoji));
+    if (on) d.reactions.push({ message_id: message, person_id: me, trip_id: m.trip_id, emoji });
+    app.write(d);
+  },
+});
+
 const backend = () => (app.fake ? fake : live);
 
 // ---------- API ----------
@@ -587,3 +671,25 @@ export const moveItem = (item, step) => backend().moveItem(item, step < 0 ? -1 :
 export const deleteItem = (item) => backend().deleteItem(item);
 export const optOut = (item, kind) => backend().optOut(item, kind || null);
 export const log = (id, before = null) => backend().log(id, before);
+
+// ---------- the chat ----------
+export const REACTIONS = ["👍", "❤️", "😂", "😮", "🙏", "🎉"];
+function messageText(body) {
+  const s = String(body ?? "").replace(/\r\n?/g, "\n").replace(/[ \t]+\n/g, "\n").replace(/^[\s]+|[\s]+$/g, "");
+  if (!s) throw new CoreError("Write something first.");
+  if (len(s) > 2000) throw new CoreError("A message is up to 2000 characters.");
+  if (/[\p{Cc}]/u.test(s.replace(/[\n\t]/g, ""))) throw new CoreError("That message has characters that can't be sent.");
+  return s;
+}
+export const messages = (id, { about = null, before = null, limit = 50 } = {}) => backend().messages(id, about, before, limit);
+export const threadCounts = (id) => backend().threadCounts(id);
+export const latestMessage = (id) => backend().latestMessage(id);
+export const sendMessage = (id, body, { replyTo = null, about = null, mentions = [] } = {}) =>
+  backend().sendMessage(id, messageText(body), replyTo, about, mentions);
+export const editMessage = (message, body) => backend().editMessage(message, messageText(body));
+export const deleteMessage = (message) => backend().deleteMessage(message);
+export function react(message, emoji, on) {
+  if (!emoji || len(emoji) > 16 || BAD.test(emoji)) throw new CoreError("Pick an emoji.");
+  return backend().react(message, emoji, !!on);
+}
+export const follow = (id, onChange) => app.watch(["changes", "messages", "reactions"].map((table) => ({ table, filter: `trip_id=eq.${id}` })), onChange);
