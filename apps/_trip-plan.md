@@ -123,4 +123,5 @@ Summary (who owes whom), Checklist, Poll, Links (files later).
 6. Offline copy, "My trips", keep-awake job.
 
 Also: Trip installs as its own app (`apps/trip/manifest.webmanifest`, icons by `node scripts/icons.cjs`), opening on
-your trips; push notifications next (needs the installed app on iPhone).
+your trips; push notifications (`supabase/migrations/20261111000000_trip_push.sql`, `worker/src/push.js`; setup in
+`worker/README.md`).

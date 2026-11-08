@@ -20,7 +20,9 @@ The user usually works from their phone, so keep replies short and end with the 
   `apps/pickleball/rotation.js`; `./` is its about page, `./?dash` the app home where the installed app opens; players with an account link it to their player with a manager's QR, `./?link=<code>`, and see their games at `./?me`), Trip `/apps/trip/` (a group's trip on one page: an account makes it and adds
   people by name, who join with its link `./?t=<code>` and pick their name, no account needed; sections like notes and
   the itinerary that everyone edits, planners lock, a live chat (`./?id=<trip>&chat`, and a thread per item), and a log
-  for planners; its own manifest and icons, so it installs as its own app opening on your trips (`./?app`); data in
+  for planners; its own manifest and icons, so it installs as its own app opening on your trips (`./?app`); push
+  notifications (🔔 on a trip: mentions, replies, comments, every message), sent by the game server (`worker/src/push.js`,
+  `site/sw.js` shows them); data in
   `shared/trip.js`, the plan in
   `apps/_trip-plan.md`), and the admin panel `/apps/admin/` (invites for admins; accounts and the log for superusers;
   linked from the Profile page for admins only, not from the home page). The database checks every admin action; the
@@ -86,7 +88,7 @@ The user usually works from their phone, so keep replies short and end with the 
 - `scripts/rules.mjs`: generates `firebase/database.rules.json` (room rules repeat per seat). Edit the rules there, never
   the JSON, then run `node scripts/rules.mjs`; `npm run rules` fails if the two don't match.
 - `tests/`: dev-only tests, never published. `tests/worker-auth.test.mjs` checks the game server's sign-in check, `tests/feed.test.mjs` its feeds, `tests/kit.test.mjs` its Play again and `tests/space.test.mjs` its spaces, and
-  `tests/pickleball-rotation.test.mjs` the Pickleball rotation (all part of the `build` check). `tests/smoke.cjs` (run after the build: `node tests/smoke.cjs`) opens every
+  `tests/pickleball-rotation.test.mjs` the Pickleball rotation and `tests/push.test.mjs` Trip's push notifications (all part of the `build` check). `tests/smoke.cjs` (run after the build: `node tests/smoke.cjs`) opens every
   page at 390px and fails on JavaScript errors, blocked scripts, sideways scroll, a game missing from the games page or
   its ‹ back link or profile icon, a missing link from the home page to the games, or a same-device game that won't start; it's part of the required `build` check, needs no
   per-game code, and lists non-games (no card, no link) in `NOT_GAMES`. `node tests/ui-audit.cjs` (after the build; CI's `ui` job) checks every screen against the design standard

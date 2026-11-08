@@ -29,6 +29,11 @@
 //   await trip.latestMessage(id)         the chat's newest message id (for "new" marks), or 0
 //   await trip.sendMessage(id, body, { replyTo, about, mentions }) / editMessage(message, body) / deleteMessage(message)
 //   await trip.react(message, emoji, on)
+// Push notifications (…_trip_push.sql, sent by the game server, worker/src/push.js):
+//   trip.pushSupport()                   "ok", "install" (an iPhone, not from the home screen yet) or "no"
+//   await trip.pushState(id)             { support, permission, on, settings: { mentions, replies, comments, all_messages } }
+//   await trip.enablePush(id) / disablePush()   asks permission and subscribes this phone / unsubscribes it
+//   await trip.setPushSettings(id, settings)
 //   trip.follow(id, onChange)            follows the trip (its changes, messages and reactions) live; returns stop()
 import * as core from "../shared/core.js";
 
@@ -606,6 +611,26 @@ Object.assign(fake, {
   },
 });
 
+live.savePush = (s) => rpc("save_push", s);
+live.dropPush = (endpoint) => rpc("drop_push", { endpoint });
+live.pushSettings = (id) => rpc("push_settings", { trip: id });
+live.setPushSettings = (id, s) => rpc("set_push_settings", { trip: id, mentions: s.mentions, replies: s.replies, comments: s.comments, all_messages: s.all_messages });
+Object.assign(fake, {
+  async savePush(s) { const d = db(); d.push = s.endpoint; app.write(d); },
+  async dropPush() { const d = db(); delete d.push; app.write(d); },
+  async pushSettings(id) {
+    const d = db();
+    const me = (await fakeMe(d, id)) || no("Only people on this trip can do that.");
+    return { mentions: true, replies: true, comments: true, all_messages: false, ...(d.pushPrefs?.[me] || {}), phones: d.push ? 1 : 0 };
+  },
+  async setPushSettings(id, s) {
+    const d = db();
+    const me = (await fakeMe(d, id)) || no("Only people on this trip can do that.");
+    (d.pushPrefs ||= {})[me] = { mentions: !!s.mentions, replies: !!s.replies, comments: !!s.comments, all_messages: !!s.all_messages };
+    app.write(d);
+  },
+});
+
 const backend = () => (app.fake ? fake : live);
 
 // ---------- API ----------
@@ -693,3 +718,66 @@ export function react(message, emoji, on) {
   return backend().react(message, emoji, !!on);
 }
 export const follow = (id, onChange) => app.watch(["changes", "messages", "reactions"].map((table) => ({ table, filter: `trip_id=eq.${id}` })), onChange);
+
+// ---------- push notifications ----------
+const KEY_URL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname) ? "http://127.0.0.1:8787/push/key" : "https://play.reclaude.junsaku.dev/push/key";
+const PUSH_KEY = "trip-push-key"; // the server key this phone subscribed with
+const appleMobile = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const standalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+export function pushSupport() {
+  if (app.fake) return "ok";
+  if ("serviceWorker" in navigator && "PushManager" in window && "Notification" in window) return "ok";
+  return appleMobile() && !standalone() ? "install" : "no";
+}
+const subscription = async () => (await (await navigator.serviceWorker.ready).pushManager.getSubscription());
+async function serverKey() {
+  const res = await fetch(KEY_URL);
+  if (!res.ok) throw new CoreError("Notifications can't be set up right now. Try again later.");
+  return (await res.json()).key;
+}
+const keyBytes = (k) => Uint8Array.from(atob(k.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((k.length + 3) % 4)), (c) => c.charCodeAt(0));
+async function savePush(sub) {
+  const j = sub.toJSON();
+  await backend().savePush({ endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth });
+}
+async function subscribe() {
+  const key = await serverKey();
+  const reg = await navigator.serviceWorker.ready;
+  let sub = await reg.pushManager.getSubscription();
+  let mine = null;
+  try { mine = localStorage.getItem(PUSH_KEY); } catch {}
+  if (sub && mine !== key) { await sub.unsubscribe().catch(() => {}); sub = null; } // the server's key changed
+  sub ||= await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(key) });
+  try { localStorage.setItem(PUSH_KEY, key); } catch {}
+  await savePush(sub);
+}
+export async function pushState(id) {
+  const support = pushSupport();
+  const settings = await backend().pushSettings(id);
+  if (app.fake) return { support, permission: "granted", on: settings.phones > 0, settings };
+  if (support !== "ok") return { support, permission: "default", on: false, settings };
+  const permission = Notification.permission;
+  let on = false;
+  try {
+    on = permission === "granted" && !!(await subscription());
+    if (on) await subscribe(); // keeps it saved for whoever's signed in now, and on the server's current key
+  } catch { /* shown as off */ }
+  return { support, permission, on, settings };
+}
+export async function enablePush(id) {
+  if (app.fake) { await backend().savePush({ endpoint: "https://push.example/fake" }); return; }
+  if (pushSupport() === "install") throw new CoreError("On iPhone, add Trip to your Home Screen first (Share, then Add to Home Screen), and turn them on there.");
+  if (pushSupport() !== "ok") throw new CoreError("This browser can't show notifications.");
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted") throw new CoreError("Notifications are blocked. Allow them for this site in your browser's settings, then try again.");
+  await subscribe();
+  await backend().pushSettings(id);
+}
+export async function disablePush() {
+  if (app.fake) { await backend().dropPush(); return; }
+  const sub = await subscription().catch(() => null);
+  if (!sub) return;
+  await backend().dropPush(sub.endpoint).catch(() => {});
+  await sub.unsubscribe().catch(() => {});
+}
+export const setPushSettings = (id, s) => backend().setPushSettings(id, s);
